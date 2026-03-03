@@ -428,10 +428,14 @@ function CTA() {
 
           <div className="flex justify-center items-baseline gap-1 mb-8">
             <span className="text-2xl font-bold text-zinc-400">R$</span>
-            <span className="text-6xl font-black text-zinc-900 tracking-tighter">2.000</span>
+            <span className="text-6xl font-black text-zinc-900 tracking-tighter">1.600</span>
             <span className="text-xl font-bold text-zinc-400">,00</span>
             <span className="text-zinc-500 font-medium ml-1">/mês</span>
           </div>
+
+          <p className="text-center text-xs text-zinc-500 -mt-4 mb-8 font-medium">
+            Comissão de 0,5% por venda de imóvel após a 6ª venda.
+          </p>
 
           <ul className="space-y-4 mb-10">
             {[
