@@ -1,1 +1,82 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+body {
+  background-color: #F5F5F7;
+  color: #1D1D1F;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer utilities {
+  .apple-blur {
+    @apply backdrop-blur-2xl bg-white/80 border border-white/20;
+  }
+  
+  .apple-card {
+    @apply bg-white rounded-3xl sm:rounded-[2.5rem] border border-black/[0.02] shadow-[0_8px_40px_-12px_rgba(0,0,0,0.03)] transition-all duration-700;
+  }
+  
+  .apple-card-hover {
+    @apply hover:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.06)] hover:-translate-y-0.5;
+  }
+
+  .glass-panel {
+    @apply bg-white/60 backdrop-blur-3xl border border-white/40 shadow-[0_4px_24px_-1px_rgba(0,0,0,0.02)] rounded-3xl sm:rounded-[2.5rem];
+  }
+
+  .glass-input {
+    @apply w-full bg-zinc-100/40 border border-transparent rounded-xl sm:rounded-2xl px-4 py-3 sm:py-4 text-sm focus:outline-none focus:bg-white focus:ring-1 focus:ring-black/5 focus:border-black/5 transition-all duration-500 text-zinc-900 placeholder:text-zinc-400;
+  }
+
+  .btn-primary {
+    @apply bg-zinc-900 text-white hover:bg-black rounded-xl sm:rounded-2xl px-6 py-3 sm:py-4 text-sm font-semibold transition-all duration-500 active:scale-[0.97] flex items-center justify-center gap-2 shadow-xl shadow-black/5;
+  }
+
+  .btn-secondary {
+    @apply bg-zinc-100/80 hover:bg-zinc-200/80 text-zinc-900 rounded-xl sm:rounded-2xl px-6 py-3 sm:py-4 text-sm font-semibold transition-all duration-500 active:scale-[0.97] flex items-center justify-center gap-2;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .tracking-tightest {
+    letter-spacing: -0.05em;
+  }
+
+  .btn-danger {
+    @apply bg-red-50 hover:bg-red-100 border border-red-100 text-red-600 rounded-2xl px-6 py-3 text-sm font-semibold transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.1);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-black/20;
+  }
+
+  .page-container {
+    @apply p-5 sm:p-8 md:p-10 lg:p-12 max-w-7xl mx-auto space-y-8 sm:space-y-10;
+  }
+
+  .mobile-safe-top {
+    @apply pt-20 md:pt-0;
+  }
+
+  .mobile-safe-bottom {
+    @apply pb-28 md:pb-0;
+  }
+}

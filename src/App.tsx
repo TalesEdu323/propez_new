@@ -1,18 +1,39 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Users, FileText, Settings, LogOut, Menu, X, Plus, Layers, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Settings, LogOut, Menu, X, Plus, Layers, Briefcase, Bell, DollarSign, User } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import Dashboard from './pages/Dashboard';
 import Clientes from './pages/Clientes';
 import Propostas from './pages/Propostas';
+import Pagamentos from './pages/Pagamentos';
 import PropezFluido from './pages/PropezFluido';
 import VisualizarProposta from './pages/VisualizarProposta';
 import Servicos from './pages/Servicos';
 import Modelos from './pages/Modelos';
 import CriarModelo from './pages/CriarModelo';
+import Contratos from './pages/Contratos';
+import Configuracoes from './pages/Configuracoes';
+import Onboarding from './components/Onboarding';
+import Login from './pages/Login';
+import { store } from './lib/store';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('propez_auth') === 'true';
+  });
   const [route, setRoute] = useState('dashboard');
   const [routeParams, setRouteParams] = useState<any>({});
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [userConfig, setUserConfig] = useState(() => store.getUserConfig());
+
+  const handleLogin = () => {
+    localStorage.setItem('propez_auth', 'true');
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('propez_auth');
+    setIsAuthenticated(false);
+  };
 
   const navigate = (newRoute: string, params: any = {}) => {
     setRoute(newRoute);
@@ -28,94 +49,194 @@ export default function App() {
         return <Clientes navigate={navigate} />;
       case 'propostas':
         return <Propostas navigate={navigate} />;
+      case 'pagamentos':
+        return <Pagamentos navigate={navigate} />;
       case 'servicos':
         return <Servicos navigate={navigate} />;
       case 'modelos':
         return <Modelos navigate={navigate} />;
+      case 'contratos':
+        return <Contratos />;
       case 'criar-modelo':
         return <CriarModelo navigate={navigate} initialData={routeParams} />;
       case 'propez-fluido':
         return <PropezFluido navigate={navigate} initialData={routeParams} />;
       case 'visualizar-proposta':
         return <VisualizarProposta navigate={navigate} id={routeParams.id} />;
+      case 'configuracoes':
+        return <Configuracoes />;
       default:
         return <Dashboard navigate={navigate} />;
     }
   };
 
-  // Se a rota for o builder (propez-fluido, criar-modelo) ou visualizar-proposta, não mostra a sidebar para dar mais espaço
+  const pageVariants = {
+    initial: { opacity: 0, y: 10, scale: 0.98 },
+    animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] } },
+    exit: { opacity: 0, y: -10, scale: 0.98, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }
+  };
+
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
+
+  if (!userConfig.onboarded) {
+    return <Onboarding onComplete={() => setUserConfig(store.getUserConfig())} />;
+  }
+
   if (route === 'propez-fluido' || route === 'visualizar-proposta' || route === 'criar-modelo') {
-    return renderContent();
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={route}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          variants={pageVariants}
+          className="h-screen w-full overflow-hidden bg-[#F5F5F7]"
+        >
+          {renderContent()}
+        </motion.div>
+      </AnimatePresence>
+    );
   }
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: 'clientes', label: 'Clientes', icon: <Users className="w-5 h-5" /> },
     { id: 'servicos', label: 'Serviços', icon: <Briefcase className="w-5 h-5" /> },
+    { id: 'contratos', label: 'Contratos', icon: <FileText className="w-5 h-5" /> },
     { id: 'modelos', label: 'Modelos', icon: <Layers className="w-5 h-5" /> },
     { id: 'propostas', label: 'Propostas', icon: <FileText className="w-5 h-5" /> },
-    { id: 'configuracoes', label: 'Configurações', icon: <Settings className="w-5 h-5" /> },
+    { id: 'pagamentos', label: 'Pagamentos', icon: <DollarSign className="w-5 h-5" /> },
   ];
 
   return (
-    <div className="flex h-screen bg-[#f5f5f7] font-sans overflow-hidden">
-      {/* Mobile Menu Button */}
-      <button 
-        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-full shadow-md"
-        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-      >
-        {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-      </button>
-
-      {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-zinc-200 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="h-full flex flex-col">
-          <div className="p-6">
-            <h1 className="text-2xl font-bold text-zinc-900 tracking-tight flex items-center gap-2">
-              <span className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xl">P</span>
-              PropEZ
-            </h1>
-          </div>
-          
-          <div className="px-4 pb-4">
-            <button 
-              onClick={() => navigate('propez-fluido')}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 px-4 rounded-xl font-medium hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              <Plus className="w-5 h-5" /> Nova Proposta
-            </button>
-          </div>
-
-          <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
-            {navItems.map((item) => (
+    <div className="flex h-screen bg-[#F5F5F7] font-sans overflow-hidden">
+      
+      {/* Desktop Sidebar - Apple Inspired */}
+      <div className="hidden md:flex flex-col w-64 bg-white/80 backdrop-blur-2xl border-r border-black/[0.05] z-40 relative">
+        <div className="p-6 flex items-center gap-3">
+          <div className="w-8 h-8 bg-zinc-900 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">P</div>
+          <span className="font-semibold text-zinc-900 tracking-tight text-lg">PropEZ</span>
+        </div>
+        
+        <nav className="flex-1 px-4 mt-8 space-y-1.5 overflow-y-auto custom-scrollbar">
+          {navItems.map((item) => {
+            const isActive = route === item.id;
+            return (
               <button
                 key={item.id}
                 onClick={() => navigate(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                  route === item.id 
-                    ? 'bg-blue-50 text-blue-700' 
-                    : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
+                className={`w-full flex items-center gap-3 px-5 py-3 rounded-2xl text-sm font-semibold transition-all duration-500 ${
+                  isActive 
+                    ? 'bg-zinc-900 text-white shadow-[0_10px_20px_-5px_rgba(0,0,0,0.15)]' 
+                    : 'text-zinc-400 hover:bg-zinc-50 hover:text-zinc-900'
                 }`}
               >
-                {item.icon}
+                <div className={`transition-transform duration-500 ${isActive ? 'scale-110' : 'scale-100 opacity-50'}`}>
+                  {item.icon}
+                </div>
                 {item.label}
               </button>
-            ))}
-          </nav>
+            );
+          })}
+        </nav>
 
-          <div className="p-4 border-t border-zinc-100">
-            <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-zinc-600 hover:bg-red-50 hover:text-red-600 transition-colors">
-              <LogOut className="w-5 h-5" />
-              Sair
-            </button>
-          </div>
+        <div className="p-4 border-t border-black/[0.02]">
+          <button 
+            onClick={() => navigate('configuracoes')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              route === 'configuracoes' 
+                ? 'bg-zinc-900 text-white shadow-sm' 
+                : 'text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600'
+            }`}
+          >
+            <Settings className="w-5 h-5" />
+            Configurações
+          </button>
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-zinc-400 hover:bg-red-50 hover:text-red-500 transition-all mt-1"
+          >
+            <LogOut className="w-5 h-5" />
+            Sair
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Top Bar */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-2xl border-b border-black/[0.05] z-40 flex items-center justify-between px-5">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-zinc-900 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">P</div>
+          <span className="font-semibold text-zinc-900 tracking-tight">PropEZ</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => navigate('configuracoes')}
+            className="w-10 h-10 flex items-center justify-center text-zinc-500 bg-zinc-100 rounded-full active:scale-95 transition-all relative"
+          >
+            <Bell className="w-5 h-5" />
+            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-amber-500 rounded-full border-2 border-white"></span>
+          </button>
+          <button 
+            onClick={() => navigate('configuracoes')}
+            className="w-10 h-10 bg-gradient-to-tr from-zinc-200 to-zinc-300 rounded-full border-2 border-white shadow-sm active:scale-90 transition-all overflow-hidden"
+          >
+            <div className="w-full h-full flex items-center justify-center text-zinc-500">
+              <User className="w-5 h-5" />
+            </div>
+          </button>
         </div>
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto w-full">
-        {renderContent()}
+      <main className="flex-1 overflow-y-auto w-full relative mobile-safe-top mobile-safe-bottom">
+        <div className="h-full w-full relative">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={route}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              variants={pageVariants}
+              className="min-h-full"
+            >
+              {renderContent()}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </main>
+
+      {/* Mobile Bottom Navigation Bar - iOS Style */}
+      <div className="md:hidden fixed bottom-6 left-6 right-6 h-20 bg-white/80 backdrop-blur-2xl border border-black/[0.05] rounded-[2rem] z-50 px-4 pb-1 pt-1 flex items-center justify-around shadow-[0_20px_50px_-10px_rgba(0,0,0,0.15)]">
+        {navItems.map((item) => {
+          const isActive = route === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => navigate(item.id)}
+              className={`relative flex flex-col items-center justify-center gap-1 w-14 h-full transition-all duration-300 active:scale-90 ${
+                isActive ? 'text-zinc-900' : 'text-zinc-400'
+              }`}
+            >
+              <div className={`transition-all duration-300 ${isActive ? 'scale-110 -translate-y-0.5' : 'scale-100'}`}>
+                {item.icon}
+              </div>
+              <span className={`text-[9px] font-bold uppercase tracking-widest transition-all duration-300 ${isActive ? 'opacity-100' : 'opacity-60'}`}>
+                {item.label.substring(0, 3)}
+              </span>
+              {isActive && (
+                <motion.div 
+                  layoutId="activeTab"
+                  className="absolute -bottom-1 w-1 h-1 bg-zinc-900 rounded-full"
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
