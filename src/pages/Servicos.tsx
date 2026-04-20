@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Plus, Search, Edit2, Trash2, X } from 'lucide-react';
 import { store, Servico } from '../lib/store';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatBRL } from '../lib/format';
+import { createId } from '../lib/ids';
+import { useContratos, useServicos } from '../hooks/useStoreEntity';
+import type { NavigateFn } from '../types/navigation';
 
-export default function Servicos({ navigate }: { navigate: (route: string) => void }) {
-  const [servicos, setServicos] = useState<Servico[]>([]);
+export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn }) {
+  const servicos = useServicos();
+  const contratos = useContratos();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -17,41 +22,28 @@ export default function Servicos({ navigate }: { navigate: (route: string) => vo
     contratoId: ''
   });
 
-  const [contratos, setContratos] = useState(store.getContratos());
-
-  useEffect(() => {
-    setServicos(store.getServicos());
-    setContratos(store.getContratos());
-  }, []);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const newServico: Servico = {
-      id: editingId || crypto.randomUUID(),
+      id: editingId || createId(),
       nome: formData.nome,
       descricao: formData.descricao,
       valor: parseFloat(formData.valor),
       tipo: formData.tipo,
-      contratoId: formData.contratoId || undefined
+      contratoId: formData.contratoId || undefined,
     };
 
-    let updatedServicos;
-    if (editingId) {
-      updatedServicos = servicos.map(s => s.id === editingId ? newServico : s);
-    } else {
-      updatedServicos = [newServico, ...servicos];
-    }
+    const updatedServicos = editingId
+      ? servicos.map(s => s.id === editingId ? newServico : s)
+      : [newServico, ...servicos];
 
     store.saveServicos(updatedServicos);
-    setServicos(updatedServicos);
     closeModal();
   };
 
   const handleDelete = (id: string) => {
-    const updated = servicos.filter(s => s.id !== id);
-    store.saveServicos(updated);
-    setServicos(updated);
+    store.saveServicos(servicos.filter(s => s.id !== id));
   };
 
   const openModal = (servico?: Servico) => {
@@ -87,11 +79,6 @@ export default function Servicos({ navigate }: { navigate: (route: string) => vo
       opacity: 1,
       transition: { staggerChildren: 0.05 }
     }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 15 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.23, 1, 0.32, 1] } }
   };
 
   return (
@@ -202,7 +189,7 @@ export default function Servicos({ navigate }: { navigate: (route: string) => vo
                           </td>
                           <td className="px-10 py-8">
                             <div className="font-bold text-zinc-900 text-lg tracking-tight">
-                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(servico.valor)}
+                              {formatBRL(servico.valor)}
                             </div>
                           </td>
                           <td className="px-10 py-8 text-right">
@@ -253,7 +240,7 @@ export default function Servicos({ navigate }: { navigate: (route: string) => vo
                           </div>
                         </div>
                         <div className="font-bold text-zinc-900 text-base tracking-tight shrink-0">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(servico.valor)}
+                          {formatBRL(servico.valor)}
                         </div>
                       </div>
                       

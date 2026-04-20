@@ -1,51 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   User, Building2, Shield, Bell, Download, 
-  Smartphone, CheckCircle2, ChevronRight, LogOut,
+  Smartphone, CheckCircle2, ChevronRight,
   Camera, CreditCard, HelpCircle, Sparkles
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { store } from '../lib/store';
+import { store, resolvePlan } from '../lib/store';
+import { PLAN_META } from '../lib/featureFlags';
 import { usePWA } from '../lib/usePWA';
+import type { NavigateFn } from '../types/navigation';
 
-export default function Configuracoes() {
+interface ConfiguracoesProps {
+  navigate: NavigateFn;
+}
+
+export default function Configuracoes({ navigate }: ConfiguracoesProps) {
   const [userConfig, setUserConfig] = useState(() => store.getUserConfig());
   const { installPrompt, isInstalled, installApp } = usePWA();
   const [isSaving, setIsSaving] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [isSubscribing, setIsSubscribing] = useState(false);
+  const plan = resolvePlan(userConfig);
+  const planMeta = PLAN_META[plan];
 
   useEffect(() => {
     fetch('/api/notifications')
       .then(res => res.json())
       .then(data => setNotifications(data))
       .catch(err => console.error('Erro ao buscar notificações:', err));
-
-    // Check for success/canceled query params from Stripe
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('success')) {
-      const config = store.getUserConfig();
-      store.saveUserConfig({ ...config, isPro: true });
-      setUserConfig({ ...config, isPro: true });
-      // Remove params from URL
-      window.history.replaceState({}, '', window.location.pathname);
-    }
   }, []);
 
-  const handleSubscribe = async () => {
-    setIsSubscribing(true);
-    try {
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-      });
-      const { url } = await response.json();
-      if (url) window.location.href = url;
-    } catch (error) {
-      console.error('Erro ao iniciar checkout:', error);
-    } finally {
-      setIsSubscribing(false);
-    }
-  };
+  const handleGoToPlans = () => navigate('planos');
 
   const handleSave = () => {
     setIsSaving(true);
@@ -94,20 +78,26 @@ export default function Configuracoes() {
               </div>
               <h2 className="text-xl font-bold text-zinc-900 tracking-tight">{userConfig.nome || 'Seu Nome'}</h2>
               <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest mt-1">
-                {userConfig.isPro ? (
-                  <span className="text-amber-500 flex items-center justify-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Plano Pro
+                {plan !== 'free' ? (
+                  <span className={`${planMeta.accentClass} flex items-center justify-center gap-1`}>
+                    <Sparkles className="w-3 h-3" /> Plano {planMeta.name}
                   </span>
                 ) : 'Plano Gratuito'}
               </p>
-              
-              {!userConfig.isPro && (
-                <button 
-                  onClick={handleSubscribe}
-                  disabled={isSubscribing}
+
+              {plan === 'free' ? (
+                <button
+                  onClick={handleGoToPlans}
                   className="mt-6 w-full bg-gradient-to-r from-amber-400 to-amber-600 text-white py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-amber-200"
                 >
-                  {isSubscribing ? 'Processando...' : 'Assinar Plano Pro'}
+                  Ver planos e fazer upgrade
+                </button>
+              ) : (
+                <button
+                  onClick={handleGoToPlans}
+                  className="mt-6 w-full bg-white border border-zinc-200 text-zinc-700 py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all hover:border-zinc-900"
+                >
+                  Gerenciar plano
                 </button>
               )}
               
@@ -277,12 +267,12 @@ export default function Configuracoes() {
             {/* Other Settings Sections */}
             <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[
-                { icon: <Shield className="w-5 h-5" />, title: 'Segurança', desc: 'Senha e autenticação' },
-                { icon: <Bell className="w-5 h-5" />, title: 'Notificações', desc: 'Alertas de propostas' },
-                { icon: <CreditCard className="w-5 h-5" />, title: 'Faturamento', desc: 'Planos e pagamentos' },
-                { icon: <HelpCircle className="w-5 h-5" />, title: 'Suporte', desc: 'Central de ajuda' },
+                { icon: <Shield className="w-5 h-5" />, title: 'Segurança', desc: 'Senha e autenticação', onClick: undefined as (() => void) | undefined },
+                { icon: <Bell className="w-5 h-5" />, title: 'Notificações', desc: 'Alertas de propostas', onClick: undefined },
+                { icon: <CreditCard className="w-5 h-5" />, title: 'Faturamento', desc: 'Planos e pagamentos', onClick: handleGoToPlans },
+                { icon: <HelpCircle className="w-5 h-5" />, title: 'Suporte', desc: 'Central de ajuda', onClick: undefined },
               ].map((item, i) => (
-                <div key={i} className="apple-card p-6 flex items-center justify-between group cursor-pointer apple-card-hover">
+                <div key={i} onClick={item.onClick} className="apple-card p-6 flex items-center justify-between group cursor-pointer apple-card-hover">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-xl bg-zinc-50 flex items-center justify-center text-zinc-400 group-hover:bg-zinc-900 group-hover:text-white transition-all">
                       {item.icon}

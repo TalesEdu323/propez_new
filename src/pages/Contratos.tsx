@@ -1,18 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, FileText, MoreVertical, Trash2, Edit2, ChevronRight, ArrowLeft } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Search, FileText, Trash2, ChevronRight, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { store, ContratoTemplate } from '../lib/store';
 import ContractEditor from '../components/ContractEditor';
+import { useContratos } from '../hooks/useStoreEntity';
+import { createId } from '../lib/ids';
+import { formatDateBR } from '../lib/format';
 
 export default function Contratos() {
-  const [contratos, setContratos] = useState<ContratoTemplate[]>([]);
+  const contratos = useContratos();
   const [searchTerm, setSearchTerm] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [currentContrato, setCurrentContrato] = useState<Partial<ContratoTemplate> | null>(null);
-
-  useEffect(() => {
-    setContratos(store.getContratos());
-  }, []);
 
   const handleSave = () => {
     if (!currentContrato?.titulo || !currentContrato?.texto) {
@@ -21,26 +20,23 @@ export default function Contratos() {
     }
 
     const newContrato: ContratoTemplate = {
-      id: currentContrato.id || crypto.randomUUID(),
+      id: currentContrato.id || createId(),
       titulo: currentContrato.titulo,
       texto: currentContrato.texto,
       data_criacao: currentContrato.data_criacao || new Date().toISOString(),
     };
 
-    const updated = currentContrato.id 
+    const updated = currentContrato.id
       ? contratos.map(c => c.id === newContrato.id ? newContrato : c)
       : [newContrato, ...contratos];
 
     store.saveContratos(updated);
-    setContratos(updated);
     setIsEditing(false);
     setCurrentContrato(null);
   };
 
   const handleDelete = (id: string) => {
-    const updated = contratos.filter(c => c.id !== id);
-    store.saveContratos(updated);
-    setContratos(updated);
+    store.saveContratos(contratos.filter(c => c.id !== id));
   };
 
   const filteredContratos = contratos.filter(c => 
@@ -189,7 +185,7 @@ export default function Contratos() {
 
                   <div className="flex items-center justify-between pt-5 sm:pt-6 border-t border-zinc-100/50">
                     <span className="text-[8px] sm:text-[9px] font-bold text-zinc-300 uppercase tracking-widest">
-                      {new Date(contrato.data_criacao).toLocaleDateString('pt-BR')}
+                      {formatDateBR(contrato.data_criacao)}
                     </span>
                     <div className="flex items-center gap-2 text-zinc-300 group-hover:text-zinc-900 transition-all">
                       <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest">Editar</span>

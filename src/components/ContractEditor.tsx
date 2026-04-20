@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Info, Copy, Check, Type, Hash, Calendar, User } from 'lucide-react';
-import { motion } from 'motion/react';
+import React from 'react';
+import { FileText, Info, Copy, Type, Hash, Calendar, User } from 'lucide-react';
 
 interface Placeholder {
   key: string;
@@ -22,14 +21,6 @@ interface ContractEditorProps {
 }
 
 export default function ContractEditor({ value, onChange }: ContractEditorProps) {
-  const [copied, setCopied] = useState<string | null>(null);
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(text);
-    setTimeout(() => setCopied(null), 2000);
-  };
-
   const insertAtCursor = (text: string) => {
     const textarea = document.getElementById('contract-textarea') as HTMLTextAreaElement;
     if (!textarea) return;
@@ -71,11 +62,7 @@ export default function ContractEditor({ value, onChange }: ContractEditorProps)
                   </div>
                   <span className="text-[11px] font-medium text-zinc-700">{p.label}</span>
                 </div>
-                {copied === p.key ? (
-                  <Check className="w-3 h-3 text-green-500" />
-                ) : (
-                  <Copy className="w-3 h-3 text-zinc-300 group-hover:text-zinc-500" />
-                )}
+                <Copy className="w-3 h-3 text-zinc-300 group-hover:text-zinc-500" />
               </button>
             ))}
           </div>

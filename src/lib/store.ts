@@ -1,3 +1,15 @@
+import type { BuilderElement } from '../types/builder';
+
+export type PlanTier = 'free' | 'pro' | 'business';
+
+export interface PlanUsage {
+  propostasThisMonth: number;
+  iaGeracoesThisMonth: number;
+  rubricaAssinaturasThisMonth: number;
+  /** ISO string do primeiro dia do mês que estamos contabilizando. */
+  monthKey: string;
+}
+
 export interface Cliente {
   id: string;
   nome: string;
@@ -26,13 +38,15 @@ export interface ContratoTemplate {
 export interface ModeloProposta {
   id: string;
   nome: string;
-  elementos: any[];
+  elementos: BuilderElement[];
   servicos: string[]; // IDs dos serviços
   contratoTexto?: string;
   contratoId?: string; // ID do contrato padrão para este modelo
   chavePix?: string;
   linkPagamento?: string;
   data_criacao: string;
+  /** Plano mínimo necessário para usar este modelo (default: 'free'). */
+  tier?: PlanTier;
 }
 
 export interface Proposta {
@@ -50,13 +64,27 @@ export interface Proposta {
   data_validade?: string;
   status: 'pendente' | 'aprovada' | 'recusada';
   data_criacao: string;
-  elementos: any[];
+  elementos: BuilderElement[];
   contratoTexto?: string;
   contratoId?: string;
   chavePix?: string;
   linkPagamento?: string;
   pago: boolean;
   data_pagamento?: string;
+  // Integração ProSync: quando a proposta nasce a partir de um lead do CRM,
+  // guardamos o id do lead para sincronizar status, vendas e webhooks.
+  prosyncLeadId?: string;
+  // Integração Rubrica: estado de assinatura do contrato.
+  rubricaDocumentId?: string;
+  rubricaStatus?: 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed';
+  rubricaSigningUrl?: string;
+  rubricaSignedPdfUrl?: string;
+  rubricaLastSyncAt?: string;
+  /**
+   * Plano vigente do criador no momento do envio. Usamos para decidir se
+   * exibe marca d'água no link público e outras regras visuais.
+   */
+  creatorPlan?: PlanTier;
 }
 
 const initialClientes: Cliente[] = [
@@ -109,7 +137,33 @@ export interface UserConfig {
   logo?: string;
   assinatura?: string;
   onboarded: boolean;
+  /**
+   * Plano atual. `isPro` é mantido apenas para compatibilidade com código
+   * legado — derive sempre de `plan` quando possível.
+   */
+  plan?: PlanTier;
+  planStartedAt?: string;
+  planRenewsAt?: string;
+  /** Trial ativo? (data limite em ISO). */
+  trialEndsAt?: string;
+  billingCycle?: 'monthly' | 'yearly';
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  usage?: PlanUsage;
+  /** @deprecated Use `plan !== 'free'`. */
   isPro?: boolean;
+}
+
+export function getCurrentMonthKey(date: Date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export function resolvePlan(config: UserConfig | null | undefined): PlanTier {
+  if (!config) return 'free';
+  if (config.plan) return config.plan;
+  // Legado: usuários com isPro=true eram assinantes antigos -> mapear para Pro.
+  if (config.isPro) return 'pro';
+  return 'free';
 }
 
 const initialModelos: ModeloProposta[] = [
@@ -123,6 +177,7 @@ const initialModelos: ModeloProposta[] = [
       { id: 'f1', type: 'feature_grid', props: { features: [{ title: 'Qualidade', desc: 'Entrega de alto nível' }, { title: 'Agilidade', desc: 'Prazos respeitados' }, { title: 'Suporte', desc: 'Atendimento 24/7' }] } }
     ],
     servicos: [],
+    tier: 'free',
     data_criacao: new Date().toISOString()
   },
   {
@@ -135,6 +190,7 @@ const initialModelos: ModeloProposta[] = [
       { id: 'pricing1', type: 'pricing', props: { title: 'Plano Website', price: '3.500', period: 'único', items: ['Design Exclusivo', 'Hospedagem 1 ano', 'Suporte Técnico'] } }
     ],
     servicos: ['1'],
+    tier: 'pro',
     data_criacao: new Date().toISOString()
   },
   {
@@ -148,6 +204,7 @@ const initialModelos: ModeloProposta[] = [
       { id: 'm-cta', type: 'marketing_cta', props: { title: 'Vamos escalar seu negócio?', description: 'Clique no botão abaixo para agendar sua consultoria gratuita.', buttonText: 'QUERO ESCALAR AGORA' } }
     ],
     servicos: ['2'],
+    tier: 'pro',
     data_criacao: new Date().toISOString()
   },
   {
@@ -163,6 +220,7 @@ const initialModelos: ModeloProposta[] = [
       { id: 'm-cta', type: 'marketing_cta', props: { title: 'Pronto para dominar o mercado?', buttonText: 'FALAR COM CONSULTOR' } }
     ],
     servicos: ['2', '3'],
+    tier: 'business',
     data_criacao: new Date().toISOString()
   }
 ];
@@ -222,18 +280,108 @@ const initialPropostas: Proposta[] = [
   }
 ];
 
+export type StoreKey =
+  | 'propez_user_config'
+  | 'propez_clientes'
+  | 'propez_servicos'
+  | 'propez_modelos'
+  | 'propez_propostas'
+  | 'propez_contratos';
+
+type Listener = () => void;
+
+const listeners: Map<StoreKey, Set<Listener>> = new Map();
+
+function notify(key: StoreKey) {
+  const bucket = listeners.get(key);
+  if (!bucket) return;
+  bucket.forEach(listener => listener());
+}
+
+export function subscribeToStore(key: StoreKey, listener: Listener): () => void {
+  let bucket = listeners.get(key);
+  if (!bucket) {
+    bucket = new Set();
+    listeners.set(key, bucket);
+  }
+  bucket.add(listener);
+  return () => {
+    bucket?.delete(listener);
+  };
+}
+
+if (typeof window !== 'undefined') {
+  // Sincroniza quando outra aba atualiza o localStorage.
+  window.addEventListener('storage', event => {
+    if (event.key && listeners.has(event.key as StoreKey)) {
+      notify(event.key as StoreKey);
+    }
+  });
+}
+
+const EMPTY_USER_CONFIG: UserConfig = { nome: '', cnpj: '', onboarded: false, plan: 'free' };
+
+function emptyUsage(): PlanUsage {
+  return {
+    propostasThisMonth: 0,
+    iaGeracoesThisMonth: 0,
+    rubricaAssinaturasThisMonth: 0,
+    monthKey: getCurrentMonthKey(),
+  };
+}
+
+function normalizeUsage(config: UserConfig): { config: UserConfig; changed: boolean } {
+  const currentMonth = getCurrentMonthKey();
+  const usage = config.usage;
+  if (!usage || usage.monthKey !== currentMonth) {
+    return {
+      config: { ...config, usage: { ...emptyUsage(), monthKey: currentMonth } },
+      changed: true,
+    };
+  }
+  return { config, changed: false };
+}
+
 export const store = {
   getUserConfig: (): UserConfig => {
     try {
       const data = localStorage.getItem('propez_user_config');
-      if (!data) return { nome: '', cnpj: '', onboarded: false };
-      return JSON.parse(data);
+      if (!data) return { ...EMPTY_USER_CONFIG };
+      const parsed: UserConfig = JSON.parse(data);
+      // Back-fill do campo `plan` para usuários legados.
+      if (!parsed.plan) {
+        parsed.plan = parsed.isPro ? 'pro' : 'free';
+      }
+      return parsed;
     } catch {
-      return { nome: '', cnpj: '', onboarded: false };
+      return { ...EMPTY_USER_CONFIG };
     }
   },
   saveUserConfig: (config: UserConfig) => {
-    localStorage.setItem('propez_user_config', JSON.stringify(config));
+    const withDerived: UserConfig = {
+      ...config,
+      plan: config.plan ?? (config.isPro ? 'pro' : 'free'),
+      isPro: (config.plan ?? (config.isPro ? 'pro' : 'free')) !== 'free',
+    };
+    localStorage.setItem('propez_user_config', JSON.stringify(withDerived));
+    notify('propez_user_config');
+  },
+  /**
+   * Garante que `usage` existe e está na competência atual; retorna a config
+   * já normalizada (persiste se alterou).
+   */
+  ensureUsage: (): UserConfig => {
+    const { config, changed } = normalizeUsage(store.getUserConfig());
+    if (changed) store.saveUserConfig(config);
+    return config;
+  },
+  incrementUsage: (key: keyof Omit<PlanUsage, 'monthKey'>, delta = 1) => {
+    const { config } = normalizeUsage(store.getUserConfig());
+    const usage = config.usage ?? emptyUsage();
+    store.saveUserConfig({
+      ...config,
+      usage: { ...usage, [key]: (usage[key] ?? 0) + delta },
+    });
   },
 
   getClientes: (): Cliente[] => {
@@ -250,6 +398,7 @@ export const store = {
   },
   saveClientes: (clientes: Cliente[]) => {
     localStorage.setItem('propez_clientes', JSON.stringify(clientes));
+    notify('propez_clientes');
   },
   
   getServicos: (): Servico[] => {
@@ -266,6 +415,7 @@ export const store = {
   },
   saveServicos: (servicos: Servico[]) => {
     localStorage.setItem('propez_servicos', JSON.stringify(servicos));
+    notify('propez_servicos');
   },
 
   getModelos: (): ModeloProposta[] => {
@@ -282,6 +432,7 @@ export const store = {
   },
   saveModelos: (modelos: ModeloProposta[]) => {
     localStorage.setItem('propez_modelos', JSON.stringify(modelos));
+    notify('propez_modelos');
   },
 
   getPropostas: (): Proposta[] => {
@@ -298,6 +449,7 @@ export const store = {
   },
   savePropostas: (propostas: Proposta[]) => {
     localStorage.setItem('propez_propostas', JSON.stringify(propostas));
+    notify('propez_propostas');
   },
 
   getContratos: (): ContratoTemplate[] => {
@@ -314,5 +466,6 @@ export const store = {
   },
   saveContratos: (contratos: ContratoTemplate[]) => {
     localStorage.setItem('propez_contratos', JSON.stringify(contratos));
+    notify('propez_contratos');
   },
 };

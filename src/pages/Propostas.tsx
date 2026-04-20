@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
-import { Plus, Search, FileText, Edit2, Trash2, Eye, CheckCircle, XCircle, Clock } from 'lucide-react';
-import { store, Proposta } from '../lib/store';
+import { useState } from 'react';
+import { Plus, Search, FileText, Trash2, Eye, CheckCircle } from 'lucide-react';
+import { store } from '../lib/store';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatBRL } from '../lib/format';
+import { usePropostas, useServicos } from '../hooks/useStoreEntity';
+import type { NavigateFn } from '../types/navigation';
 
-export default function Propostas({ navigate }: { navigate: (route: string, params?: any) => void }) {
-  const [propostas, setPropostas] = useState<Proposta[]>(store.getPropostas());
+export default function Propostas({ navigate }: { navigate: NavigateFn }) {
+  const propostas = usePropostas();
+  const servicos = useServicos();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todas' | 'pendente' | 'aprovada' | 'recusada'>('todas');
-
-  const servicos = store.getServicos();
 
   const getServicosNomes = (ids: string[]) => {
     if (!ids || ids.length === 0) return 'Nenhum serviço';
@@ -24,31 +26,11 @@ export default function Propostas({ navigate }: { navigate: (route: string, para
   });
 
   const handleDelete = (id: string) => {
-    const updated = propostas.filter(p => p.id !== id);
-    setPropostas(updated);
-    store.savePropostas(updated);
+    store.savePropostas(propostas.filter(p => p.id !== id));
   };
 
   const handleStatusChange = (id: string, newStatus: 'pendente' | 'aprovada' | 'recusada') => {
-    const updated = propostas.map(p => p.id === id ? { ...p, status: newStatus } : p);
-    setPropostas(updated);
-    store.savePropostas(updated);
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'aprovada': return <CheckCircle className="w-4 h-4 text-emerald-600" />;
-      case 'recusada': return <XCircle className="w-4 h-4 text-red-600" />;
-      default: return <Clock className="w-4 h-4 text-amber-600" />;
-    }
-  };
-
-  const getStatusClass = (status: string) => {
-    switch (status) {
-      case 'aprovada': return 'bg-black text-white border-black';
-      case 'recusada': return 'bg-zinc-200 text-zinc-600 border-zinc-300';
-      default: return 'bg-white border-black/10 text-zinc-800 shadow-sm';
-    }
+    store.savePropostas(propostas.map(p => p.id === id ? { ...p, status: newStatus } : p));
   };
 
   const containerVariants = {
@@ -117,10 +99,10 @@ export default function Propostas({ navigate }: { navigate: (route: string, para
                 />
               </div>
               <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 no-scrollbar">
-                {['todas', 'pendente', 'aprovada', 'recusada'].map((status) => (
+                {(['todas', 'pendente', 'aprovada', 'recusada'] as const).map((status) => (
                   <button
                     key={status}
-                    onClick={() => setFilterStatus(status as any)}
+                    onClick={() => setFilterStatus(status)}
                     className={`px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-[0.15em] transition-all whitespace-nowrap ${
                       filterStatus === status 
                         ? 'bg-zinc-900 text-white shadow-lg shadow-zinc-900/20' 
@@ -186,7 +168,7 @@ export default function Propostas({ navigate }: { navigate: (route: string, para
                           </td>
                           <td className="px-8 py-7">
                             <div className="font-bold text-zinc-900 text-base tracking-tight">
-                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(proposta.valor)}
+                              {formatBRL(proposta.valor)}
                             </div>
                           </td>
                           <td className="px-8 py-7">
@@ -266,7 +248,7 @@ export default function Propostas({ navigate }: { navigate: (route: string, para
                         <div className="flex justify-between items-center pt-4 border-t border-zinc-100">
                           <div className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Valor Total</div>
                           <div className="text-lg font-bold text-zinc-900 tracking-tight">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(proposta.valor)}
+                            {formatBRL(proposta.valor)}
                           </div>
                         </div>
                       </div>

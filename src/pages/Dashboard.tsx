@@ -1,17 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
-  FileText, Users, CheckCircle, TrendingUp, Plus, Wallet, 
+  FileText, Users, CheckCircle, Plus, Wallet, 
   Clock, Activity, ChevronRight, DollarSign, ArrowUpRight,
   Target, Zap, BarChart3, Calendar as CalendarIcon,
   ArrowRight
 } from 'lucide-react';
-import { store } from '../lib/store';
 import { motion } from 'motion/react';
+import { formatBRL } from '../lib/format';
+import { useClientes, usePropostas, useServicos } from '../hooks/useStoreEntity';
+import type { NavigateFn } from '../types/navigation';
 
-export default function Dashboard({ navigate }: { navigate: (route: string, params?: any) => void }) {
-  const propostas = store.getPropostas();
-  const clientes = store.getClientes();
-  const servicos = store.getServicos();
+export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
+  const propostas = usePropostas();
+  const clientes = useClientes();
+  const servicos = useServicos();
 
   const [greeting, setGreeting] = useState('');
   const [currentDate, setCurrentDate] = useState('');
@@ -119,13 +121,13 @@ export default function Dashboard({ navigate }: { navigate: (route: string, para
                 </div>
                 <div>
                   <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-[0.25em] block mb-0.5">Faturamento Total</span>
-                  <span className="text-sm font-medium text-zinc-500">Propostas aprovadas e liquidadas</span>
+                  <span className="text-sm font-medium text-zinc-500">Total em propostas aprovadas</span>
                 </div>
               </div>
               
               <div className="space-y-6">
                 <h2 className="text-6xl md:text-8xl font-bold text-zinc-900 tracking-tightest">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalRevenue)}
+                  {formatBRL(totalRevenue, { fractionDigits: 0 })}
                 </h2>
                 <div className="flex items-center gap-3 w-fit bg-emerald-50/50 text-emerald-600 px-5 py-2.5 rounded-full border border-emerald-100/50 backdrop-blur-sm">
                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -169,7 +171,7 @@ export default function Dashboard({ navigate }: { navigate: (route: string, para
               <div>
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Recebido</span>
                 <h3 className="text-3xl font-bold text-zinc-900 tracking-tight mt-2">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalPaid)}
+                  {formatBRL(totalPaid, { fractionDigits: 0 })}
                 </h3>
               </div>
             </motion.div>
@@ -191,7 +193,7 @@ export default function Dashboard({ navigate }: { navigate: (route: string, para
               <div>
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Pendente</span>
                 <h3 className="text-3xl font-bold text-zinc-900 tracking-tight mt-2">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalPending)}
+                  {formatBRL(totalPending, { fractionDigits: 0 })}
                 </h3>
               </div>
             </motion.div>
@@ -289,7 +291,7 @@ export default function Dashboard({ navigate }: { navigate: (route: string, para
                     <div className="flex items-center gap-8 shrink-0 ml-4">
                       <div className="text-right hidden sm:block">
                         <p className="font-bold text-zinc-900 tracking-tightest text-xl">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor)}
+                          {formatBRL(p.valor)}
                         </p>
                         <span className={`text-[9px] font-bold uppercase tracking-[0.2em] px-3 py-1 rounded-full inline-block mt-1 ${
                           p.status === 'aprovada' ? 'text-emerald-600 bg-emerald-50 border border-emerald-100/50' :

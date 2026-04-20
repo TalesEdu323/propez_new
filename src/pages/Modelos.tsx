@@ -1,21 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Search, Edit2, Trash2, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { store, ModeloProposta } from '../lib/store';
+import { store } from '../lib/store';
+import { useModelos } from '../hooks/useStoreEntity';
+import { formatDateBR } from '../lib/format';
+import type { NavigateFn } from '../types/navigation';
 
-export default function Modelos({ navigate }: { navigate: (route: string, params?: any) => void }) {
-  const [modelos, setModelos] = useState<ModeloProposta[]>([]);
+export default function Modelos({ navigate }: { navigate: NavigateFn }) {
+  const modelos = useModelos();
   const [searchTerm, setSearchTerm] = useState('');
-
-  useEffect(() => {
-    setModelos(store.getModelos());
-  }, []);
 
   const handleDelete = (id: string) => {
     if (confirm('Tem certeza que deseja excluir este modelo?')) {
-      const updated = modelos.filter(m => m.id !== id);
-      store.saveModelos(updated);
-      setModelos(updated);
+      store.saveModelos(modelos.filter(m => m.id !== id));
     }
   };
 
@@ -125,7 +122,7 @@ export default function Modelos({ navigate }: { navigate: (route: string, params
                         </td>
                         <td className="px-10 py-8">
                           <div className="text-sm font-medium text-zinc-400">
-                            {new Date(modelo.data_criacao).toLocaleDateString('pt-BR')}
+                            {formatDateBR(modelo.data_criacao)}
                           </div>
                         </td>
                         <td className="px-10 py-8 text-right">
@@ -178,7 +175,7 @@ export default function Modelos({ navigate }: { navigate: (route: string, params
                       </div>
                       <div className="text-[9px] font-bold uppercase tracking-widest text-zinc-300 mt-4 mb-1">Criado em</div>
                       <div className="text-sm text-zinc-400 font-medium">
-                        {new Date(modelo.data_criacao).toLocaleDateString('pt-BR')}
+                        {formatDateBR(modelo.data_criacao)}
                       </div>
                     </div>
 

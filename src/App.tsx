@@ -1,28 +1,37 @@
-import React, { useState } from 'react';
-import { LayoutDashboard, Users, FileText, Settings, LogOut, Menu, X, Plus, Layers, Briefcase, Bell, DollarSign, User } from 'lucide-react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
+import { LayoutDashboard, Users, FileText, Settings, LogOut, Layers, Briefcase, Bell, DollarSign, User } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import Dashboard from './pages/Dashboard';
-import Clientes from './pages/Clientes';
-import Propostas from './pages/Propostas';
-import Pagamentos from './pages/Pagamentos';
-import PropezFluido from './pages/PropezFluido';
-import VisualizarProposta from './pages/VisualizarProposta';
-import Servicos from './pages/Servicos';
-import Modelos from './pages/Modelos';
-import CriarModelo from './pages/CriarModelo';
-import Contratos from './pages/Contratos';
-import Configuracoes from './pages/Configuracoes';
-import Onboarding from './components/Onboarding';
-import Login from './pages/Login';
 import { store } from './lib/store';
+import { subscribeToPlanosRequest } from './lib/navigationEvents';
+import type { AppRoute, NavigateFn, RouteParams } from './types/navigation';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Clientes = lazy(() => import('./pages/Clientes'));
+const Propostas = lazy(() => import('./pages/Propostas'));
+const Pagamentos = lazy(() => import('./pages/Pagamentos'));
+const PropezFluido = lazy(() => import('./pages/PropezFluido'));
+const VisualizarProposta = lazy(() => import('./pages/VisualizarProposta'));
+const Servicos = lazy(() => import('./pages/Servicos'));
+const Modelos = lazy(() => import('./pages/Modelos'));
+const CriarModelo = lazy(() => import('./pages/CriarModelo'));
+const Contratos = lazy(() => import('./pages/Contratos'));
+const Configuracoes = lazy(() => import('./pages/Configuracoes'));
+const Planos = lazy(() => import('./pages/Planos'));
+const Onboarding = lazy(() => import('./components/Onboarding'));
+const Login = lazy(() => import('./pages/Login'));
+
+const loadingFallback = (
+  <div className="h-full min-h-screen w-full flex items-center justify-center text-zinc-500 bg-[#F5F5F7]">
+    Carregando...
+  </div>
+);
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('propez_auth') === 'true';
   });
-  const [route, setRoute] = useState('dashboard');
-  const [routeParams, setRouteParams] = useState<any>({});
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [route, setRoute] = useState<AppRoute>('dashboard');
+  const [routeParams, setRouteParams] = useState<RouteParams>({});
   const [userConfig, setUserConfig] = useState(() => store.getUserConfig());
 
   const handleLogin = () => {
@@ -35,11 +44,28 @@ export default function App() {
     setIsAuthenticated(false);
   };
 
-  const navigate = (newRoute: string, params: any = {}) => {
+  const navigate: NavigateFn = (newRoute, params = {}) => {
     setRoute(newRoute);
     setRouteParams(params);
-    setIsMobileMenuOpen(false);
   };
+
+  // Qualquer lugar do app pode pedir "leva o usuário para planos" via event bus.
+  // Isso evita propagar `navigate` até componentes profundos (ex.: UpgradeGate).
+  useEffect(() => {
+    return subscribeToPlanosRequest((detail) => {
+      navigate('planos', { targetPlan: detail.targetPlan });
+    });
+  }, []);
+
+  // Suporte a URLs diretas: `?route=planos&success=true&session_id=...` cai aqui
+  // quando o usuário retorna do Stripe Checkout.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const directRoute = params.get('route') as AppRoute | null;
+    if (directRoute && directRoute !== route) {
+      navigate(directRoute);
+    }
+  }, []);
 
   const renderContent = () => {
     switch (route) {
@@ -62,9 +88,11 @@ export default function App() {
       case 'propez-fluido':
         return <PropezFluido navigate={navigate} initialData={routeParams} />;
       case 'visualizar-proposta':
-        return <VisualizarProposta navigate={navigate} id={routeParams.id} />;
+        return <VisualizarProposta navigate={navigate} id={routeParams.id ?? ''} />;
       case 'configuracoes':
-        return <Configuracoes />;
+        return <Configuracoes navigate={navigate} />;
+      case 'planos':
+        return <Planos navigate={navigate} targetPlan={routeParams.targetPlan as 'free' | 'pro' | 'business' | undefined} />;
       default:
         return <Dashboard navigate={navigate} />;
     }
@@ -77,11 +105,15 @@ export default function App() {
   };
 
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
+    return <Suspense fallback={loadingFallback}><Login onLogin={handleLogin} /></Suspense>;
   }
 
   if (!userConfig.onboarded) {
-    return <Onboarding onComplete={() => setUserConfig(store.getUserConfig())} />;
+    return (
+      <Suspense fallback={loadingFallback}>
+        <Onboarding onComplete={() => setUserConfig(store.getUserConfig())} />
+      </Suspense>
+    );
   }
 
   if (route === 'propez-fluido' || route === 'visualizar-proposta' || route === 'criar-modelo') {
@@ -95,13 +127,13 @@ export default function App() {
           variants={pageVariants}
           className="h-screen w-full overflow-hidden bg-[#F5F5F7]"
         >
-          {renderContent()}
+          <Suspense fallback={loadingFallback}>{renderContent()}</Suspense>
         </motion.div>
       </AnimatePresence>
     );
   }
 
-  const navItems = [
+  const navItems: { id: AppRoute; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: 'clientes', label: 'Clientes', icon: <Users className="w-5 h-5" /> },
     { id: 'servicos', label: 'Serviços', icon: <Briefcase className="w-5 h-5" /> },
@@ -127,7 +159,7 @@ export default function App() {
             return (
               <button
                 key={item.id}
-                onClick={() => navigate(item.id)}
+                onClick={() => navigate(item.id as AppRoute)}
                 className={`w-full flex items-center gap-3 px-5 py-3 rounded-2xl text-sm font-semibold transition-all duration-500 ${
                   isActive 
                     ? 'bg-zinc-900 text-white shadow-[0_10px_20px_-5px_rgba(0,0,0,0.15)]' 
@@ -202,7 +234,7 @@ export default function App() {
               variants={pageVariants}
               className="min-h-full"
             >
-              {renderContent()}
+              <Suspense fallback={loadingFallback}>{renderContent()}</Suspense>
             </motion.div>
           </AnimatePresence>
         </div>

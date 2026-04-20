@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mail, Lock, ArrowRight, ShieldCheck, User, Building2, ChevronLeft, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, ShieldCheck, ChevronLeft, CheckCircle2 } from 'lucide-react';
 
 interface LoginProps {
   onLogin: () => void;

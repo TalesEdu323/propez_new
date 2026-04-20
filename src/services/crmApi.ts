@@ -1,122 +1,157 @@
 /**
- * CRM Integration Service - ProSync
- * 
- * This file contains the hooks and functions needed to integrate PropEZ with your external CRM (ProSync).
- * Replace the contents of these functions with actual `fetch` or `axios` calls to your ProSync API.
+ * CRM Integration Service — ProSync
+ *
+ * Chama o **próprio backend** do PropEZ (`/api/integrations/prosync/*`), que
+ * por sua vez fala com a API do ProSync usando a `PROSYNC_API_KEY`.
+ * Nenhuma chave de API fica exposta no bundle do frontend.
  */
 
 export interface ExternalClient {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  document?: string; // CPF/CNPJ
-  company?: string;
-  source?: 'prosync' | 'local';
+  id: string
+  name: string
+  email: string
+  phone: string
+  document?: string
+  company?: string
+  source?: 'prosync' | 'local'
+  status?: string
 }
 
 export interface ProposalStatusUpdate {
-  proposalId: string;
-  crmClientId: string;
-  status: 'pendente' | 'aprovada' | 'recusada';
-  value: number;
-  updatedAt: string;
-  proposalUrl?: string;
-  clientEmail?: string;
-  clientDocument?: string;
-  products?: string[];
+  proposalId: string
+  crmClientId: string
+  status: 'pendente' | 'aprovada' | 'recusada'
+  value: number
+  updatedAt: string
+  proposalUrl?: string
+  clientEmail?: string
+  clientDocument?: string
+  products?: string[]
 }
 
-/**
- * Fetch leads/clients from ProSync CRM.
- * 
- * @returns A promise that resolves to an array of clients from ProSync.
- */
-export async function fetchClientsFromCRM(): Promise<ExternalClient[]> {
-  console.log('[ProSync Integration] Fetching leads from ProSync API...');
-  
-  try {
-    // Exemplo de implementação real:
-    // const response = await fetch(`${import.meta.env.VITE_PROSYNC_API_URL}/v1/leads`, {
-    //   headers: { 'Authorization': `Bearer ${import.meta.env.VITE_PROSYNC_API_KEY}` }
-    // });
-    // const data = await response.json();
-    // return data.leads.map((lead: any) => ({
-    //   id: lead.id,
-    //   name: lead.name,
-    //   email: lead.email,
-    //   phone: lead.phone,
-    //   company: lead.company_name,
-    //   source: 'prosync'
-    // }));
+interface ProsyncLead {
+  id: string
+  name: string
+  email: string | null
+  phone: string | null
+  company_name: string | null
+  status: string
+}
 
-    // Mock response para demonstração
-    return [
-      { id: 'prosync-001', name: 'Lead do ProSync 1', email: 'lead1@prosync.com', phone: '11999999999', source: 'prosync' },
-      { id: 'prosync-002', name: 'Lead do ProSync 2', email: 'lead2@prosync.com', phone: '11888888888', source: 'prosync' }
-    ];
-  } catch (error) {
-    console.error('[ProSync Integration] Error fetching leads:', error);
-    return [];
+function mapPropezStatusToProsyncLeadStatus(
+  s: ProposalStatusUpdate['status'],
+): string {
+  switch (s) {
+    case 'aprovada':
+      return 'qualified'
+    case 'recusada':
+      return 'lost'
+    case 'pendente':
+    default:
+      return 'contacted'
   }
 }
 
 /**
- * Send proposal data and status to ProSync CRM.
- * 
- * @param update The status update payload containing proposal details.
- * @returns A promise that resolves to true if successful, false otherwise.
+ * Busca leads do ProSync via backend.
+ */
+export async function fetchClientsFromCRM(params?: {
+  search?: string
+  status?: string
+  limit?: number
+}): Promise<ExternalClient[]> {
+  try {
+    const qs = new URLSearchParams()
+    if (params?.search) qs.set('search', params.search)
+    if (params?.status) qs.set('status', params.status)
+    if (params?.limit != null) qs.set('limit', String(params.limit))
+    const q = qs.toString() ? `?${qs.toString()}` : ''
+
+    const res = await fetch(`/api/integrations/prosync/leads${q}`, { method: 'GET' })
+    if (!res.ok) {
+      console.error('[ProSync] listLeads falhou:', res.status)
+      return []
+    }
+    const data = (await res.json()) as { leads: ProsyncLead[] }
+    return (data.leads || []).map((lead) => ({
+      id: lead.id,
+      name: lead.name,
+      email: lead.email || '',
+      phone: lead.phone || '',
+      company: lead.company_name || undefined,
+      status: lead.status,
+      source: 'prosync',
+    }))
+  } catch (error) {
+    console.error('[ProSync] Erro ao buscar leads:', error)
+    return []
+  }
+}
+
+/**
+ * Atualiza o lead no ProSync com um novo status derivado do estado da proposta.
  */
 export async function updateProposalStatusInCRM(update: ProposalStatusUpdate): Promise<boolean> {
-  console.log(`[ProSync Integration] Sending proposal ${update.proposalId} to ProSync...`, update);
-  
   try {
-    // Exemplo de implementação real:
-    // const response = await fetch(`${import.meta.env.VITE_PROSYNC_API_URL}/v1/proposals`, {
-    //   method: 'POST',
-    //   headers: { 
-    //     'Authorization': `Bearer ${import.meta.env.VITE_PROSYNC_API_KEY}`,
-    //     'Content-Type': 'application/json'
-    //   },
-    //   body: JSON.stringify(update)
-    // });
-    // return response.ok;
-
-    await new Promise(resolve => setTimeout(resolve, 800));
-    console.log('[ProSync Integration] Successfully synced with ProSync!');
-    return true;
+    const leadStatus = mapPropezStatusToProsyncLeadStatus(update.status)
+    const res = await fetch(
+      `/api/integrations/prosync/leads/${encodeURIComponent(update.crmClientId)}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: leadStatus,
+          notes: `Proposta ${update.proposalId} — R$ ${update.value.toFixed(2)} — ${update.status}${
+            update.proposalUrl ? ` — ${update.proposalUrl}` : ''
+          }`,
+        }),
+      },
+    )
+    return res.ok
   } catch (error) {
-    console.error('[ProSync Integration] Error syncing with ProSync:', error);
-    return false;
+    console.error('[ProSync] Erro ao atualizar lead:', error)
+    return false
   }
 }
 
 /**
- * Sync a product/service with ProSync CRM.
- * 
- * @param product The product details.
- * @returns A promise that resolves to true if successful.
+ * Sync do produto: hoje registra via backend quando o lead foi aprovado,
+ * criando uma venda no ProSync.
+ *
+ * Esta função aceita um objeto opcional com `prosyncLeadId` + `productId`
+ * para registrar a venda. Se não houver esses dados, faz apenas log.
  */
-export async function syncProductWithCRM(product: { id: string; nome: string; valor: number }): Promise<boolean> {
-  console.log(`[ProSync Integration] Syncing product ${product.nome} (${product.id}) with ProSync...`);
-  
+export async function syncProductWithCRM(product: {
+  id: string
+  nome: string
+  valor: number
+  prosyncLeadId?: string
+  prosyncProductId?: string
+  quantity?: number
+  status?: 'pending' | 'confirmed'
+}): Promise<boolean> {
+  if (!product.prosyncLeadId || !product.prosyncProductId) {
+    console.info('[ProSync] syncProductWithCRM ignorado (sem lead/product id)')
+    return false
+  }
   try {
-    // Exemplo de implementação real:
-    // const response = await fetch(`${import.meta.env.VITE_PROSYNC_API_URL}/v1/products`, {
-    //   method: 'POST',
-    //   headers: { 
-    //     'Authorization': `Bearer ${import.meta.env.VITE_PROSYNC_API_KEY}`,
-    //     'Content-Type': 'application/json'
-    //   },
-    //   body: JSON.stringify(product)
-    // });
-    // return response.ok;
-
-    await new Promise(resolve => setTimeout(resolve, 500));
-    console.log(`[ProSync Integration] Product ${product.nome} synced!`);
-    return true;
+    const res = await fetch(
+      `/api/integrations/prosync/leads/${encodeURIComponent(product.prosyncLeadId)}/sale`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: product.prosyncProductId,
+          quantity: product.quantity ?? 1,
+          unit_price: product.valor,
+          status: product.status ?? 'confirmed',
+          notes: `Proposta PropEZ ${product.id}`,
+        }),
+      },
+    )
+    return res.ok
   } catch (error) {
-    console.error('[ProSync Integration] Error syncing product:', error);
-    return false;
+    console.error('[ProSync] Erro ao sync de produto:', error)
+    return false
   }
 }

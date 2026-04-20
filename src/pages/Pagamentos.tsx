@@ -1,33 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { DollarSign, CheckCircle2, Clock, Search, Filter, ArrowUpRight, Check, X } from 'lucide-react';
-import { store, Proposta } from '../lib/store';
+import { useMemo, useState } from 'react';
+import { DollarSign, CheckCircle2, Clock, Search, ArrowUpRight, Check, X } from 'lucide-react';
+import { store } from '../lib/store';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatBRL } from '../lib/format';
+import { usePropostas } from '../hooks/useStoreEntity';
+import type { NavigateFn } from '../types/navigation';
 
-export default function Pagamentos({ navigate }: { navigate: (route: string, params?: any) => void }) {
-  const [propostas, setPropostas] = useState<Proposta[]>([]);
+export default function Pagamentos({ navigate: _navigate }: { navigate: NavigateFn }) {
+  const allPropostas = usePropostas();
+  const propostas = useMemo(() => allPropostas.filter(p => p.status === 'aprovada'), [allPropostas]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'todos' | 'pagos' | 'pendentes'>('todos');
 
-  useEffect(() => {
-    // Apenas propostas aprovadas aparecem no financeiro
-    const aprovadas = store.getPropostas().filter(p => p.status === 'aprovada');
-    setPropostas(aprovadas);
-  }, []);
-
   const toggleStatus = (id: string) => {
-    const updated = store.getPropostas().map(p => {
+    const updated = allPropostas.map(p => {
       if (p.id === id) {
         const isPago = !p.pago;
-        return { 
-          ...p, 
-          pago: isPago, 
-          data_pagamento: isPago ? new Date().toISOString() : undefined 
+        return {
+          ...p,
+          pago: isPago,
+          data_pagamento: isPago ? new Date().toISOString() : undefined,
         };
       }
       return p;
     });
     store.savePropostas(updated);
-    setPropostas(updated.filter(p => p.status === 'aprovada'));
   };
 
   const filteredPropostas = propostas.filter(p => {
@@ -53,13 +50,13 @@ export default function Pagamentos({ navigate }: { navigate: (route: string, par
           <div className="apple-card !p-6 flex flex-col gap-2 min-w-[160px] shadow-[0_20px_40px_-12px_rgba(16,185,129,0.1)]">
             <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-[0.25em]">Recebido</span>
             <span className="text-2xl font-bold text-zinc-900 tracking-tightest">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalRecebido)}
+              {formatBRL(totalRecebido, { fractionDigits: 0 })}
             </span>
           </div>
           <div className="apple-card !p-6 flex flex-col gap-2 min-w-[160px] shadow-[0_20px_40px_-12px_rgba(245,158,11,0.1)]">
             <span className="text-[9px] font-bold text-amber-600 uppercase tracking-[0.25em]">Pendente</span>
             <span className="text-2xl font-bold text-zinc-900 tracking-tightest">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalPendente)}
+              {formatBRL(totalPendente, { fractionDigits: 0 })}
             </span>
           </div>
         </div>
@@ -115,7 +112,7 @@ export default function Pagamentos({ navigate }: { navigate: (route: string, par
                     <h3 className="font-semibold text-zinc-900 text-xl tracking-tight leading-tight">{p.cliente_nome}</h3>
                     <div className="flex items-center gap-4 mt-2">
                       <span className="text-base font-bold text-zinc-900 tracking-tightest">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor)}
+                        {formatBRL(p.valor)}
                       </span>
                       <span className="text-zinc-200">•</span>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Aprovada em {new Date(p.data_criacao).toLocaleDateString('pt-BR')}</span>
