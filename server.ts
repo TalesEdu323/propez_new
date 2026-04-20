@@ -127,6 +127,17 @@ async function startServer() {
     }
   });
 
+  // Rubrica Webhook (Contract Signed)
+  app.post('/api/webhooks/rubrica', async (req, res) => {
+    const { documentId, status, signedAt } = req.body;
+    console.log(`[Rubrica Webhook] Document ${documentId} status updated to: ${status}`);
+    
+    // Here you would update the proposal status in the database
+    // await pool.query('UPDATE propostas SET assinado = true WHERE rubrica_doc_id = $1', [documentId]);
+    
+    res.json({ received: true });
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

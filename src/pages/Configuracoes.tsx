@@ -237,6 +237,43 @@ export default function Configuracoes() {
               </div>
             </motion.div>
 
+            {/* Integrations Section */}
+            <motion.div variants={itemVariants} className="apple-card p-8">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-900 border border-zinc-100">
+                  <Smartphone className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-zinc-900 tracking-tight">Integrações</h3>
+                  <p className="text-sm text-zinc-400 font-medium">Conecte o PropEZ com suas ferramentas favoritas</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 font-bold">PS</div>
+                    <div>
+                      <h4 className="text-sm font-bold text-zinc-900">ProSync CRM</h4>
+                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Status: Conectado</p>
+                    </div>
+                  </div>
+                  <button className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-900 transition-colors">Configurar</button>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 font-bold">RB</div>
+                    <div>
+                      <h4 className="text-sm font-bold text-zinc-900">Rubrica Assinatura</h4>
+                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Status: Aguardando Chave</p>
+                    </div>
+                  </div>
+                  <button className="text-[10px] font-bold text-amber-600 uppercase tracking-widest hover:text-amber-700 transition-colors">Conectar</button>
+                </div>
+              </div>
+            </motion.div>
+
             {/* Other Settings Sections */}
             <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[
