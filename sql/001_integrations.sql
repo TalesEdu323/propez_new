@@ -1,8 +1,8 @@
 -- ============================================================================
--- Integrações PropEZ <-> ProSync <-> Rubrica
+-- Integrações Propez <-> ProSync <-> Rubrica
 -- ----------------------------------------------------------------------------
--- Tabelas usadas pelo backend do PropEZ (server.ts) para:
--- 1. Persistir o mapeamento entre proposta PropEZ, lead do ProSync e documento
+-- Tabelas usadas pelo backend do Propez (server.ts) para:
+-- 1. Persistir o mapeamento entre proposta Propez, lead do ProSync e documento
 --    do Rubrica.
 -- 2. Auditar webhooks recebidos (ProSync / Rubrica) para rastreabilidade.
 --

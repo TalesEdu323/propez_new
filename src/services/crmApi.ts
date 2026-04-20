@@ -1,7 +1,7 @@
 /**
  * CRM Integration Service — ProSync
  *
- * Chama o **próprio backend** do PropEZ (`/api/integrations/prosync/*`), que
+ * Chama o **próprio backend** do Propez (`/api/integrations/prosync/*`), que
  * por sua vez fala com a API do ProSync usando a `PROSYNC_API_KEY`.
  * Nenhuma chave de API fica exposta no bundle do frontend.
  */
@@ -145,7 +145,7 @@ export async function syncProductWithCRM(product: {
           quantity: product.quantity ?? 1,
           unit_price: product.valor,
           status: product.status ?? 'confirmed',
-          notes: `Proposta PropEZ ${product.id}`,
+          notes: `Proposta Propez ${product.id}`,
         }),
       },
     )

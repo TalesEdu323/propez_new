@@ -1,9 +1,15 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { LayoutDashboard, Users, FileText, Settings, LogOut, Layers, Briefcase, Bell, DollarSign, User } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { store } from './lib/store';
+import { hydrateStore, store } from './lib/store';
 import { subscribeToPlanosRequest } from './lib/navigationEvents';
 import type { AppRoute, NavigateFn, RouteParams } from './types/navigation';
+import {
+  bootstrapSession,
+  logout as authLogout,
+  useInitialLoaded,
+  useSession,
+} from './lib/authSession';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Clientes = lazy(() => import('./pages/Clientes'));
@@ -11,6 +17,7 @@ const Propostas = lazy(() => import('./pages/Propostas'));
 const Pagamentos = lazy(() => import('./pages/Pagamentos'));
 const PropezFluido = lazy(() => import('./pages/PropezFluido'));
 const VisualizarProposta = lazy(() => import('./pages/VisualizarProposta'));
+const PublicProposta = lazy(() => import('./pages/PublicProposta'));
 const Servicos = lazy(() => import('./pages/Servicos'));
 const Modelos = lazy(() => import('./pages/Modelos'));
 const CriarModelo = lazy(() => import('./pages/CriarModelo'));
@@ -26,22 +33,38 @@ const loadingFallback = (
   </div>
 );
 
+function extractPublicToken(): string | null {
+  const path = window.location.pathname;
+  const m = path.match(/^\/p\/([A-Za-z0-9_-]{8,})\/?$/);
+  return m ? m[1] : null;
+}
+
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('propez_auth') === 'true';
-  });
+  const session = useSession();
+  const initialLoaded = useInitialLoaded();
+  const publicToken = useMemo(extractPublicToken, []);
+
   const [route, setRoute] = useState<AppRoute>('dashboard');
   const [routeParams, setRouteParams] = useState<RouteParams>({});
-  const [userConfig, setUserConfig] = useState(() => store.getUserConfig());
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (session && !hydrated) {
+      void hydrateStore().then(() => setHydrated(true));
+    }
+    if (!session && hydrated) {
+      setHydrated(false);
+    }
+  }, [session, hydrated]);
 
   const handleLogin = () => {
-    localStorage.setItem('propez_auth', 'true');
-    setIsAuthenticated(true);
+    // Login foi processado pela tela Login (cookies já setados).
+    // Forçamos reload da sessão para popular o estado global.
+    void bootstrapSession();
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('propez_auth');
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    await authLogout();
   };
 
   const navigate: NavigateFn = (newRoute, params = {}) => {
@@ -49,16 +72,12 @@ export default function App() {
     setRouteParams(params);
   };
 
-  // Qualquer lugar do app pode pedir "leva o usuário para planos" via event bus.
-  // Isso evita propagar `navigate` até componentes profundos (ex.: UpgradeGate).
   useEffect(() => {
     return subscribeToPlanosRequest((detail) => {
       navigate('planos', { targetPlan: detail.targetPlan });
     });
   }, []);
 
-  // Suporte a URLs diretas: `?route=planos&success=true&session_id=...` cai aqui
-  // quando o usuário retorna do Stripe Checkout.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const directRoute = params.get('route') as AppRoute | null;
@@ -66,6 +85,37 @@ export default function App() {
       navigate(directRoute);
     }
   }, []);
+
+  // Rota pública `/p/:token` — não exige autenticação.
+  if (publicToken) {
+    return (
+      <Suspense fallback={loadingFallback}>
+        <PublicProposta token={publicToken} />
+      </Suspense>
+    );
+  }
+
+  if (!initialLoaded) {
+    return loadingFallback;
+  }
+
+  const userConfig = store.getUserConfig();
+
+  if (!session) {
+    return (
+      <Suspense fallback={loadingFallback}>
+        <Login onLogin={handleLogin} />
+      </Suspense>
+    );
+  }
+
+  if (!userConfig.onboarded) {
+    return (
+      <Suspense fallback={loadingFallback}>
+        <Onboarding onComplete={() => { /* org.onboarded já atualizou via saveUserConfig */ }} />
+      </Suspense>
+    );
+  }
 
   const renderContent = () => {
     switch (route) {
@@ -104,18 +154,6 @@ export default function App() {
     exit: { opacity: 0, y: -10, scale: 0.98, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }
   };
 
-  if (!isAuthenticated) {
-    return <Suspense fallback={loadingFallback}><Login onLogin={handleLogin} /></Suspense>;
-  }
-
-  if (!userConfig.onboarded) {
-    return (
-      <Suspense fallback={loadingFallback}>
-        <Onboarding onComplete={() => setUserConfig(store.getUserConfig())} />
-      </Suspense>
-    );
-  }
-
   if (route === 'propez-fluido' || route === 'visualizar-proposta' || route === 'criar-modelo') {
     return (
       <AnimatePresence mode="wait">
@@ -150,7 +188,7 @@ export default function App() {
       <div className="hidden md:flex flex-col w-64 bg-white/80 backdrop-blur-2xl border-r border-black/[0.05] z-40 relative">
         <div className="p-6 flex items-center gap-3">
           <div className="w-8 h-8 bg-zinc-900 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">P</div>
-          <span className="font-semibold text-zinc-900 tracking-tight text-lg">PropEZ</span>
+          <span className="font-semibold text-zinc-900 tracking-tight text-lg">Propez</span>
         </div>
         
         <nav className="flex-1 px-4 mt-8 space-y-1.5 overflow-y-auto custom-scrollbar">
@@ -201,7 +239,7 @@ export default function App() {
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-2xl border-b border-black/[0.05] z-40 flex items-center justify-between px-5">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-zinc-900 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">P</div>
-          <span className="font-semibold text-zinc-900 tracking-tight">PropEZ</span>
+          <span className="font-semibold text-zinc-900 tracking-tight">Propez</span>
         </div>
         <div className="flex items-center gap-3">
           <button 

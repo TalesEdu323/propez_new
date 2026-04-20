@@ -120,9 +120,9 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
                 <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center mb-6 backdrop-blur-md border border-white/10">
                   <Smartphone className="w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold tracking-tight mb-2">PropEZ no seu Celular</h3>
+                <h3 className="text-xl font-bold tracking-tight mb-2">Propez no seu Celular</h3>
                 <p className="text-white/50 text-xs font-medium mb-8 leading-relaxed">
-                  Instale o PropEZ como um aplicativo nativo para acesso rápido e offline.
+                  Instale o Propez como um aplicativo nativo para acesso rápido e offline.
                 </p>
                 
                 {isInstalled ? (
@@ -235,7 +235,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
                 </div>
                 <div>
                   <h3 className="text-2xl font-bold text-zinc-900 tracking-tight">Integrações</h3>
-                  <p className="text-sm text-zinc-400 font-medium">Conecte o PropEZ com suas ferramentas favoritas</p>
+                  <p className="text-sm text-zinc-400 font-medium">Conecte o Propez com suas ferramentas favoritas</p>
                 </div>
               </div>
 

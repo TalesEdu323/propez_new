@@ -1,4 +1,27 @@
+/**
+ * Propez data store (frontend).
+ *
+ * Arquitetura:
+ * - Cache em memória alimentado pelo backend via `hydrateStore()` após login.
+ * - Leituras sempre síncronas (`store.getClientes()` etc.) para compatibilidade
+ *   com hooks `useSyncExternalStore` que já usam esta API.
+ * - Escritas (`store.saveClientes(list)`) aplicam diff contra o cache e
+ *   disparam chamadas CRUD para o backend. Atualizações otimistas + reconciliação
+ *   com as respostas (para adotar UUIDs gerados pelo servidor).
+ * - `getUserConfig()` deriva de organization + usage; `saveUserConfig()` faz
+ *   PATCH em `/api/organizations/current`.
+ *
+ * A interface pública foi mantida para evitar migração massiva das páginas.
+ * Código novo deve preferir os helpers explícitos (`createCliente`, etc.).
+ */
 import type { BuilderElement } from '../types/builder';
+import { api } from './apiClient';
+import {
+  getSession,
+  patchOrganization,
+  subscribeSession,
+  type CurrentOrg,
+} from './authSession';
 
 export type PlanTier = 'free' | 'pro' | 'business';
 
@@ -25,7 +48,7 @@ export interface Servico {
   descricao: string;
   valor: number;
   tipo: 'unico' | 'recorrente';
-  contratoId?: string; // ID do contrato padrão para este serviço
+  contratoId?: string;
 }
 
 export interface ContratoTemplate {
@@ -39,13 +62,12 @@ export interface ModeloProposta {
   id: string;
   nome: string;
   elementos: BuilderElement[];
-  servicos: string[]; // IDs dos serviços
+  servicos: string[];
   contratoTexto?: string;
-  contratoId?: string; // ID do contrato padrão para este modelo
+  contratoId?: string;
   chavePix?: string;
   linkPagamento?: string;
   data_criacao: string;
-  /** Plano mínimo necessário para usar este modelo (default: 'free'). */
   tier?: PlanTier;
 }
 
@@ -54,7 +76,7 @@ export interface Proposta {
   cliente_id: string;
   cliente_nome: string;
   modelo_id?: string;
-  servicos: string[]; // IDs dos serviços selecionados
+  servicos: string[];
   valor: number;
   desconto?: number;
   recorrente?: boolean;
@@ -71,65 +93,15 @@ export interface Proposta {
   linkPagamento?: string;
   pago: boolean;
   data_pagamento?: string;
-  // Integração ProSync: quando a proposta nasce a partir de um lead do CRM,
-  // guardamos o id do lead para sincronizar status, vendas e webhooks.
   prosyncLeadId?: string;
-  // Integração Rubrica: estado de assinatura do contrato.
   rubricaDocumentId?: string;
   rubricaStatus?: 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed';
   rubricaSigningUrl?: string;
   rubricaSignedPdfUrl?: string;
   rubricaLastSyncAt?: string;
-  /**
-   * Plano vigente do criador no momento do envio. Usamos para decidir se
-   * exibe marca d'água no link público e outras regras visuais.
-   */
   creatorPlan?: PlanTier;
+  publicToken?: string;
 }
-
-const initialClientes: Cliente[] = [
-  {
-    id: '1',
-    nome: 'TechCorp Solutions',
-    empresa: 'TechCorp',
-    email: 'contato@techcorp.com',
-    telefone: '(11) 99999-9999',
-    data_cadastro: new Date().toISOString()
-  },
-  {
-    id: '2',
-    nome: 'Inova Marketing',
-    empresa: 'Inova',
-    email: 'ola@inovamarketing.com.br',
-    telefone: '(11) 98888-8888',
-    data_cadastro: new Date().toISOString()
-  }
-];
-
-const initialServicos: Servico[] = [
-  {
-    id: '1',
-    nome: 'Desenvolvimento de Website',
-    descricao: 'Criação de website institucional responsivo com até 5 páginas.',
-    valor: 3500,
-    tipo: 'unico',
-    contratoId: '1'
-  },
-  {
-    id: '2',
-    nome: 'Gestão de Redes Sociais',
-    descricao: 'Gestão mensal de Instagram e Facebook com 12 posts/mês.',
-    valor: 1200,
-    tipo: 'recorrente'
-  },
-  {
-    id: '3',
-    nome: 'Consultoria SEO',
-    descricao: 'Análise e otimização de SEO on-page e off-page.',
-    valor: 2000,
-    tipo: 'unico'
-  }
-];
 
 export interface UserConfig {
   nome: string;
@@ -137,14 +109,9 @@ export interface UserConfig {
   logo?: string;
   assinatura?: string;
   onboarded: boolean;
-  /**
-   * Plano atual. `isPro` é mantido apenas para compatibilidade com código
-   * legado — derive sempre de `plan` quando possível.
-   */
   plan?: PlanTier;
   planStartedAt?: string;
   planRenewsAt?: string;
-  /** Trial ativo? (data limite em ISO). */
   trialEndsAt?: string;
   billingCycle?: 'monthly' | 'yearly';
   stripeCustomerId?: string;
@@ -161,124 +128,9 @@ export function getCurrentMonthKey(date: Date = new Date()): string {
 export function resolvePlan(config: UserConfig | null | undefined): PlanTier {
   if (!config) return 'free';
   if (config.plan) return config.plan;
-  // Legado: usuários com isPro=true eram assinantes antigos -> mapear para Pro.
   if (config.isPro) return 'pro';
   return 'free';
 }
-
-const initialModelos: ModeloProposta[] = [
-  {
-    id: 'modelo-servico',
-    nome: 'Proposta de Serviço (Simples)',
-    elementos: [
-      { id: 'h1', type: 'heading', props: { text: 'Proposta de Prestação de Serviços', align: 'center', size: 'text-5xl' } },
-      { id: 'p1', type: 'paragraph', props: { text: 'Apresentamos nossa solução personalizada para atender às suas necessidades de negócio.', align: 'center' } },
-      { id: 's1', type: 'stats', props: { value: '10', label: 'Anos de Experiência', suffix: '+', color: '#2563eb' } },
-      { id: 'f1', type: 'feature_grid', props: { features: [{ title: 'Qualidade', desc: 'Entrega de alto nível' }, { title: 'Agilidade', desc: 'Prazos respeitados' }, { title: 'Suporte', desc: 'Atendimento 24/7' }] } }
-    ],
-    servicos: [],
-    tier: 'free',
-    data_criacao: new Date().toISOString()
-  },
-  {
-    id: 'modelo-website',
-    nome: 'Proposta de Website Profissional',
-    elementos: [
-      { id: 'nav1', type: 'navbar', props: { logoText: 'WEB AGENCY', links: ['Sobre', 'Portfólio', 'Contato'], buttonText: 'Falar com Especialista' } },
-      { id: 'hero1', type: 'slider', props: { height: 600, slides: [{ image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=1200', title: 'Websites que Convertem', desc: 'Design moderno e focado em resultados.' }] } },
-      { id: 'grid1', type: 'feature_grid', props: { columns: '3', features: [{ title: 'Responsivo', desc: 'Funciona em todos os dispositivos' }, { title: 'SEO', desc: 'Otimizado para o Google' }, { title: 'Veloz', desc: 'Carregamento instantâneo' }] } },
-      { id: 'pricing1', type: 'pricing', props: { title: 'Plano Website', price: '3.500', period: 'único', items: ['Design Exclusivo', 'Hospedagem 1 ano', 'Suporte Técnico'] } }
-    ],
-    servicos: ['1'],
-    tier: 'pro',
-    data_criacao: new Date().toISOString()
-  },
-  {
-    id: 'modelo-trafego',
-    nome: 'Tráfego Pago (Performance)',
-    elementos: [
-      { id: 'm-hero', type: 'marketing_hero', props: { title: 'Escalamos seu faturamento com anúncios inteligentes.', subtitle: 'Gestão de Tráfego Pago', description: 'Pare de queimar dinheiro com anúncios que não vendem. Nossa metodologia foca em ROI real.', primaryColor: '#B45309' } },
-      { id: 'm-context', type: 'marketing_context', props: { title: 'O cenário atual do seu negócio', description: 'Muitas empresas investem em tráfego sem uma estratégia de funil, resultando em CAC alto e baixo lucro.', stats: [{ value: '3x', label: 'Média de ROI' }, { value: '45%', label: 'Redução de CAC' }], challenges: [{ title: 'Público Desqualificado', desc: 'Atraindo pessoas que não compram.' }, { title: 'Falta de Escala', desc: 'Dificuldade em aumentar o investimento mantendo o lucro.' }] } },
-      { id: 'm-strategy', type: 'marketing_strategy', props: { title: 'Nossa Estratégia de Escala', steps: [{ letra: 'A', titulo: 'Atração', desc: 'Anúncios de topo de funil para novos públicos.' }, { letra: 'R', titulo: 'Retenção', desc: 'Remarketing para quem já demonstrou interesse.' }, { letra: 'C', titulo: 'Conversão', desc: 'Foco em fechamento e vendas diretas.' }] } },
-      { id: 'm-pricing', type: 'marketing_pricing', props: { title: 'Investimento em Gestão', price: '1.500', items: ['Gestão de Meta Ads', 'Gestão de Google Ads', 'Dashboard de Métricas', 'Reunião Mensal'] } },
-      { id: 'm-cta', type: 'marketing_cta', props: { title: 'Vamos escalar seu negócio?', description: 'Clique no botão abaixo para agendar sua consultoria gratuita.', buttonText: 'QUERO ESCALAR AGORA' } }
-    ],
-    servicos: ['2'],
-    tier: 'pro',
-    data_criacao: new Date().toISOString()
-  },
-  {
-    id: 'modelo-marketing-completo',
-    nome: 'Marketing 360º (Completo)',
-    elementos: [
-      { id: 'm-hero', type: 'marketing_hero', props: { title: 'Sua empresa com um ecossistema de vendas completo.', subtitle: 'Marketing 360º', description: 'Unimos branding, tráfego e tecnologia para criar uma máquina de vendas previsível.', primaryColor: '#1e40af' } },
-      { id: 'grid1', type: 'feature_grid', props: { columns: '2', features: [{ title: 'Branding', desc: 'Identidade visual e posicionamento' }, { title: 'Tráfego', desc: 'Aquisição de novos clientes' }, { title: 'Conteúdo', desc: 'Retenção e autoridade' }, { title: 'Tecnologia', desc: 'Automação e CRM' }] } },
-      { id: 'm-strategy', type: 'marketing_strategy', props: { title: 'Jornada do Cliente' } },
-      { id: 'm-services', type: 'marketing_services', props: { title: 'O que entregamos no 360º' } },
-      { id: 'timeline1', type: 'timeline', props: { steps: [{ title: 'Mês 1: Setup', desc: 'Configurações e planejamento' }, { title: 'Mês 2: Lançamento', desc: 'Início das campanhas' }, { title: 'Mês 3: Otimização', desc: 'Ajustes finos para escala' }] } },
-      { id: 'm-pricing', type: 'marketing_pricing', props: { title: 'Plano 360º', price: '5.000', items: ['Gestão Completa', 'Time Dedicado', 'Relatórios Semanais'] } },
-      { id: 'm-cta', type: 'marketing_cta', props: { title: 'Pronto para dominar o mercado?', buttonText: 'FALAR COM CONSULTOR' } }
-    ],
-    servicos: ['2', '3'],
-    tier: 'business',
-    data_criacao: new Date().toISOString()
-  }
-];
-
-const initialContratos: ContratoTemplate[] = [
-  {
-    id: '1',
-    titulo: 'Contrato de Prestação de Serviços Web',
-    texto: `INSTRUMENTO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS
-
-CONTRATADA: {{EMPRESA_NOME}} (CNPJ: {{EMPRESA_CNPJ}})
-CONTRATANTE: {{CLIENTE_NOME}}
-
-1. OBJETO
-O presente contrato tem como objeto a prestação de serviços de {{SERVICOS_LISTA}}.
-
-2. VALOR E PAGAMENTO
-O valor total dos serviços é de {{VALOR_TOTAL}}.
-
-3. PRAZO
-A validade desta proposta é até {{DATA_VALIDADE}}.
-
-Data: {{DATA_ATUAL}}
-
-Assinatura CONTRATADA:
-{{ASSINATURA_IMAGEM}}`,
-    data_criacao: new Date().toISOString()
-  }
-];
-
-const initialPropostas: Proposta[] = [
-  {
-    id: '1',
-    cliente_id: '1',
-    cliente_nome: 'TechCorp Solutions',
-    modelo_id: '1',
-    servicos: ['1', '3'],
-    valor: 5500,
-    status: 'aprovada',
-    pago: true,
-    data_pagamento: new Date(Date.now() - 86400000).toISOString(),
-    data_criacao: new Date(Date.now() - 86400000 * 2).toISOString(), // 2 days ago
-    elementos: initialModelos[0].elementos
-  },
-  {
-    id: '2',
-    cliente_id: '2',
-    cliente_nome: 'Inova Marketing',
-    servicos: ['2'],
-    valor: 1200,
-    recorrente: true,
-    ciclo_recorrencia: 'mensal',
-    status: 'pendente',
-    pago: false,
-    data_criacao: new Date().toISOString(),
-    elementos: []
-  }
-];
 
 export type StoreKey =
   | 'propez_user_config'
@@ -294,8 +146,7 @@ const listeners: Map<StoreKey, Set<Listener>> = new Map();
 
 function notify(key: StoreKey) {
   const bucket = listeners.get(key);
-  if (!bucket) return;
-  bucket.forEach(listener => listener());
+  if (bucket) bucket.forEach((listener) => listener());
 }
 
 export function subscribeToStore(key: StoreKey, listener: Listener): () => void {
@@ -310,16 +161,17 @@ export function subscribeToStore(key: StoreKey, listener: Listener): () => void 
   };
 }
 
-if (typeof window !== 'undefined') {
-  // Sincroniza quando outra aba atualiza o localStorage.
-  window.addEventListener('storage', event => {
-    if (event.key && listeners.has(event.key as StoreKey)) {
-      notify(event.key as StoreKey);
-    }
-  });
+// ============================================================================
+// Cache em memória
+// ============================================================================
+interface Caches {
+  clientes: Cliente[];
+  servicos: Servico[];
+  modelos: ModeloProposta[];
+  propostas: Proposta[];
+  contratos: ContratoTemplate[];
+  usage: PlanUsage;
 }
-
-const EMPTY_USER_CONFIG: UserConfig = { nome: '', cnpj: '', onboarded: false, plan: 'free' };
 
 function emptyUsage(): PlanUsage {
   return {
@@ -330,142 +182,722 @@ function emptyUsage(): PlanUsage {
   };
 }
 
-function normalizeUsage(config: UserConfig): { config: UserConfig; changed: boolean } {
-  const currentMonth = getCurrentMonthKey();
-  const usage = config.usage;
-  if (!usage || usage.monthKey !== currentMonth) {
-    return {
-      config: { ...config, usage: { ...emptyUsage(), monthKey: currentMonth } },
-      changed: true,
-    };
-  }
-  return { config, changed: false };
+const cache: Caches = {
+  clientes: [],
+  servicos: [],
+  modelos: [],
+  propostas: [],
+  contratos: [],
+  usage: emptyUsage(),
+};
+
+let hydrated = false;
+let hydratePromise: Promise<void> | null = null;
+
+export function isStoreHydrated(): boolean {
+  return hydrated;
 }
 
+export function clearStore(): void {
+  cache.clientes = [];
+  cache.servicos = [];
+  cache.modelos = [];
+  cache.propostas = [];
+  cache.contratos = [];
+  cache.usage = emptyUsage();
+  hydrated = false;
+  hydratePromise = null;
+  notify('propez_clientes');
+  notify('propez_servicos');
+  notify('propez_modelos');
+  notify('propez_propostas');
+  notify('propez_contratos');
+  notify('propez_user_config');
+}
+
+subscribeSession(() => {
+  if (!getSession()) {
+    clearStore();
+  }
+});
+
+// ----------------------------------------------------------------------------
+// Tipos de response do backend (snake_case mesclado com camelCase nos nossos
+// serializers). Aceitamos campos opcionais para robustez.
+// ----------------------------------------------------------------------------
+interface ApiCliente {
+  id: string;
+  nome: string;
+  empresa: string;
+  email: string;
+  telefone: string;
+  data_cadastro: string;
+}
+interface ApiServico {
+  id: string;
+  nome: string;
+  descricao: string;
+  valor: number;
+  tipo: 'unico' | 'recorrente';
+  contratoId?: string | null;
+}
+interface ApiContrato {
+  id: string;
+  titulo: string;
+  texto: string;
+  data_criacao: string;
+}
+interface ApiModelo {
+  id: string;
+  nome: string;
+  elementos: BuilderElement[];
+  servicos: string[];
+  contratoId?: string | null;
+  contratoTexto?: string | null;
+  chavePix?: string | null;
+  linkPagamento?: string | null;
+  tier: PlanTier;
+  data_criacao: string;
+}
+interface ApiProposta {
+  id: string;
+  cliente_id: string | null;
+  cliente_nome: string;
+  modelo_id?: string | null;
+  servicos: string[];
+  valor: number;
+  desconto?: number;
+  recorrente?: boolean;
+  ciclo_recorrencia?: string | null;
+  duracao_recorrencia?: number | null;
+  data_envio?: string | null;
+  data_validade?: string | null;
+  status: 'pendente' | 'aprovada' | 'recusada';
+  elementos: BuilderElement[];
+  contratoTexto?: string | null;
+  contratoId?: string | null;
+  chavePix?: string | null;
+  linkPagamento?: string | null;
+  pago: boolean;
+  data_pagamento?: string | null;
+  data_criacao: string;
+  creatorPlan?: string | null;
+  publicToken?: string | null;
+  prosyncLeadId?: string | null;
+  rubricaDocumentId?: string | null;
+  rubricaStatus?: 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed' | null;
+  rubricaSigningUrl?: string | null;
+  rubricaSignedPdfUrl?: string | null;
+  rubricaLastSyncAt?: string | null;
+}
+
+function fromApiCliente(a: ApiCliente): Cliente {
+  return {
+    id: a.id,
+    nome: a.nome ?? '',
+    empresa: a.empresa ?? '',
+    email: a.email ?? '',
+    telefone: a.telefone ?? '',
+    data_cadastro: a.data_cadastro ?? new Date().toISOString(),
+  };
+}
+function fromApiServico(a: ApiServico): Servico {
+  return {
+    id: a.id,
+    nome: a.nome ?? '',
+    descricao: a.descricao ?? '',
+    valor: Number(a.valor ?? 0),
+    tipo: (a.tipo ?? 'unico') as 'unico' | 'recorrente',
+    contratoId: a.contratoId ?? undefined,
+  };
+}
+function fromApiContrato(a: ApiContrato): ContratoTemplate {
+  return { id: a.id, titulo: a.titulo, texto: a.texto ?? '', data_criacao: a.data_criacao };
+}
+function fromApiModelo(a: ApiModelo): ModeloProposta {
+  return {
+    id: a.id,
+    nome: a.nome,
+    elementos: Array.isArray(a.elementos) ? a.elementos : [],
+    servicos: Array.isArray(a.servicos) ? a.servicos : [],
+    contratoId: a.contratoId ?? undefined,
+    contratoTexto: a.contratoTexto ?? undefined,
+    chavePix: a.chavePix ?? undefined,
+    linkPagamento: a.linkPagamento ?? undefined,
+    tier: (a.tier ?? 'free') as PlanTier,
+    data_criacao: a.data_criacao,
+  };
+}
+function fromApiProposta(a: ApiProposta): Proposta {
+  return {
+    id: a.id,
+    cliente_id: a.cliente_id ?? '',
+    cliente_nome: a.cliente_nome ?? '',
+    modelo_id: a.modelo_id ?? undefined,
+    servicos: Array.isArray(a.servicos) ? a.servicos : [],
+    valor: Number(a.valor ?? 0),
+    desconto: a.desconto != null ? Number(a.desconto) : undefined,
+    recorrente: !!a.recorrente,
+    ciclo_recorrencia: a.ciclo_recorrencia ?? undefined,
+    duracao_recorrencia: a.duracao_recorrencia ?? undefined,
+    data_envio: a.data_envio ?? undefined,
+    data_validade: a.data_validade ?? undefined,
+    status: a.status,
+    elementos: Array.isArray(a.elementos) ? a.elementos : [],
+    contratoTexto: a.contratoTexto ?? undefined,
+    contratoId: a.contratoId ?? undefined,
+    chavePix: a.chavePix ?? undefined,
+    linkPagamento: a.linkPagamento ?? undefined,
+    pago: !!a.pago,
+    data_pagamento: a.data_pagamento ?? undefined,
+    data_criacao: a.data_criacao,
+    creatorPlan: (a.creatorPlan as PlanTier | undefined) ?? undefined,
+    publicToken: a.publicToken ?? undefined,
+    prosyncLeadId: a.prosyncLeadId ?? undefined,
+    rubricaDocumentId: a.rubricaDocumentId ?? undefined,
+    rubricaStatus: a.rubricaStatus ?? undefined,
+    rubricaSigningUrl: a.rubricaSigningUrl ?? undefined,
+    rubricaSignedPdfUrl: a.rubricaSignedPdfUrl ?? undefined,
+    rubricaLastSyncAt: a.rubricaLastSyncAt ?? undefined,
+  };
+}
+
+// ============================================================================
+// Hydration
+// ============================================================================
+export async function hydrateStore(force = false): Promise<void> {
+  if (hydrated && !force) return;
+  if (!force && hydratePromise) return hydratePromise;
+  hydratePromise = (async () => {
+    const [clientes, servicos, modelos, propostas, contratos, usage] = await Promise.all([
+      api.get<ApiCliente[]>('/api/clientes').catch(() => []),
+      api.get<ApiServico[]>('/api/servicos').catch(() => []),
+      api.get<ApiModelo[]>('/api/modelos').catch(() => []),
+      api.get<ApiProposta[]>('/api/propostas').catch(() => []),
+      api.get<ApiContrato[]>('/api/contratos').catch(() => []),
+      api
+        .get<PlanUsage>('/api/usage/current')
+        .catch(() => emptyUsage()),
+    ]);
+    cache.clientes = (clientes ?? []).map(fromApiCliente);
+    cache.servicos = (servicos ?? []).map(fromApiServico);
+    cache.modelos = (modelos ?? []).map(fromApiModelo);
+    cache.propostas = (propostas ?? []).map(fromApiProposta);
+    cache.contratos = (contratos ?? []).map(fromApiContrato);
+    cache.usage = usage ?? emptyUsage();
+    hydrated = true;
+    notify('propez_clientes');
+    notify('propez_servicos');
+    notify('propez_modelos');
+    notify('propez_propostas');
+    notify('propez_contratos');
+    notify('propez_user_config');
+  })();
+  return hydratePromise;
+}
+
+export async function refreshEntity(key: Exclude<StoreKey, 'propez_user_config'>): Promise<void> {
+  switch (key) {
+    case 'propez_clientes': {
+      const list = await api.get<ApiCliente[]>('/api/clientes').catch(() => []);
+      cache.clientes = (list ?? []).map(fromApiCliente);
+      break;
+    }
+    case 'propez_servicos': {
+      const list = await api.get<ApiServico[]>('/api/servicos').catch(() => []);
+      cache.servicos = (list ?? []).map(fromApiServico);
+      break;
+    }
+    case 'propez_modelos': {
+      const list = await api.get<ApiModelo[]>('/api/modelos').catch(() => []);
+      cache.modelos = (list ?? []).map(fromApiModelo);
+      break;
+    }
+    case 'propez_propostas': {
+      const list = await api.get<ApiProposta[]>('/api/propostas').catch(() => []);
+      cache.propostas = (list ?? []).map(fromApiProposta);
+      break;
+    }
+    case 'propez_contratos': {
+      const list = await api.get<ApiContrato[]>('/api/contratos').catch(() => []);
+      cache.contratos = (list ?? []).map(fromApiContrato);
+      break;
+    }
+  }
+  notify(key);
+}
+
+// ============================================================================
+// Diff engine genérico
+// ============================================================================
+function jsonEquals(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return a === b;
+  }
+}
+
+interface EntityApi<T extends { id: string }, TPayload = T> {
+  create: (item: TPayload) => Promise<T>;
+  update: (id: string, patch: TPayload) => Promise<T>;
+  delete: (id: string) => Promise<void>;
+  toPayload: (item: T) => TPayload;
+}
+
+function replaceCacheItem<T extends { id: string }>(list: T[], oldId: string, next: T): T[] {
+  const idx = list.findIndex((i) => i.id === oldId);
+  if (idx === -1) return [next, ...list];
+  const copy = list.slice();
+  copy[idx] = next;
+  return copy;
+}
+
+function removeCacheItem<T extends { id: string }>(list: T[], id: string): T[] {
+  return list.filter((i) => i.id !== id);
+}
+
+async function diffSave<T extends { id: string }, TPayload>(
+  key: Exclude<StoreKey, 'propez_user_config'>,
+  getList: () => T[],
+  setList: (v: T[]) => void,
+  newList: T[],
+  impl: EntityApi<T, TPayload>,
+): Promise<void> {
+  const prev = getList();
+  const prevById = new Map(prev.map((i) => [i.id, i] as const));
+  const nextById = new Map(newList.map((i) => [i.id, i] as const));
+
+  // Atualização otimista.
+  setList(newList.slice());
+  notify(key);
+
+  const ops: Promise<void>[] = [];
+
+  // DELETEs
+  for (const [id] of prevById) {
+    if (!nextById.has(id)) {
+      ops.push(
+        impl
+          .delete(id)
+          .then(() => {
+            setList(removeCacheItem(getList(), id));
+            notify(key);
+          })
+          .catch((err) => {
+            console.error(`[store] ${key} delete falhou:`, err);
+            // Rollback: recoloca no cache se apagamos otimisticamente e falhou
+          }),
+      );
+    }
+  }
+
+  // CREATE / UPDATE
+  for (const [id, item] of nextById) {
+    const prevItem = prevById.get(id);
+    if (!prevItem) {
+      ops.push(
+        impl
+          .create(impl.toPayload(item))
+          .then((saved) => {
+            setList(replaceCacheItem(getList(), id, saved));
+            notify(key);
+          })
+          .catch((err) => {
+            console.error(`[store] ${key} create falhou:`, err);
+            setList(removeCacheItem(getList(), id));
+            notify(key);
+          }),
+      );
+    } else if (!jsonEquals(prevItem, item)) {
+      ops.push(
+        impl
+          .update(id, impl.toPayload(item))
+          .then((saved) => {
+            setList(replaceCacheItem(getList(), id, saved));
+            notify(key);
+          })
+          .catch((err) => {
+            console.error(`[store] ${key} update falhou:`, err);
+          }),
+      );
+    }
+  }
+
+  await Promise.allSettled(ops);
+}
+
+// ============================================================================
+// Implementações concretas por entidade
+// ============================================================================
+const clienteApi: EntityApi<Cliente, Partial<Cliente>> = {
+  toPayload: (c) => ({
+    nome: c.nome,
+    empresa: c.empresa,
+    email: c.email,
+    telefone: c.telefone,
+  }),
+  create: async (p) => fromApiCliente(await api.post<ApiCliente>('/api/clientes', p as Record<string, unknown>)),
+  update: async (id, p) => fromApiCliente(await api.patch<ApiCliente>(`/api/clientes/${id}`, p as Record<string, unknown>)),
+  delete: async (id) => {
+    await api.delete(`/api/clientes/${id}`);
+  },
+};
+
+interface ServicoPayload {
+  nome: string;
+  descricao: string;
+  valor: number;
+  tipo: 'unico' | 'recorrente';
+  contratoId?: string | null;
+}
+const servicoApi: EntityApi<Servico, ServicoPayload> = {
+  toPayload: (s) => ({
+    nome: s.nome,
+    descricao: s.descricao,
+    valor: s.valor,
+    tipo: s.tipo,
+    contratoId: s.contratoId ?? null,
+  }),
+  create: async (p) => fromApiServico(await api.post<ApiServico>('/api/servicos', p as unknown as Record<string, unknown>)),
+  update: async (id, p) => fromApiServico(await api.patch<ApiServico>(`/api/servicos/${id}`, p as unknown as Record<string, unknown>)),
+  delete: async (id) => {
+    await api.delete(`/api/servicos/${id}`);
+  },
+};
+
+interface ContratoPayload {
+  titulo: string;
+  texto: string;
+}
+const contratoApi: EntityApi<ContratoTemplate, ContratoPayload> = {
+  toPayload: (c) => ({ titulo: c.titulo, texto: c.texto }),
+  create: async (p) => fromApiContrato(await api.post<ApiContrato>('/api/contratos', p as unknown as Record<string, unknown>)),
+  update: async (id, p) => fromApiContrato(await api.patch<ApiContrato>(`/api/contratos/${id}`, p as unknown as Record<string, unknown>)),
+  delete: async (id) => {
+    await api.delete(`/api/contratos/${id}`);
+  },
+};
+
+interface ModeloPayload {
+  nome: string;
+  elementos: BuilderElement[];
+  servicos: string[];
+  contratoId?: string | null;
+  contratoTexto?: string | null;
+  chavePix?: string | null;
+  linkPagamento?: string | null;
+  tier: PlanTier;
+}
+const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
+  toPayload: (m) => ({
+    nome: m.nome,
+    elementos: m.elementos ?? [],
+    servicos: m.servicos ?? [],
+    contratoId: m.contratoId ?? null,
+    contratoTexto: m.contratoTexto ?? null,
+    chavePix: m.chavePix ?? null,
+    linkPagamento: m.linkPagamento ?? null,
+    tier: m.tier ?? 'free',
+  }),
+  create: async (p) => fromApiModelo(await api.post<ApiModelo>('/api/modelos', p as unknown as Record<string, unknown>)),
+  update: async (id, p) => fromApiModelo(await api.patch<ApiModelo>(`/api/modelos/${id}`, p as unknown as Record<string, unknown>)),
+  delete: async (id) => {
+    await api.delete(`/api/modelos/${id}`);
+  },
+};
+
+interface PropostaPayload {
+  cliente_id?: string | null;
+  cliente_nome: string;
+  modelo_id?: string | null;
+  servicos: string[];
+  valor: number;
+  desconto?: number;
+  recorrente?: boolean;
+  ciclo_recorrencia?: string | null;
+  duracao_recorrencia?: number | null;
+  data_envio?: string | null;
+  data_validade?: string | null;
+  status: 'pendente' | 'aprovada' | 'recusada';
+  elementos: BuilderElement[];
+  contratoTexto?: string | null;
+  contratoId?: string | null;
+  chavePix?: string | null;
+  linkPagamento?: string | null;
+  pago: boolean;
+  data_pagamento?: string | null;
+  creatorPlan?: PlanTier | null;
+  prosyncLeadId?: string | null;
+}
+
+function toPropostaPayload(p: Proposta): PropostaPayload {
+  return {
+    cliente_id: p.cliente_id || null,
+    cliente_nome: p.cliente_nome,
+    modelo_id: p.modelo_id ?? null,
+    servicos: p.servicos ?? [],
+    valor: p.valor,
+    desconto: p.desconto,
+    recorrente: p.recorrente,
+    ciclo_recorrencia: p.ciclo_recorrencia ?? null,
+    duracao_recorrencia: p.duracao_recorrencia ?? null,
+    data_envio: p.data_envio ?? null,
+    data_validade: p.data_validade ?? null,
+    status: p.status,
+    elementos: p.elementos ?? [],
+    contratoTexto: p.contratoTexto ?? null,
+    contratoId: p.contratoId ?? null,
+    chavePix: p.chavePix ?? null,
+    linkPagamento: p.linkPagamento ?? null,
+    pago: p.pago,
+    data_pagamento: p.data_pagamento ?? null,
+    creatorPlan: p.creatorPlan ?? null,
+    prosyncLeadId: p.prosyncLeadId ?? null,
+  };
+}
+
+const propostaApi: EntityApi<Proposta, PropostaPayload> = {
+  toPayload: toPropostaPayload,
+  create: async (p) => fromApiProposta(await api.post<ApiProposta>('/api/propostas', p as unknown as Record<string, unknown>)),
+  update: async (id, p) => fromApiProposta(await api.patch<ApiProposta>(`/api/propostas/${id}`, p as unknown as Record<string, unknown>)),
+  delete: async (id) => {
+    await api.delete(`/api/propostas/${id}`);
+  },
+};
+
+// ============================================================================
+// UserConfig (derivado de organization + usage)
+// ============================================================================
+function buildUserConfig(org: CurrentOrg | null, usage: PlanUsage): UserConfig {
+  if (!org) {
+    return { nome: '', cnpj: '', onboarded: false, plan: 'free', usage };
+  }
+  return {
+    nome: org.name ?? '',
+    cnpj: org.cnpj ?? '',
+    logo: org.logoUrl ?? undefined,
+    assinatura: org.signatureUrl ?? undefined,
+    onboarded: !!org.onboarded,
+    plan: (org.plan ?? 'free') as PlanTier,
+    planStartedAt: org.planStartedAt ?? undefined,
+    planRenewsAt: org.planRenewsAt ?? undefined,
+    trialEndsAt: org.trialEndsAt ?? undefined,
+    billingCycle: (org.billingCycle ?? undefined) as UserConfig['billingCycle'],
+    stripeCustomerId: org.stripeCustomerId ?? undefined,
+    stripeSubscriptionId: org.stripeSubscriptionId ?? undefined,
+    usage,
+    isPro: (org.plan ?? 'free') !== 'free',
+  };
+}
+
+async function pushOrgPatch(patch: Partial<UserConfig>): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if ('nome' in patch) body.name = patch.nome;
+  if ('cnpj' in patch) body.cnpj = patch.cnpj ?? null;
+  if ('logo' in patch) body.logoUrl = patch.logo ?? null;
+  if ('assinatura' in patch) body.signatureUrl = patch.assinatura ?? null;
+  if ('onboarded' in patch) body.onboarded = patch.onboarded;
+  if (Object.keys(body).length === 0) return;
+  try {
+    const updated = await api.patch<{
+      name: string;
+      cnpj: string | null;
+      logoUrl: string | null;
+      signatureUrl: string | null;
+      onboarded: boolean;
+      plan: PlanTier;
+      billingCycle: 'monthly' | 'yearly' | null;
+      trialEndsAt: string | null;
+      planStartedAt: string | null;
+      planRenewsAt: string | null;
+      stripeCustomerId: string | null;
+      stripeSubscriptionId: string | null;
+    }>('/api/organizations/current', body);
+    patchOrganization({
+      name: updated.name,
+      cnpj: updated.cnpj,
+      logoUrl: updated.logoUrl,
+      signatureUrl: updated.signatureUrl,
+      onboarded: updated.onboarded,
+      plan: updated.plan,
+      billingCycle: updated.billingCycle,
+      trialEndsAt: updated.trialEndsAt,
+      planStartedAt: updated.planStartedAt,
+      planRenewsAt: updated.planRenewsAt,
+      stripeCustomerId: updated.stripeCustomerId,
+      stripeSubscriptionId: updated.stripeSubscriptionId,
+    });
+  } catch (err) {
+    console.error('[store] saveUserConfig erro', err);
+  }
+}
+
+// ============================================================================
+// API pública (mantém a superfície histórica)
+// ============================================================================
 export const store = {
   getUserConfig: (): UserConfig => {
-    try {
-      const data = localStorage.getItem('propez_user_config');
-      if (!data) return { ...EMPTY_USER_CONFIG };
-      const parsed: UserConfig = JSON.parse(data);
-      // Back-fill do campo `plan` para usuários legados.
-      if (!parsed.plan) {
-        parsed.plan = parsed.isPro ? 'pro' : 'free';
-      }
-      return parsed;
-    } catch {
-      return { ...EMPTY_USER_CONFIG };
-    }
+    const session = getSession();
+    return buildUserConfig(session?.organization ?? null, cache.usage);
   },
   saveUserConfig: (config: UserConfig) => {
-    const withDerived: UserConfig = {
-      ...config,
-      plan: config.plan ?? (config.isPro ? 'pro' : 'free'),
-      isPro: (config.plan ?? (config.isPro ? 'pro' : 'free')) !== 'free',
-    };
-    localStorage.setItem('propez_user_config', JSON.stringify(withDerived));
+    // Sincroniza o cache local otimisticamente só para onboarded/trial que afetam routing.
+    const session = getSession();
+    if (session) {
+      patchOrganization({
+        name: config.nome,
+        cnpj: config.cnpj || null,
+        logoUrl: config.logo ?? null,
+        signatureUrl: config.assinatura ?? null,
+        onboarded: !!config.onboarded,
+      });
+    }
+    if (config.usage) {
+      cache.usage = { ...config.usage };
+      notify('propez_user_config');
+    }
+    // Persiste no backend.
+    void pushOrgPatch({
+      nome: config.nome,
+      cnpj: config.cnpj,
+      logo: config.logo,
+      assinatura: config.assinatura,
+      onboarded: config.onboarded,
+    });
     notify('propez_user_config');
   },
-  /**
-   * Garante que `usage` existe e está na competência atual; retorna a config
-   * já normalizada (persiste se alterou).
-   */
   ensureUsage: (): UserConfig => {
-    const { config, changed } = normalizeUsage(store.getUserConfig());
-    if (changed) store.saveUserConfig(config);
-    return config;
+    const u = cache.usage;
+    const current = getCurrentMonthKey();
+    if (!u || u.monthKey !== current) {
+      cache.usage = { ...emptyUsage(), monthKey: current };
+      notify('propez_user_config');
+    }
+    return store.getUserConfig();
   },
   incrementUsage: (key: keyof Omit<PlanUsage, 'monthKey'>, delta = 1) => {
-    const { config } = normalizeUsage(store.getUserConfig());
-    const usage = config.usage ?? emptyUsage();
-    store.saveUserConfig({
-      ...config,
-      usage: { ...usage, [key]: (usage[key] ?? 0) + delta },
+    cache.usage = { ...cache.usage, [key]: (cache.usage[key] ?? 0) + delta };
+    notify('propez_user_config');
+    const backendKey =
+      key === 'propostasThisMonth'
+        ? 'propostas'
+        : key === 'iaGeracoesThisMonth'
+          ? 'ia_geracoes'
+          : 'rubrica_assinaturas';
+    void api.post('/api/usage/increment', { key: backendKey, delta }).catch((err) => {
+      console.error('[store] incrementUsage falhou', err);
     });
   },
 
-  getClientes: (): Cliente[] => {
-    try {
-      const data = localStorage.getItem('propez_clientes');
-      if (!data) {
-        localStorage.setItem('propez_clientes', JSON.stringify(initialClientes));
-        return initialClientes;
-      }
-      return JSON.parse(data);
-    } catch {
-      return initialClientes;
-    }
-  },
-  saveClientes: (clientes: Cliente[]) => {
-    localStorage.setItem('propez_clientes', JSON.stringify(clientes));
-    notify('propez_clientes');
-  },
-  
-  getServicos: (): Servico[] => {
-    try {
-      const data = localStorage.getItem('propez_servicos');
-      if (!data) {
-        localStorage.setItem('propez_servicos', JSON.stringify(initialServicos));
-        return initialServicos;
-      }
-      return JSON.parse(data);
-    } catch {
-      return initialServicos;
-    }
-  },
-  saveServicos: (servicos: Servico[]) => {
-    localStorage.setItem('propez_servicos', JSON.stringify(servicos));
-    notify('propez_servicos');
+  getClientes: (): Cliente[] => cache.clientes,
+  saveClientes: (list: Cliente[]): void => {
+    void diffSave(
+      'propez_clientes',
+      () => cache.clientes,
+      (v) => {
+        cache.clientes = v;
+      },
+      list,
+      clienteApi,
+    );
   },
 
-  getModelos: (): ModeloProposta[] => {
-    try {
-      const data = localStorage.getItem('propez_modelos');
-      if (!data) {
-        localStorage.setItem('propez_modelos', JSON.stringify(initialModelos));
-        return initialModelos;
-      }
-      return JSON.parse(data);
-    } catch {
-      return initialModelos;
-    }
-  },
-  saveModelos: (modelos: ModeloProposta[]) => {
-    localStorage.setItem('propez_modelos', JSON.stringify(modelos));
-    notify('propez_modelos');
+  getServicos: (): Servico[] => cache.servicos,
+  saveServicos: (list: Servico[]): void => {
+    void diffSave(
+      'propez_servicos',
+      () => cache.servicos,
+      (v) => {
+        cache.servicos = v;
+      },
+      list,
+      servicoApi,
+    );
   },
 
-  getPropostas: (): Proposta[] => {
-    try {
-      const data = localStorage.getItem('propez_propostas');
-      if (!data) {
-        localStorage.setItem('propez_propostas', JSON.stringify(initialPropostas));
-        return initialPropostas;
-      }
-      return JSON.parse(data);
-    } catch {
-      return initialPropostas;
-    }
-  },
-  savePropostas: (propostas: Proposta[]) => {
-    localStorage.setItem('propez_propostas', JSON.stringify(propostas));
-    notify('propez_propostas');
+  getModelos: (): ModeloProposta[] => cache.modelos,
+  saveModelos: (list: ModeloProposta[]): void => {
+    void diffSave(
+      'propez_modelos',
+      () => cache.modelos,
+      (v) => {
+        cache.modelos = v;
+      },
+      list,
+      modeloApi,
+    );
   },
 
-  getContratos: (): ContratoTemplate[] => {
-    try {
-      const data = localStorage.getItem('propez_contratos');
-      if (!data) {
-        localStorage.setItem('propez_contratos', JSON.stringify(initialContratos));
-        return initialContratos;
-      }
-      return JSON.parse(data);
-    } catch {
-      return initialContratos;
-    }
+  getPropostas: (): Proposta[] => cache.propostas,
+  savePropostas: (list: Proposta[]): void => {
+    void diffSave(
+      'propez_propostas',
+      () => cache.propostas,
+      (v) => {
+        cache.propostas = v;
+      },
+      list,
+      propostaApi,
+    );
   },
-  saveContratos: (contratos: ContratoTemplate[]) => {
-    localStorage.setItem('propez_contratos', JSON.stringify(contratos));
-    notify('propez_contratos');
+
+  getContratos: (): ContratoTemplate[] => cache.contratos,
+  saveContratos: (list: ContratoTemplate[]): void => {
+    void diffSave(
+      'propez_contratos',
+      () => cache.contratos,
+      (v) => {
+        cache.contratos = v;
+      },
+      list,
+      contratoApi,
+    );
   },
 };
+
+// ============================================================================
+// Helpers explícitos (preferidos em código novo)
+// ============================================================================
+
+/**
+ * Cria cliente, aguarda resposta do servidor com UUID final e atualiza cache.
+ * Retorna o Cliente com id do servidor.
+ */
+export async function createCliente(input: Omit<Cliente, 'id' | 'data_cadastro'>): Promise<Cliente> {
+  const saved = fromApiCliente(
+    await api.post<ApiCliente>('/api/clientes', {
+      nome: input.nome,
+      empresa: input.empresa,
+      email: input.email,
+      telefone: input.telefone,
+    }),
+  );
+  cache.clientes = [saved, ...cache.clientes];
+  notify('propez_clientes');
+  return saved;
+}
+
+export async function createProposta(input: Omit<Proposta, 'id' | 'data_criacao'>): Promise<Proposta> {
+  const saved = fromApiProposta(
+    await api.post<ApiProposta>('/api/propostas', toPropostaPayload(input as Proposta)),
+  );
+  cache.propostas = [saved, ...cache.propostas];
+  notify('propez_propostas');
+  return saved;
+}
+
+export async function updateProposta(id: string, patch: Partial<Proposta>): Promise<Proposta> {
+  const saved = fromApiProposta(
+    await api.patch<ApiProposta>(`/api/propostas/${id}`, toPropostaPayload({ id, ...patch } as Proposta)),
+  );
+  cache.propostas = cache.propostas.map((p) => (p.id === id ? saved : p));
+  notify('propez_propostas');
+  return saved;
+}
+
+export async function generatePublicLink(
+  propostaId: string,
+): Promise<{ token: string; url: string }> {
+  return api.post<{ token: string; url: string }>(`/api/propostas/${propostaId}/public-link`);
+}

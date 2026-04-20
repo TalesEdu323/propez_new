@@ -6,6 +6,8 @@ import { createProsyncClient, ProsyncHttpError } from '../clients/prosyncClient.
 import { createRubricaClient, RubricaHttpError } from '../clients/rubricaClient.js'
 import { generateContractPdf } from '../services/contractPdf.js'
 import type { IntegrationsConfig } from '../config.js'
+import type { EnvironmentConfig } from '../env.js'
+import { buildRequireAuth } from '../auth/middleware.js'
 import {
   getMappingByProposal,
   logIntegrationEvent,
@@ -13,15 +15,20 @@ import {
 } from '../db/mappings.js'
 
 /**
- * Monta o router com todas as rotas `/api/integrations/*` que o frontend
- * PropEZ chama. O frontend nunca fala diretamente com ProSync/Rubrica.
+ * Router de `/api/integrations/*`. Todas as rotas requerem auth e fazem proxy
+ * para ProSync/Rubrica carregando as API keys apenas no servidor.
+ * Cada mapping criado passa a carregar `organization_id`, permitindo filtrar
+ * por tenant em relatórios e resolver webhooks.
  */
 export function buildIntegrationsRouter(deps: {
   pool: Pool
   config: IntegrationsConfig
+  envConfig: EnvironmentConfig
 }): Router {
   const router = express.Router()
-  const { pool, config } = deps
+  const { pool, config, envConfig } = deps
+
+  router.use(buildRequireAuth(envConfig.auth))
 
   function prosync() {
     if (!config.prosync.apiKey) {
@@ -92,6 +99,7 @@ export function buildIntegrationsRouter(deps: {
       await logIntegrationEvent(pool, {
         source: 'internal',
         event: 'prosync.lead.updated',
+        organizationId: req.auth?.orgId ?? null,
         payload: { leadId: req.params.id, request: req.body || null },
       }).catch(() => {})
       res.json(data)
@@ -116,6 +124,7 @@ export function buildIntegrationsRouter(deps: {
       await logIntegrationEvent(pool, {
         source: 'internal',
         event: 'prosync.sale.created',
+        organizationId: req.auth?.orgId ?? null,
         payload: { leadId: req.params.id, product_id, quantity, unit_price, status },
       }).catch(() => {})
       res.json(data)
@@ -137,27 +146,6 @@ export function buildIntegrationsRouter(deps: {
   // Rubrica orquestração
   // -------------------------------------------------------------------------
 
-  /**
-   * POST /api/integrations/rubrica/send
-   * Orquestra: gera PDF do contrato -> upload no Rubrica -> send para assinatura.
-   * Persiste mapping em integration_mappings.
-   *
-   * Body:
-   *  {
-   *    proposalId: string (obrigatório)
-   *    prosyncLeadId?: string
-   *    clientName: string
-   *    clientEmail: string
-   *    clientPhone?: string
-   *    clientDocument?: string
-   *    contractTitle?: string (default: "Contrato - ${proposalId}")
-   *    contractText: string (corpo do contrato)
-   *    companyName?: string
-   *    companyCnpj?: string
-   *    value?: number
-   *    location?: string
-   *  }
-   */
   router.post('/rubrica/send', async (req: Request, res: Response) => {
     const body = req.body || {}
     const proposalId: string = String(body.proposalId || '').trim()
@@ -175,8 +163,18 @@ export function buildIntegrationsRouter(deps: {
     }
 
     const title = String(body.contractTitle || `Contrato - ${proposalId}`).slice(0, 200)
+    const orgId = req.auth?.orgId ?? null
 
     try {
+      // Confirma que a proposta pertence à organização atual (defense in depth).
+      const ownerCheck = await pool.query<{ id: string }>(
+        `SELECT id FROM propostas WHERE id::text = $1 AND organization_id = $2`,
+        [proposalId, orgId],
+      )
+      if (!ownerCheck.rows[0]) {
+        return res.status(404).json({ error: 'Proposta não encontrada nesta organização' })
+      }
+
       const pdf = await generateContractPdf({
         title,
         body: contractText,
@@ -190,9 +188,9 @@ export function buildIntegrationsRouter(deps: {
 
       const secret = crypto.randomBytes(12).toString('hex')
 
-      // Pré-insert no mapping para marcar que começamos (status pending)
       await upsertMapping(pool, {
         propez_proposal_id: proposalId,
+        organization_id: orgId,
         prosync_lead_id: body.prosyncLeadId ? String(body.prosyncLeadId) : null,
         webhook_secret: secret,
         status: 'pending',
@@ -227,19 +225,31 @@ export function buildIntegrationsRouter(deps: {
 
       const mapping = await upsertMapping(pool, {
         propez_proposal_id: proposalId,
+        organization_id: orgId,
         rubrica_document_id: documentId,
         rubrica_signing_url: signingUrl ?? null,
         status: 'sent',
       })
 
+      // Reflete em propostas.rubrica_* para a UI atualizar direto do DB.
+      await pool.query(
+        `UPDATE propostas SET
+           rubrica_document_id = $3,
+           rubrica_signing_url = $4,
+           rubrica_status = 'sent',
+           rubrica_last_sync_at = NOW()
+         WHERE id::text = $1 AND organization_id = $2`,
+        [proposalId, orgId, documentId, signingUrl ?? null],
+      ).catch((err) => console.error('[integrations:rubrica/send] propostas update failed:', err))
+
       await logIntegrationEvent(pool, {
         source: 'internal',
         event: 'rubrica.sent',
         proposalId,
+        organizationId: orgId,
         payload: { documentId, signingUrl },
       })
 
-      // Se houver lead vinculado, move para `contacted` no ProSync
       if (mapping.prosync_lead_id && config.prosync.apiKey) {
         prosync()
           .updateLead(mapping.prosync_lead_id, { status: 'contacted' })
@@ -257,6 +267,7 @@ export function buildIntegrationsRouter(deps: {
     } catch (err) {
       await upsertMapping(pool, {
         propez_proposal_id: proposalId,
+        organization_id: orgId,
         status: 'failed',
         last_error: err instanceof Error ? err.message : String(err),
       }).catch(() => {})
@@ -264,15 +275,13 @@ export function buildIntegrationsRouter(deps: {
     }
   })
 
-  /**
-   * GET /api/integrations/rubrica/status/:proposalId
-   * Retorna status atual. Primeiro tenta banco local; se inconclusivo,
-   * consulta Rubrica.
-   */
   router.get('/rubrica/status/:proposalId', async (req: Request, res: Response) => {
     try {
       const mapping = await getMappingByProposal(pool, req.params.proposalId)
       if (!mapping) {
+        return res.status(404).json({ error: 'Proposta sem mapping' })
+      }
+      if (mapping.organization_id && mapping.organization_id !== req.auth?.orgId) {
         return res.status(404).json({ error: 'Proposta sem mapping' })
       }
 
@@ -303,14 +312,13 @@ export function buildIntegrationsRouter(deps: {
     }
   })
 
-  /**
-   * GET /api/integrations/rubrica/download/:proposalId
-   * Devolve o PDF assinado (proxy autenticado).
-   */
   router.get('/rubrica/download/:proposalId', async (req: Request, res: Response) => {
     try {
       const mapping = await getMappingByProposal(pool, req.params.proposalId)
       if (!mapping || !mapping.rubrica_document_id) {
+        return res.status(404).json({ error: 'Proposta sem documento Rubrica' })
+      }
+      if (mapping.organization_id && mapping.organization_id !== req.auth?.orgId) {
         return res.status(404).json({ error: 'Proposta sem documento Rubrica' })
       }
       const dl = await rubrica().downloadDocument(mapping.rubrica_document_id, { type: 'signed' })

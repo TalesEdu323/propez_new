@@ -12,7 +12,7 @@ const baseContext: ContractContext = {
   clienteEmpresa: 'Acme LTDA',
   valor: 1500,
   desconto: 150,
-  empresaNome: 'PropEZ',
+  empresaNome: 'Propez',
   empresaCnpj: '00.000.000/0001-00',
   servicosNomes: ['Consultoria', 'Implementação'],
 };

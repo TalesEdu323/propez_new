@@ -8,6 +8,24 @@ export interface StripePlansConfig {
   business: StripePlanPriceIds;
 }
 
+export interface AuthConfig {
+  jwtSecret: string;
+  sessionCookieName: string;
+  /** Tempo de vida do access token em segundos. */
+  accessTtlSeconds: number;
+  /** Tempo de vida do refresh token em segundos. */
+  refreshTtlSeconds: number;
+  /** Cookie Secure=true em produção. */
+  cookieSecure: boolean;
+}
+
+export interface MailConfig {
+  resendApiKey: string | null;
+  from: string;
+  /** Quando true, o app recusa registros se não houver provedor (prod). */
+  required: boolean;
+}
+
 export interface EnvironmentConfig {
   appUrl: string;
   databaseUrl: string;
@@ -17,6 +35,8 @@ export interface EnvironmentConfig {
   port: number;
   nodeEnv: string;
   allowedOrigins: string[];
+  auth: AuthConfig;
+  mail: MailConfig;
 }
 
 function getRequiredEnv(name: string): string {
@@ -55,6 +75,23 @@ export function loadConfig(): EnvironmentConfig {
     throw new Error('PORT must be a valid positive number');
   }
 
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const isProd = nodeEnv === 'production';
+
+  const jwtSecret = process.env.JWT_SECRET || '';
+  if (!jwtSecret) {
+    if (isProd) {
+      throw new Error('JWT_SECRET obrigatório em produção');
+    }
+    console.warn('[env] JWT_SECRET ausente — usando fallback inseguro de DEV. Defina JWT_SECRET no .env.');
+  }
+
+  const resendApiKey = process.env.RESEND_API_KEY?.trim() || null;
+  const mailFrom = process.env.MAIL_FROM?.trim() || 'Propez <no-reply@propez.local>';
+  if (isProd && !resendApiKey) {
+    console.warn('[env] RESEND_API_KEY ausente em produção — verificação de email não funcionará.');
+  }
+
   return {
     appUrl,
     databaseUrl: getRequiredEnv('DATABASE_URL'),
@@ -71,7 +108,19 @@ export function loadConfig(): EnvironmentConfig {
       },
     },
     port,
-    nodeEnv: process.env.NODE_ENV || 'development',
+    nodeEnv,
     allowedOrigins: getAllowedOrigins(appUrl),
+    auth: {
+      jwtSecret: jwtSecret || 'dev-insecure-secret-change-me',
+      sessionCookieName: process.env.SESSION_COOKIE_NAME?.trim() || 'propez_session',
+      accessTtlSeconds: Number(process.env.AUTH_ACCESS_TTL_SECONDS || 900),
+      refreshTtlSeconds: Number(process.env.AUTH_REFRESH_TTL_SECONDS || 60 * 60 * 24 * 30),
+      cookieSecure: isProd,
+    },
+    mail: {
+      resendApiKey,
+      from: mailFrom,
+      required: isProd,
+    },
   };
 }

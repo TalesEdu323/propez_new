@@ -1,17 +1,17 @@
-# Smoke test das integrações PropEZ + ProSync + Rubrica
+# Smoke test das integrações Propez + ProSync + Rubrica
 
 Este runbook valida, de ponta a ponta, o fluxo de uma proposta criada a partir
 de um lead do ProSync, aprovada pelo cliente e com contrato assinado via
 Rubrica. É o último passo do plano de integração.
 
 > Pré-requisito: os três projetos rodando em máquina com acesso a bancos de
-> dados PostgreSQL reais (Neon do PropEZ e ProSync, Postgres do Rubrica) e um
-> endpoint público para o PropEZ (ngrok ou Cloud Run). Webhooks não funcionam
+> dados PostgreSQL reais (Neon do Propez e ProSync, Postgres do Rubrica) e um
+> endpoint público para o Propez (ngrok ou Cloud Run). Webhooks não funcionam
 > em `localhost` puro.
 
 ## Check automatizado (antes do fluxo manual)
 
-Com o PropEZ já rodando (`npm run dev`) e `.env` válido:
+Com o Propez já rodando (`npm run dev`) e `.env` válido:
 
 ```powershell
 npm run check:integrations
@@ -32,7 +32,7 @@ No boot do servidor, confira também os logs de
 
 ## 0. Variáveis críticas
 
-No `.env` do **PropEZ**:
+No `.env` do **Propez**:
 
 ```
 APP_URL=https://<tunel-publico-propez>
@@ -48,7 +48,7 @@ RUBRICA_WEBHOOK_SECRET=<usado internamente; o Rubrica não assina, é só docstr
 ## 1. Provisionar a API Key do ProSync
 
 1. Suba o ProSync (`pnpm dev` em `Prosync/`).
-2. Aplique o migration no **Postgres do ProSync** (não é arquivo do PropEZ):
+2. Aplique o migration no **Postgres do ProSync** (não é arquivo do Propez):
 
    ```bash
    psql "$DATABASE_URL_DO_PROSYNC" -f scripts/CREATE_API_KEYS_AND_WEBHOOKS.sql
@@ -58,22 +58,22 @@ RUBRICA_WEBHOOK_SECRET=<usado internamente; o Rubrica não assina, é só docstr
 3. Entre no dashboard como **owner/admin** e acesse
    `Configurações → Integrações`.
 4. Crie uma API Key com escopos `crm:read, crm:write`. Copie a chave
-   `ps_live_...` (só é mostrada uma vez) e cole em `PROSYNC_API_KEY` do PropEZ.
+   `ps_live_...` (só é mostrada uma vez) e cole em `PROSYNC_API_KEY` do Propez.
 5. Ainda em Integrações, crie um **Outbound Webhook**:
    - URL: `https://<tunel-publico-propez>/api/webhooks/prosync`
    - Eventos: `lead.created, lead.updated, lead.status_changed, lead.sale_confirmed`
-   - Copie o `secret` exibido e cole em `PROSYNC_WEBHOOK_SECRET` do PropEZ.
+   - Copie o `secret` exibido e cole em `PROSYNC_WEBHOOK_SECRET` do Propez.
 
 ## 2. Provisionar a API Key do Rubrica
 
 1. Suba o Rubrica (`pnpm dev` em `Rubrica-Assinaturas/`).
 2. Em `/dashboard/integracoes`, gere uma API Key (`dm_live_...`) e cole em
-   `RUBRICA_API_KEY` do PropEZ.
-3. Não é preciso configurar webhook manualmente — o PropEZ envia a
+   `RUBRICA_API_KEY` do Propez.
+3. Não é preciso configurar webhook manualmente — o Propez envia a
    `webhookUrl` dinamicamente em cada `/api/signature/send`, já com o secret
    em query string.
 
-## 3. Subir o PropEZ e aplicar migrations
+## 3. Subir o Propez e aplicar migrations
 
 ```powershell
 cd C:\Users\suporte\GitHub\propez_new
@@ -96,13 +96,13 @@ Abra `http://localhost:3000/api/health`; deve retornar:
 ## 4. Criar um lead no ProSync
 
 Dashboard do ProSync → CRM → Novo Lead. Preencha nome, email, telefone.
-Aguarde ~1s e confira no log do PropEZ uma linha
+Aguarde ~1s e confira no log do Propez uma linha
 `[webhooks/prosync] event=lead.created` (isso valida que o ProSync está
-assinando com HMAC e o PropEZ está validando).
+assinando com HMAC e o Propez está validando).
 
 ## 5. Abrir o PropezFluido e importar
 
-1. Logue no PropEZ e clique em **Nova proposta**.
+1. Logue no Propez e clique em **Nova proposta**.
 2. Avance até o passo 2 e clique em **Importar do ProSync**. O modal abre
    chamando `GET /api/integrations/prosync/leads`. Escolha o lead criado.
 3. Finalize a proposta e gere. No passo de salvamento, o backend chama
@@ -124,7 +124,7 @@ assinando com HMAC e o PropEZ está validando).
 ## 7. Assinar no Rubrica
 
 Clique no link de assinatura e complete o fluxo. Assim que o Rubrica dispara
-o webhook `document.signed`, o PropEZ:
+o webhook `document.signed`, o Propez:
 
 - valida o secret em query string;
 - atualiza `integration_mappings.status = 'signed'`;
@@ -137,7 +137,7 @@ Rubrica).
 
 ## 8. Checagens finais
 
-No Postgres do PropEZ:
+No Postgres do Propez:
 
 ```sql
 SELECT * FROM integration_mappings ORDER BY updated_at DESC LIMIT 5;
@@ -172,8 +172,8 @@ LIMIT 20;
 
 Esperado após criar um lead (com webhook configurado): pelo menos uma linha com
 `status = 'success'` e `http_status` entre 200 e 299. Se `status = 'failed'`,
-inspecione `error` e `response_body` (URL do PropEZ inacessível, assinatura
-rejeitada no PropEZ, etc.).
+inspecione `error` e `response_body` (URL do Propez inacessível, assinatura
+rejeitada no Propez, etc.).
 
 ## Troubleshooting
 

@@ -13,19 +13,11 @@ import {
 } from '../db/mappings.js'
 
 /**
- * Rotas de entrada `/api/webhooks/*`.
+ * Inbound webhooks dos integradores. Rotas públicas (sem auth) — protegidas
+ * por HMAC (ProSync) ou secret em query string (Rubrica).
  *
- * - `/api/webhooks/rubrica`: recebe `document.signed` do Rubrica. Como o
- *   Rubrica atualmente não assina o webhook (sem HMAC), validamos pela
- *   combinação `externalId` (= proposalId) + `secret` em query string, que
- *   foi gerado pelo PropEZ e enviado ao Rubrica como parte da webhookUrl.
- *
- * - `/api/webhooks/prosync`: recebe eventos do ProSync com HMAC em
- *   `X-Prosync-Signature` (sha256=<hex> do body).
- *
- * Montagem importante: como `/api/webhooks/prosync` precisa comparar HMAC
- * sobre o **raw body**, usamos `express.raw` nessa rota específica e
- * fazemos JSON.parse manualmente.
+ * Quando o webhook chega, a organization_id é recuperada do mapping existente
+ * (criado pelo Propez quando disparou `/api/integrations/rubrica/send`).
  */
 export function buildWebhooksRouter(deps: {
   pool: Pool
@@ -51,7 +43,6 @@ export function buildWebhooksRouter(deps: {
     }
 
     try {
-      // Tenta casar pelo externalId (== proposalId) que foi setado no /send.
       const proposalId = body.externalId ? String(body.externalId) : null
       const mapping = proposalId
         ? await getMappingByProposal(pool, proposalId)
@@ -67,6 +58,7 @@ export function buildWebhooksRouter(deps: {
         source: 'rubrica',
         event: body.event,
         proposalId: mapping?.propez_proposal_id ?? proposalId,
+        organizationId: mapping?.organization_id ?? null,
         payload: body as Record<string, unknown>,
         signatureValid: matchesSecret,
       })
@@ -81,7 +73,6 @@ export function buildWebhooksRouter(deps: {
         return res.status(401).json({ error: 'Secret inválido' })
       }
 
-      // Baixar PDF assinado e persistir mapping como 'signed'
       let signedUrl: string | null = mapping.rubrica_signed_pdf_url
       if (config.rubrica.apiKey) {
         try {
@@ -89,7 +80,6 @@ export function buildWebhooksRouter(deps: {
             baseUrl: config.rubrica.baseUrl,
             apiKey: config.rubrica.apiKey,
           })
-          // Baixa para validar o link está acessível; guardamos URL canônica
           await rb.downloadDocument(body.documentId, { type: 'signed' })
           signedUrl = body.downloadUrl || signedUrl || `${config.rubrica.baseUrl.replace(/\/+$/, '')}/api/documents/${body.documentId}/download?type=signed`
         } catch (err) {
@@ -99,11 +89,24 @@ export function buildWebhooksRouter(deps: {
 
       const updated = await upsertMapping(pool, {
         propez_proposal_id: mapping.propez_proposal_id,
+        organization_id: mapping.organization_id,
         status: 'signed',
         rubrica_signed_pdf_url: signedUrl,
       })
 
-      // Notifica ProSync: lead -> converted
+      // Reflete em propostas (rubrica_status = signed).
+      await pool
+        .query(
+          `UPDATE propostas SET
+             rubrica_status = 'signed',
+             rubrica_signed_pdf_url = COALESCE($3, rubrica_signed_pdf_url),
+             rubrica_last_sync_at = NOW(),
+             status = CASE WHEN status = 'pendente' THEN 'aprovada' ELSE status END
+           WHERE id::text = $1 AND ($2::uuid IS NULL OR organization_id = $2::uuid)`,
+          [mapping.propez_proposal_id, mapping.organization_id, signedUrl],
+        )
+        .catch((err) => console.error('[webhooks/rubrica] propostas update failed:', err))
+
       if (updated.prosync_lead_id && config.prosync.apiKey) {
         try {
           const ps = createProsyncClient({
@@ -124,8 +127,6 @@ export function buildWebhooksRouter(deps: {
   })
 
   // --- ProSync: inbound (HMAC) --------------------------------------------
-  // Precisamos do raw body para comparar HMAC — por isso usamos express.raw
-  // somente nesta rota. Parse JSON manualmente depois.
   router.post(
     '/prosync',
     express.raw({ type: '*/*', limit: '1mb' }),
@@ -161,12 +162,13 @@ export function buildWebhooksRouter(deps: {
       const ev = (parsed?.event as string) || event || 'unknown'
       const data = (parsed?.data as Record<string, unknown>) || {}
       const lead = (data?.lead as { id?: string } | undefined) || undefined
-      const proposalId = lead?.id ? await lookupProposalByLead(pool, lead.id) : null
+      const lookup = lead?.id ? await lookupProposalByLead(pool, lead.id) : null
 
       await logIntegrationEvent(pool, {
         source: 'prosync',
         event: ev,
-        proposalId,
+        proposalId: lookup?.proposalId ?? null,
+        organizationId: lookup?.organizationId ?? null,
         payload: parsed,
         signatureValid,
       })
@@ -185,13 +187,19 @@ function timingSafeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ab, bb)
 }
 
-async function lookupProposalByLead(pool: Pool, leadId: string): Promise<string | null> {
+async function lookupProposalByLead(
+  pool: Pool,
+  leadId: string,
+): Promise<{ proposalId: string; organizationId: string | null } | null> {
   try {
-    const res = await pool.query<{ propez_proposal_id: string }>(
-      `SELECT propez_proposal_id FROM integration_mappings WHERE prosync_lead_id = $1 ORDER BY updated_at DESC LIMIT 1`,
+    const res = await pool.query<{ propez_proposal_id: string; organization_id: string | null }>(
+      `SELECT propez_proposal_id, organization_id FROM integration_mappings
+       WHERE prosync_lead_id = $1 ORDER BY updated_at DESC LIMIT 1`,
       [leadId],
     )
-    return res.rows[0]?.propez_proposal_id ?? null
+    const r = res.rows[0]
+    if (!r) return null
+    return { proposalId: r.propez_proposal_id, organizationId: r.organization_id }
   } catch {
     return null
   }

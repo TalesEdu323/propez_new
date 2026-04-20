@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, ShieldCheck, ChevronLeft, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, ShieldCheck, ChevronLeft, CheckCircle2, AlertCircle } from 'lucide-react';
+import { api, ApiError } from '../lib/apiClient';
+import { bootstrapSession } from '../lib/authSession';
 
 interface LoginProps {
   onLogin: () => void;
 }
 
-type AuthMode = 'login' | 'register' | 'verify';
+type AuthMode = 'login' | 'register' | 'verify' | 'forgot' | 'forgot-sent';
 
 export default function Login({ onLogin }: LoginProps) {
   const [mode, setMode] = useState<AuthMode>('login');
@@ -16,32 +18,105 @@ export default function Login({ onLogin }: LoginProps) {
   const [company, setCompany] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  useEffect(() => {
+    setErrorMsg(null);
+    setInfo(null);
+  }, [mode]);
+
+  async function onSuccessLogin() {
+    await bootstrapSession();
+    onLogin();
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
+    setErrorMsg(null);
+    try {
+      await api.post('/api/auth/login', { email, password });
+      await onSuccessLogin();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 403 && (err.body as { reason?: string })?.reason === 'email_not_verified') {
+          setMode('verify');
+          setInfo('Confirme seu email antes de entrar.');
+          try {
+            await api.post('/api/auth/resend-verification', { email });
+          } catch {/* silencia */}
+        } else {
+          setErrorMsg(err.message);
+        }
+      } else {
+        setErrorMsg('Falha ao entrar. Tente novamente.');
+      }
+    } finally {
       setIsLoading(false);
-      onLogin();
-    }, 1000);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    setErrorMsg(null);
+    try {
+      await api.post('/api/auth/register', { name, company, email, password });
       setMode('verify');
-    }, 1000);
+      setInfo('Enviamos um código de 6 dígitos para seu email.');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setErrorMsg(err.message);
+      } else {
+        setErrorMsg('Falha ao criar conta.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
+    setErrorMsg(null);
+    try {
+      await api.post('/api/auth/verify-email', { email, code: code.join('') });
+      await onSuccessLogin();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setErrorMsg(err.message);
+      } else {
+        setErrorMsg('Código inválido.');
+      }
+    } finally {
       setIsLoading(false);
-      onLogin();
-    }, 1000);
+    }
+  };
+
+  const handleResend = async () => {
+    setErrorMsg(null);
+    setInfo(null);
+    try {
+      await api.post('/api/auth/resend-verification', { email });
+      setInfo('Código reenviado. Verifique sua caixa de entrada.');
+    } catch {
+      setErrorMsg('Não foi possível reenviar o código.');
+    }
+  };
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      await api.post('/api/auth/forgot-password', { email });
+      setMode('forgot-sent');
+    } catch {
+      setErrorMsg('Tente novamente em alguns instantes.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCodeChange = (index: number, value: string) => {
@@ -70,8 +145,21 @@ export default function Login({ onLogin }: LoginProps) {
             >
               P
             </motion.div>
-            <h1 className="text-base font-semibold text-zinc-900 tracking-tight">PropEZ</h1>
+            <h1 className="text-base font-semibold text-zinc-900 tracking-tight">Propez</h1>
           </div>
+
+          {(errorMsg || info) && (
+            <div
+              className={`mb-6 text-xs font-medium px-4 py-3 rounded-xl flex items-start gap-2 ${
+                errorMsg
+                  ? 'bg-red-50 text-red-700 border border-red-100'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+              }`}
+            >
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{errorMsg ?? info}</span>
+            </div>
+          )}
 
           <div className="relative">
             <AnimatePresence mode="wait">
@@ -104,7 +192,13 @@ export default function Login({ onLogin }: LoginProps) {
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-center ml-1">
                         <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Senha</label>
-                        <button type="button" className="text-[10px] font-bold text-zinc-400 hover:text-zinc-900 uppercase tracking-widest transition-colors">Esqueceu?</button>
+                        <button
+                          type="button"
+                          onClick={() => setMode('forgot')}
+                          className="text-[10px] font-bold text-zinc-400 hover:text-zinc-900 uppercase tracking-widest transition-colors"
+                        >
+                          Esqueceu?
+                        </button>
                       </div>
                       <input 
                         type="password" 
@@ -196,8 +290,10 @@ export default function Login({ onLogin }: LoginProps) {
                       <input 
                         type="password" 
                         required
+                        minLength={8}
                         value={password}
                         onChange={e => setPassword(e.target.value)}
+                        placeholder="Mínimo 8 caracteres"
                         className="glass-input"
                       />
                     </div>
@@ -238,6 +334,7 @@ export default function Login({ onLogin }: LoginProps) {
                           id={`code-${i}`}
                           type="text"
                           maxLength={1}
+                          inputMode="numeric"
                           value={digit}
                           onChange={e => handleCodeChange(i, e.target.value)}
                           className="w-full h-14 bg-zinc-50 border border-transparent rounded-xl text-center text-xl font-bold focus:outline-none focus:bg-white focus:ring-1 focus:ring-black/5 transition-all"
@@ -255,9 +352,79 @@ export default function Login({ onLogin }: LoginProps) {
                     </button>
 
                     <div className="text-center">
-                      <button type="button" className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-900 transition-colors">Reenviar código</button>
+                      <button
+                        type="button"
+                        onClick={handleResend}
+                        className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-900 transition-colors"
+                      >
+                        Reenviar código
+                      </button>
                     </div>
                   </form>
+                </motion.div>
+              )}
+
+              {mode === 'forgot' && (
+                <motion.div
+                  key="forgot"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <div className="mb-10">
+                    <button
+                      onClick={() => setMode('login')}
+                      className="flex items-center gap-2 text-zinc-400 hover:text-zinc-900 transition-colors mb-6 text-[10px] font-bold uppercase tracking-widest"
+                    >
+                      <ChevronLeft className="w-3 h-3" /> Voltar
+                    </button>
+                    <h2 className="text-3xl font-semibold text-zinc-900 tracking-tightest mb-2">Recuperar acesso</h2>
+                    <p className="text-zinc-400 text-sm">Informe seu email para receber o link de redefinição.</p>
+                  </div>
+                  <form onSubmit={handleForgot} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">E-mail</label>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        className="glass-input"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="btn-primary w-full mt-6"
+                    >
+                      {isLoading ? 'Enviando...' : 'Enviar link'}
+                      {!isLoading && <ArrowRight className="w-4 h-4" />}
+                    </button>
+                  </form>
+                </motion.div>
+              )}
+
+              {mode === 'forgot-sent' && (
+                <motion.div
+                  key="forgot-sent"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                  className="text-center"
+                >
+                  <div className="w-16 h-16 bg-zinc-50 text-zinc-900 rounded-2xl flex items-center justify-center mx-auto mb-8 border border-black/[0.02]">
+                    <CheckCircle2 className="w-8 h-8" />
+                  </div>
+                  <h2 className="text-3xl font-semibold text-zinc-900 tracking-tightest mb-2">Verifique seu email</h2>
+                  <p className="text-zinc-400 text-sm mb-8">Se o email existir, você receberá um link em poucos segundos.</p>
+                  <button
+                    onClick={() => setMode('login')}
+                    className="btn-primary w-full"
+                  >
+                    Voltar ao login
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -273,7 +440,6 @@ export default function Login({ onLogin }: LoginProps) {
 
       {/* Right Side: Visual/Branding */}
       <div className="hidden lg:flex w-[55%] bg-[#F5F5F7] relative items-center justify-center overflow-hidden">
-        {/* Background Decorations */}
         <div className="absolute top-[-10%] right-[-10%] w-[70%] h-[70%] bg-gradient-to-br from-zinc-200/50 to-zinc-100/50 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[70%] h-[70%] bg-gradient-to-tr from-zinc-100/50 to-zinc-200/50 rounded-full blur-[120px]" />
         
@@ -294,7 +460,6 @@ export default function Login({ onLogin }: LoginProps) {
               Transforme suas propostas em experiências memoráveis. Simples, rápido e profissional.
             </p>
 
-            {/* Abstract Visual Element */}
             <div className="relative mx-auto w-full max-w-[320px]">
               <div className="aspect-[4/3] bg-white rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] border border-black/[0.01] overflow-hidden p-8 flex flex-col justify-between">
                 <div className="space-y-4">
@@ -308,7 +473,6 @@ export default function Login({ onLogin }: LoginProps) {
                   </div>
                 </div>
               </div>
-              {/* Decorative floating elements */}
               <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/40 backdrop-blur-xl rounded-3xl border border-white/20 shadow-xl -rotate-6" />
               <div className="absolute -bottom-4 -left-8 w-20 h-20 bg-white/60 backdrop-blur-xl rounded-3xl border border-white/20 shadow-xl rotate-12" />
             </div>

@@ -14,9 +14,9 @@ export default defineConfig(({mode}) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
         manifest: {
-          name: 'PropEZ - Propostas Inteligentes',
-          short_name: 'PropEZ',
-          description: 'Plataforma profissional para criação e gestão de propostas comerciais.',
+          name: 'Propez — Propostas memoráveis',
+          short_name: 'Propez',
+          description: 'Transforme suas propostas em experiências memoráveis. Simples, rápido e profissional.',
           theme_color: '#09090b',
           background_color: '#F5F5F7',
           display: 'standalone',

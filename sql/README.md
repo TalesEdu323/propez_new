@@ -1,9 +1,9 @@
-# SQL do PropEZ
+# SQL do Propez
 
-Copiar/colar no Neon por app (PropEZ + ProSync + nota Rubrica): ver
+Copiar/colar no Neon por app (Propez + ProSync + nota Rubrica): ver
 [docs/NEON_SQL_POR_APP.md](../docs/NEON_SQL_POR_APP.md).
 
-## PropEZ (`sql/`)
+## Propez (`sql/`)
 
 Scripts nesta pasta são executados **automaticamente** no boot do servidor
 ([`src/server/db.ts`](../src/server/db.ts) → `runMigrations` em ordem

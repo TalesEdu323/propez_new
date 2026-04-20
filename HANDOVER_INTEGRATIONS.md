@@ -1,10 +1,10 @@
 # Guia de Integração: Rubrica & ProSync
 
-Este documento serve como guia para a continuidade do desenvolvimento das integrações externas do PropEZ.
+Este documento serve como guia para a continuidade do desenvolvimento das integrações externas do Propez.
 
 ## 1. ProSync (CRM & Leads)
 
-O **ProSync** é o CRM externo que fornece leads para o PropEZ e recebe atualizações de status das propostas.
+O **ProSync** é o CRM externo que fornece leads para o Propez e recebe atualizações de status das propostas.
 
 ### Arquivos Relevantes:
 - `src/services/crmApi.ts`: Contém as interfaces e funções de comunicação.
@@ -13,14 +13,14 @@ O **ProSync** é o CRM externo que fornece leads para o PropEZ e recebe atualiza
 
 ### Próximos Passos para o Cursor:
 1.  **Substituir Mocks**: No arquivo `src/services/crmApi.ts`, trocar as respostas estáticas por chamadas `fetch` reais usando `import.meta.env.VITE_PROSYNC_API_URL`.
-2.  **Mapeamento de Campos**: Garantir que os campos do lead do ProSync (ex: `company_name`) sejam mapeados corretamente para o objeto `Cliente` do PropEZ.
+2.  **Mapeamento de Campos**: Garantir que os campos do lead do ProSync (ex: `company_name`) sejam mapeados corretamente para o objeto `Cliente` do Propez.
 3.  **Sincronização Bidirecional**: Implementar um webhook no backend (`server.ts`) que receba atualizações do ProSync (ex: lead excluído ou atualizado).
 
 ---
 
 ## 2. Rubrica (Assinatura Digital)
 
-O **Rubrica** é o serviço responsável pela coleta de assinaturas digitais nos contratos gerados pelo PropEZ.
+O **Rubrica** é o serviço responsável pela coleta de assinaturas digitais nos contratos gerados pelo Propez.
 
 ### Arquivos Relevantes:
 - `src/services/rubricaApi.ts`: Contém a lógica de envio de documentos para assinatura.
@@ -29,7 +29,7 @@ O **Rubrica** é o serviço responsável pela coleta de assinaturas digitais nos
 ### Próximos Passos para o Cursor:
 1.  **Fluxo de Assinatura**: Atualmente, o app apenas envia o documento. É necessário implementar a captura do `signingUrl` retornado pelo Rubrica e exibi-lo ao usuário ou redirecioná-lo.
 2.  **Status da Assinatura**: Criar um endpoint no `server.ts` para receber webhooks do Rubrica informando quando o documento foi assinado.
-3.  **Download do PDF Assinado**: Após a assinatura, o Rubrica fornece um link para o PDF final. O PropEZ deve armazenar esse link na proposta (`pago: true` ou um novo campo `assinado: true`).
+3.  **Download do PDF Assinado**: Após a assinatura, o Rubrica fornece um link para o PDF final. O Propez deve armazenar esse link na proposta (`pago: true` ou um novo campo `assinado: true`).
 
 ---
 

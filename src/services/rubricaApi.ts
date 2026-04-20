@@ -1,7 +1,7 @@
 /**
  * Rubrica Integration Service — Assinatura de contratos.
  *
- * Chama `/api/integrations/rubrica/*` no backend do PropEZ. O backend gera o
+ * Chama `/api/integrations/rubrica/*` no backend do Propez. O backend gera o
  * PDF, faz upload no Rubrica e dispara o envio para assinatura. A chave de
  * API do Rubrica fica apenas no servidor.
  */

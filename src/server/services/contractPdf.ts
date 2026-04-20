@@ -116,8 +116,8 @@ export async function generateContractPdf(input: ContractPdfInput): Promise<Buff
   const docDefinition: TDocumentDefinitions = {
     info: {
       title: input.title,
-      author: input.companyName || 'PropEZ',
-      creator: 'PropEZ',
+      author: input.companyName || 'Propez',
+      creator: 'Propez',
     },
     pageSize: 'A4',
     pageMargins: [60, 60, 60, 60],
