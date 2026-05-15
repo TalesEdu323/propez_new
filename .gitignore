@@ -7,3 +7,28 @@ coverage/
 .env*
 !.env.example
 .cursor/
+.idea/
+.vscode/
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+
+# Cache / temp
+.cache/
+.tmp/
+tmp/
+temp/
+
+# Tooling outputs
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test outputs
+playwright-report/
+test-results/

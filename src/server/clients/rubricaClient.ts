@@ -43,9 +43,36 @@ export interface RubricaSendResult {
   }>
 }
 
+/**
+ * Resposta real do Rubrica para `GET /api/documents/:id/signature-status`.
+ * O Rubrica devolve um envelope `{ success, document: { ... } }`. Os campos
+ * abaixo são os relevantes hoje — o envelope traz mais coisas (signatureLinks,
+ * stats etc.) que ignoramos por enquanto.
+ */
 export interface RubricaStatusResult {
-  documentId: string
-  status: string
+  success?: boolean
+  document?: {
+    id: string
+    title?: string
+    fileName?: string
+    status: string
+    signedPdfUrl?: string | null
+    originalUrl?: string | null
+    signerName?: string | null
+    signerCpf?: string | null
+    signedAt?: string | null
+    allSignersCompleted?: boolean
+    totalSigners?: number
+    completedSigners?: number
+    signatureLinks?: Array<{
+      signer?: { email?: string; name?: string }
+      link?: string
+      token?: string
+    }>
+  }
+  /** Campos legados — alguns ambientes antigos do Rubrica devolviam achatado. */
+  documentId?: string
+  status?: string
   signers?: Array<{ email: string; status: string; signedAt?: string }>
   signedAt?: string
   downloadUrl?: string
@@ -156,6 +183,15 @@ export function createRubricaClient(config: RubricaClientConfig) {
       signers: RubricaSigner[]
       webhookUrl?: string
       externalId?: string
+      /**
+       * Modo de envio aceito pelo Rubrica.
+       * - `'link'` (default no Propez): o Rubrica devolve apenas `signatureLinks`
+       *   e **não** envia e-mail próprio para o signatário. O Propez controla
+       *   a comunicação. É o padrão de produtos como DocuSign/Clicksign quando
+       *   o orquestrador gerencia o canal.
+       * - `'email'`: comportamento default do Rubrica (envia convite por e-mail).
+       */
+      sendingMethod?: 'email' | 'link'
     }): Promise<RubricaSendResult> {
       return jsonRequest<RubricaSendResult>(
         `/api/documents/${encodeURIComponent(input.documentId)}/send`,
@@ -165,6 +201,7 @@ export function createRubricaClient(config: RubricaClientConfig) {
             signers: input.signers,
             webhookUrl: input.webhookUrl,
             externalId: input.externalId,
+            sendingMethod: input.sendingMethod ?? 'link',
           }),
         },
       )

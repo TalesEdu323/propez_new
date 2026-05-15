@@ -49,9 +49,16 @@ export async function sendToRubricaForSigning(payload: ContractPayload): Promise
       signingUrl?: string
       documentId?: string
       error?: string
+      upstream?: string
+      code?: string
     }
     if (!res.ok) {
-      return { success: false, error: data?.error || `HTTP ${res.status}` }
+      const details = [
+        data?.error || `HTTP ${res.status}`,
+        data?.upstream ? `upstream=${data.upstream}` : null,
+        data?.code ? `code=${data.code}` : null,
+      ].filter(Boolean).join(' | ')
+      return { success: false, error: details }
     }
     return { success: true, signingUrl: data.signingUrl, documentId: data.documentId }
   } catch (error) {
@@ -66,7 +73,11 @@ export async function getRubricaStatus(proposalId: string): Promise<RubricaStatu
       `/api/integrations/rubrica/status/${encodeURIComponent(proposalId)}`,
       { method: 'GET' },
     )
-    if (!res.ok) return null
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { error?: string }
+      console.error('[Rubrica] Status indisponível:', body?.error || `HTTP ${res.status}`)
+      return null
+    }
     return (await res.json()) as RubricaStatus
   } catch (error) {
     console.error('[Rubrica] Erro ao consultar status:', error)

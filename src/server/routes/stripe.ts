@@ -11,6 +11,13 @@ export interface StripeWebhookOptions {
 type PlanId = 'pro' | 'business';
 type BillingCycle = 'monthly' | 'yearly';
 
+function normalizeReturnPath(path: string, fallback: string): string {
+  if (!path || typeof path !== 'string') return fallback;
+  const trimmed = path.trim();
+  if (!trimmed.startsWith('/')) return fallback;
+  return trimmed;
+}
+
 function resolvePlanFromPriceId(priceId: string | undefined | null, config: EnvironmentConfig): { plan: PlanId; cycle: BillingCycle } | null {
   if (!priceId) return null;
   const { pro, business } = config.stripePlans;
@@ -156,12 +163,18 @@ export function createCheckoutRouter({ stripe, config }: StripeWebhookOptions): 
         return res.status(400).json({ error: 'priceId não corresponde a nenhum plano configurado' });
       }
 
+      const safeSuccessPath = normalizeReturnPath(
+        successPath,
+        '/?route=configuracoes&success=true&session_id={CHECKOUT_SESSION_ID}',
+      );
+      const safeCancelPath = normalizeReturnPath(cancelPath, '/?route=planos&canceled=true');
+
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
         payment_method_types: ['card'],
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${config.appUrl}${successPath}`,
-        cancel_url: `${config.appUrl}${cancelPath}`,
+        success_url: `${config.appUrl}${safeSuccessPath}`,
+        cancel_url: `${config.appUrl}${safeCancelPath}`,
         client_reference_id: clientReferenceId,
         customer_email: customerEmail,
         allow_promotion_codes: true,

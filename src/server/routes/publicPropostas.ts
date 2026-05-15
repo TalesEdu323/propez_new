@@ -63,11 +63,22 @@ export function createPublicPropostasRouter(deps: { pool: Pool }): Router {
     const token = String(req.params.token || '').trim()
     if (!token) return res.status(400).json({ error: 'Token obrigatório' })
     const parsed = approveSchema.safeParse(req.body)
-    if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' })
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
+    }
     const { action, clientName } = parsed.data
 
     try {
       const status = action === 'approve' ? 'aprovada' : 'recusada'
+      const current = await pool.query<{ status: 'pendente' | 'aprovada' | 'recusada' }>(
+        `SELECT status FROM propostas WHERE public_token = $1`,
+        [token],
+      )
+      if (!current.rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
+      if (current.rows[0].status !== 'pendente') {
+        return res.status(409).json({ error: 'Decisão já registrada para esta proposta' })
+      }
+
       const { rows } = await pool.query(
         `UPDATE propostas SET status = $2, cliente_nome = COALESCE($3, cliente_nome), data_envio = COALESCE(data_envio, NOW())
          WHERE public_token = $1

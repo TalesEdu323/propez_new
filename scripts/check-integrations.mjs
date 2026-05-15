@@ -46,6 +46,20 @@ async function main() {
   }
   console.log('[check-integrations] health OK:', JSON.stringify(health.body));
 
+  // Relatório estruturado do health para guiar o usuário antes do smoke E2E.
+  const detail = health.body?.detail;
+  if (detail) {
+    console.log('[check-integrations] ProSync.apiKey   =', detail.prosync?.apiKey);
+    console.log('[check-integrations] ProSync.webhook  =', detail.prosync?.webhookSecret);
+    console.log('[check-integrations] Rubrica.apiKey   =', detail.rubrica?.apiKey);
+    console.log('[check-integrations] APP_URL          =', health.body?.appUrl, health.body?.appUrlPublic ? '(público)' : '(LOCAL — webhooks externos não chegam)');
+  }
+  const warnings = Array.isArray(health.body?.warnings) ? health.body.warnings : [];
+  if (warnings.length > 0) {
+    console.warn('[check-integrations] warnings:');
+    for (const w of warnings) console.warn('  -', w);
+  }
+
   // /api/auth/me sem cookie => 401 esperado. Qualquer outra coisa significa que
   // a rota não está montada.
   const me = await getJson(`${baseUrl}/api/auth/me`);

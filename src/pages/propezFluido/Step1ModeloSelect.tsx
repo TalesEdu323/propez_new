@@ -73,19 +73,13 @@ export function Step1ModeloSelect({ modelos, formData, onSelectModelo, onNext, o
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <motion.div
-          whileHover={{ y: -4 }}
-          onClick={() => { onSelectModelo(''); onNext(); }}
-          className={`p-8 rounded-[2.5rem] border-2 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center text-center min-h-[220px] shadow-sm ${
-            formData.modeloId === ''
-              ? 'border-zinc-900 bg-white shadow-xl shadow-zinc-900/5'
-              : 'border-transparent bg-white hover:border-zinc-200'
-          }`}
+          className="p-8 rounded-[2.5rem] border-2 border-dashed border-zinc-200 bg-zinc-50/60 flex flex-col items-center justify-center text-center min-h-[220px] shadow-sm opacity-80"
         >
           <div className="w-16 h-16 rounded-2xl bg-zinc-100 flex items-center justify-center mb-6">
             <Plus className="w-8 h-8 text-zinc-900" />
           </div>
-          <h3 className="text-lg font-semibold text-zinc-900">Começar do Zero</h3>
-          <p className="text-sm text-zinc-500 mt-2">Criar uma proposta em branco</p>
+          <h3 className="text-lg font-semibold text-zinc-700">Começar do Zero</h3>
+          <p className="text-sm text-zinc-500 mt-2">Indisponível neste fluxo. Selecione um modelo para gerar a proposta.</p>
         </motion.div>
 
         {modelos.map(m => {

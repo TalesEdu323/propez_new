@@ -81,8 +81,13 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const directRoute = params.get('route') as AppRoute | null;
-    if (directRoute && directRoute !== route) {
-      navigate(directRoute);
+    const id = params.get('id');
+    const editId = params.get('editId');
+    if (directRoute) {
+      navigate(directRoute, {
+        ...(id ? { id } : {}),
+        ...(editId ? { editId } : {}),
+      });
     }
   }, []);
 

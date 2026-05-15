@@ -30,7 +30,7 @@ Para que a integração funcione plenamente, o ProSync deve expor:
 
 ## 4. Implementação no Código
 
-As funções de comunicação estão centralizadas em `src/services/crmApi.ts`. 
+As funções de comunicação estão centralizadas em `src/services/crmApi.ts`.
 
 ### Exemplo de busca de Lead:
 ```typescript

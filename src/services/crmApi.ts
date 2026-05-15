@@ -38,6 +38,24 @@ interface ProsyncLead {
   status: string
 }
 
+async function parseErrorResponse(res: Response): Promise<string> {
+  const fallback = `Erro de integração ProSync (HTTP ${res.status})`;
+  try {
+    const body = await res.json() as {
+      error?: string
+      upstream?: string
+      body?: { error?: string }
+    }
+    return (
+      body.error
+      || body.body?.error
+      || (body.upstream ? `${fallback} em ${body.upstream}` : fallback)
+    );
+  } catch {
+    return fallback;
+  }
+}
+
 function mapPropezStatusToProsyncLeadStatus(
   s: ProposalStatusUpdate['status'],
 ): string {
@@ -69,8 +87,8 @@ export async function fetchClientsFromCRM(params?: {
 
     const res = await fetch(`/api/integrations/prosync/leads${q}`, { method: 'GET' })
     if (!res.ok) {
-      console.error('[ProSync] listLeads falhou:', res.status)
-      return []
+      const message = await parseErrorResponse(res);
+      throw new Error(message);
     }
     const data = (await res.json()) as { leads: ProsyncLead[] }
     return (data.leads || []).map((lead) => ({
@@ -84,7 +102,9 @@ export async function fetchClientsFromCRM(params?: {
     }))
   } catch (error) {
     console.error('[ProSync] Erro ao buscar leads:', error)
-    return []
+    throw error instanceof Error
+      ? error
+      : new Error('Falha ao consultar ProSync. Verifique rede e configuração da integração.');
   }
 }
 
@@ -107,6 +127,11 @@ export async function updateProposalStatusInCRM(update: ProposalStatusUpdate): P
         }),
       },
     )
+    if (!res.ok) {
+      const message = await parseErrorResponse(res);
+      console.error('[ProSync] Falha ao atualizar lead:', message);
+      return false;
+    }
     return res.ok
   } catch (error) {
     console.error('[ProSync] Erro ao atualizar lead:', error)

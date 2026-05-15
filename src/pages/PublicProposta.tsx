@@ -54,6 +54,7 @@ export default function PublicProposta({ token }: Props) {
   const [clientEmail, setClientEmail] = useState('');
   const [clientDoc, setClientDoc] = useState('');
   const [formOpen, setFormOpen] = useState<false | 'approve' | 'reject'>(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,8 +68,14 @@ export default function PublicProposta({ token }: Props) {
         setClientName(res.proposta.cliente_nome ?? '');
       } catch (err) {
         if (cancelled) return;
-        if (err instanceof ApiError && err.status === 404) {
-          setError('Proposta não encontrada ou link expirado.');
+        if (err instanceof ApiError) {
+          if (err.status === 404) {
+            setError('Proposta não encontrada ou link expirado.');
+          } else if (err.status === 410) {
+            setError('Este link público não está mais disponível.');
+          } else {
+            setError(`Não foi possível carregar a proposta (${err.status}).`);
+          }
         } else {
           setError('Não foi possível carregar a proposta. Tente novamente mais tarde.');
         }
@@ -88,6 +95,7 @@ export default function PublicProposta({ token }: Props) {
 
   async function decide(action: 'approve' | 'reject') {
     if (!proposta) return;
+    setDecisionError(null);
     setIsSubmitting(true);
     try {
       const updated = await api.post<PublicProposta>(
@@ -103,7 +111,17 @@ export default function PublicProposta({ token }: Props) {
       setData((prev) => (prev ? { ...prev, proposta: updated } : prev));
       setFormOpen(false);
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Erro ao registrar decisão.');
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          setDecisionError('A decisão desta proposta já foi registrada anteriormente.');
+        } else if (err.status === 404) {
+          setDecisionError('Link público inválido ou expirado.');
+        } else {
+          setDecisionError(`Erro ao registrar decisão (${err.status}): ${err.message}`);
+        }
+      } else {
+        setDecisionError('Erro ao registrar decisão. Tente novamente.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -274,6 +292,9 @@ export default function PublicProposta({ token }: Props) {
                   {isSubmitting ? 'Enviando...' : formOpen === 'approve' ? 'Aprovar' : 'Recusar'}
                 </button>
               </div>
+              {decisionError && (
+                <p className="mt-3 text-sm text-red-600">{decisionError}</p>
+              )}
             </motion.div>
           </motion.div>
         )}

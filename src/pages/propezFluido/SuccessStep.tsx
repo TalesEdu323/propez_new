@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { CheckCircle, Eye, Mail } from 'lucide-react';
+import { generatePublicLink } from '../../lib/store';
+import { ApiError } from '../../lib/apiClient';
 
 export interface SuccessStepProps {
   propostaId: string;
@@ -18,8 +20,38 @@ export function SuccessStep({
   onNavigateToView,
 }: SuccessStepProps) {
   const [isSending, setIsSending] = useState(false);
+  const [proposalUrl, setProposalUrl] = useState('');
+  const [isGeneratingLink, setIsGeneratingLink] = useState(true);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
-  const proposalUrl = `${window.location.origin}/?route=visualizar-proposta&id=${propostaId}`;
+  const loadPublicLink = async (cancelledRef?: { current: boolean }) => {
+    setIsGeneratingLink(true);
+    setLinkError(null);
+    try {
+      const result = await generatePublicLink(propostaId);
+      if (cancelledRef?.current) return;
+      setProposalUrl(result.url);
+    } catch (error) {
+      console.error('[SuccessStep] erro ao gerar link publico:', error);
+      if (cancelledRef?.current) return;
+      if (error instanceof ApiError && error.status === 404) {
+        setLinkError('A proposta ainda não foi persistida. Salve novamente antes de compartilhar o link.');
+      } else {
+        setLinkError('Nao foi possivel gerar o link publico agora. Tente novamente em alguns instantes.');
+      }
+    } finally {
+      if (!cancelledRef?.current) setIsGeneratingLink(false);
+    }
+  };
+
+  useEffect(() => {
+    const cancelledRef = { current: false };
+
+    void loadPublicLink(cancelledRef);
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, [propostaId]);
 
   const handleSendEmail = async () => {
     if (!clienteEmail) {
@@ -41,6 +73,7 @@ export function SuccessStep({
   };
 
   const handleCopyLink = () => {
+    if (!proposalUrl) return;
     navigator.clipboard.writeText(proposalUrl);
     alert('Link copiado!');
   };
@@ -72,16 +105,34 @@ export function SuccessStep({
               <input
                 type="text"
                 readOnly
-                value={proposalUrl}
+                value={
+                  isGeneratingLink
+                    ? 'Gerando link publico...'
+                    : linkError
+                      ? linkError
+                      : proposalUrl
+                }
                 className="w-full bg-zinc-50 border border-black/10 rounded-xl px-4 py-4 text-sm font-mono text-zinc-600 focus:outline-none"
               />
               <button
                 onClick={handleCopyLink}
+                disabled={isGeneratingLink || !proposalUrl}
                 className="bg-[#0a0a0a] text-white hover:bg-zinc-800 rounded-xl px-8 py-4 text-sm font-medium transition-all active:scale-[0.98] whitespace-nowrap"
               >
-                Copiar Link
+                {isGeneratingLink ? 'Gerando...' : 'Copiar Link'}
               </button>
             </div>
+            {linkError && (
+              <div className="mt-3">
+                <button
+                  onClick={() => void loadPublicLink()}
+                  disabled={isGeneratingLink}
+                  className="text-xs font-semibold text-zinc-700 hover:text-zinc-900 underline disabled:opacity-60"
+                >
+                  Tentar gerar link novamente
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="relative py-2">

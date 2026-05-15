@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FileText } from 'lucide-react';
-import { store, Proposta } from '../lib/store';
+import { hydrateStore, isStoreHydrated, store, Proposta } from '../lib/store';
 import { RenderElement } from '../components/builder/RenderElement';
 import { motion, AnimatePresence } from 'motion/react';
 import { updateProposalStatusInCRM } from '../services/crmApi';
@@ -21,6 +21,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
   const propostas = usePropostas();
   const userConfig = useUserConfig();
   const proposta: Proposta | null = useMemo(() => propostas.find(p => p.id === id) ?? null, [propostas, id]);
+  const [isResolvingProposal, setIsResolvingProposal] = useState(false);
 
   const [viewState, setViewState] = useState<'proposal' | 'contract'>('proposal');
   const [isUpdating, setIsUpdating] = useState(false);
@@ -31,6 +32,32 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
     documento: '', // CPF/CNPJ
   });
   const [rubricaStatus, setRubricaStatus] = useState<RubricaStatus>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!id || proposta) {
+      setIsResolvingProposal(false);
+      return;
+    }
+    if (isStoreHydrated()) {
+      setIsResolvingProposal(false);
+      return;
+    }
+
+    setIsResolvingProposal(true);
+    void hydrateStore()
+      .catch((error) => {
+        console.error('[VisualizarProposta] falha ao hidratar store para resolver rota direta:', error);
+      })
+      .finally(() => {
+        if (!cancelled) setIsResolvingProposal(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, proposta]);
 
   useEffect(() => {
     if (!proposta) return;
@@ -179,6 +206,16 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
     }
   };
 
+  if (isResolvingProposal) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-transparent">
+        <div className="text-center glass-panel p-10 rounded-3xl">
+          <p className="text-zinc-500 font-medium">Carregando proposta...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!proposta) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-transparent">
@@ -187,7 +224,9 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
           animate={{ opacity: 1, scale: 1 }}
           className="text-center glass-panel p-10 rounded-3xl"
         >
-          <h2 className="text-2xl font-bold text-zinc-900 mb-4 tracking-tight">Proposta não encontrada</h2>
+          <h2 className="text-2xl font-bold text-zinc-900 mb-4 tracking-tight">
+            {id ? 'Proposta não encontrada' : 'Link inválido'}
+          </h2>
           <button onClick={() => navigate('propostas')} className="text-zinc-500 hover:text-black font-medium transition-colors">Voltar para Propostas</button>
         </motion.div>
       </div>

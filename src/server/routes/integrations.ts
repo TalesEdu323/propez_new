@@ -59,10 +59,25 @@ export function buildIntegrationsRouter(deps: {
       })
       return
     }
-    console.error(`[integrations:${label}]`, err)
+    const message = err instanceof Error ? err.message : String(err)
+    const code = err instanceof Error && 'code' in err ? String((err as { code?: unknown }).code ?? '') : ''
+    const isDns = code === 'ENOTFOUND' || /ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(message)
+    const isTimeout = code === 'ABORT_ERR' || /aborted|timeout/i.test(message)
+    const userMessage = isDns
+      ? 'Falha de DNS ao acessar integração externa'
+      : isTimeout
+        ? 'Timeout ao acessar integração externa'
+        : message || 'Upstream error'
+
+    console.error(`[integrations:${label}]`, {
+      message,
+      code: code || undefined,
+      type: isDns ? 'dns' : isTimeout ? 'timeout' : 'generic',
+    })
     res.status(502).json({
-      error: err instanceof Error ? err.message : 'Upstream error',
+      error: userMessage,
       upstream: label,
+      code: code || undefined,
     })
   }
 

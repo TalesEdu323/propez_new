@@ -60,14 +60,27 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
   const currentPlan = resolvePlan(userConfig);
   const [cycle, setCycle] = useState<'monthly' | 'yearly'>('yearly');
   const [plans, setPlans] = useState<StripePlansResponse | null>(null);
+  const [plansError, setPlansError] = useState<string | null>(null);
   const [loadingPlan, setLoadingPlan] = useState<PlanTier | null>(null);
   const [returnInfo, setReturnInfo] = useState<{ type: 'success' | 'canceled'; message: string } | null>(null);
 
   useEffect(() => {
     fetch('/api/stripe/plans')
-      .then(res => res.json())
-      .then(setPlans)
-      .catch(err => console.error('Erro ao carregar planos:', err));
+      .then(async res => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({})) as { error?: string };
+          throw new Error(body.error || `Falha ao carregar planos (HTTP ${res.status})`);
+        }
+        return res.json();
+      })
+      .then((data: StripePlansResponse) => {
+        setPlans(data);
+        setPlansError(null);
+      })
+      .catch(err => {
+        console.error('Erro ao carregar planos:', err);
+        setPlansError(err instanceof Error ? err.message : 'Erro ao carregar configuração de planos.');
+      });
   }, []);
 
   // Ao voltar do Stripe: se há session_id, consulta o status e atualiza config.
@@ -85,7 +98,13 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
 
     if (success && sessionId) {
       fetch(`/api/stripe/session/${sessionId}`)
-        .then(res => res.json())
+        .then(async res => {
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({})) as { error?: string };
+            throw new Error(body.error || `Falha ao confirmar sessão (HTTP ${res.status})`);
+          }
+          return res.json();
+        })
         .then(data => {
           if (data?.plan) {
             const cfg = store.getUserConfig();
@@ -104,7 +123,13 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
             });
           }
         })
-        .catch(err => console.error('Erro ao confirmar sessão:', err))
+        .catch(err => {
+          console.error('Erro ao confirmar sessão:', err);
+          setReturnInfo({
+            type: 'canceled',
+            message: err instanceof Error ? err.message : 'Não foi possível confirmar o checkout.',
+          });
+        })
         .finally(() => {
           window.history.replaceState({}, '', window.location.pathname);
         });
@@ -184,6 +209,11 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
           >
             <p className="text-sm font-semibold">{returnInfo.message}</p>
           </motion.div>
+        )}
+        {plansError && (
+          <div className="mb-10 p-5 rounded-2xl border bg-red-50 border-red-200 text-red-700">
+            <p className="text-sm font-semibold">{plansError}</p>
+          </div>
         )}
 
         {/* Toggle mensal / anual */}

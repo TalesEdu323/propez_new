@@ -8,6 +8,20 @@ export interface HealthRouterOptions {
   integrationsConfig: IntegrationsConfig;
 }
 
+type IntegrationState = 'configured' | 'placeholder' | 'missing';
+
+function classifyIntegrationKey(value: string | null): IntegrationState {
+  if (!value) return 'missing';
+  if (value.includes('<PREENCHER>') || value.endsWith('_PREENCHER')) return 'placeholder';
+  return 'configured';
+}
+
+function isLocalUrl(url: string): boolean {
+  const u = url.trim().toLowerCase();
+  if (!u) return true;
+  return /localhost|127\.0\.0\.1|0\.0\.0\.0|::1/i.test(u) || u.startsWith('http://');
+}
+
 export function createHealthRouter({ pool, integrationsConfig }: HealthRouterOptions): Router {
   const router = express.Router();
 
@@ -24,13 +38,46 @@ export function createHealthRouter({ pool, integrationsConfig }: HealthRouterOpt
       client?.release();
     }
 
+    const prosyncState = classifyIntegrationKey(integrationsConfig.prosync.apiKey);
+    const rubricaState = classifyIntegrationKey(integrationsConfig.rubrica.apiKey);
+    const prosyncSecretState = classifyIntegrationKey(integrationsConfig.prosync.webhookSecret);
+    const appUrlPublic = !isLocalUrl(integrationsConfig.appUrl);
+
+    const warnings: string[] = [];
+    if (prosyncState === 'placeholder') {
+      warnings.push('PROSYNC_API_KEY ainda contém <PREENCHER>; substitua por uma chave ps_live_... real.');
+    }
+    if (rubricaState === 'placeholder') {
+      warnings.push('RUBRICA_API_KEY ainda contém <PREENCHER>; substitua por uma chave dm_live_... real.');
+    }
+    if (prosyncState === 'configured' && prosyncSecretState !== 'configured') {
+      warnings.push('PROSYNC_WEBHOOK_SECRET ausente — webhooks inbound do ProSync retornarão 401.');
+    }
+    if ((prosyncState === 'configured' || rubricaState === 'configured') && !appUrlPublic) {
+      warnings.push('APP_URL é local — ProSync/Rubrica na nuvem não conseguem entregar webhooks. Use ngrok/Cloudflare Tunnel ou deploy.');
+    }
+
     res.status(dbStatus ? 200 : 503).json({
       status: dbStatus ? 'ok' : 'degraded',
       database: dbStatus,
+      appUrl: integrationsConfig.appUrl,
+      appUrlPublic,
       integrations: {
-        prosync: !!integrationsConfig.prosync.apiKey,
-        rubrica: !!integrationsConfig.rubrica.apiKey,
+        prosync: prosyncState === 'configured',
+        rubrica: rubricaState === 'configured',
       },
+      detail: {
+        prosync: {
+          apiKey: prosyncState,
+          webhookSecret: prosyncSecretState,
+          baseUrl: integrationsConfig.prosync.baseUrl,
+        },
+        rubrica: {
+          apiKey: rubricaState,
+          baseUrl: integrationsConfig.rubrica.baseUrl,
+        },
+      },
+      warnings,
     });
   });
 

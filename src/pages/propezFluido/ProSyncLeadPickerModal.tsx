@@ -14,18 +14,21 @@ export function ProSyncLeadPickerModal({ open, onClose, onSelect }: Props) {
   const [leads, setLeads] = useState<ExternalClient[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isEmpty, setIsEmpty] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setIsEmpty(false);
     fetchClientsFromCRM({ limit: 50 })
       .then(res => {
         if (cancelled) return;
         setLeads(res);
         if (res.length === 0) {
-          setError('Nenhum lead retornado pelo ProSync. Verifique a configuração de integração.');
+          setIsEmpty(true);
         }
       })
       .catch(err => {
@@ -38,7 +41,7 @@ export function ProSyncLeadPickerModal({ open, onClose, onSelect }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, reloadToken]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -100,9 +103,22 @@ export function ProSyncLeadPickerModal({ open, onClose, onSelect }: Props) {
                 <div className="text-center py-12 text-sm text-zinc-400">Carregando leads...</div>
               )}
               {!loading && error && (
-                <div className="text-center py-12 text-sm text-red-500">{error}</div>
+                <div className="text-center py-12 text-sm text-red-500">
+                  <p>{error}</p>
+                  <button
+                    onClick={() => setReloadToken((v) => v + 1)}
+                    className="mt-3 text-xs font-semibold underline hover:text-red-700"
+                  >
+                    Tentar novamente
+                  </button>
+                </div>
               )}
-              {!loading && !error && filtered.length === 0 && (
+              {!loading && !error && isEmpty && (
+                <div className="text-center py-12 text-sm text-zinc-500">
+                  Nenhum lead foi retornado pelo ProSync para esta conta.
+                </div>
+              )}
+              {!loading && !error && !isEmpty && filtered.length === 0 && (
                 <div className="text-center py-12 text-sm text-zinc-400">
                   Nenhum lead corresponde à busca.
                 </div>

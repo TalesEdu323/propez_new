@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ArrowRight } from 'lucide-react';
-import { store, resolvePlan, Cliente, Proposta } from '../lib/store';
+import {
+  store,
+  resolvePlan,
+  Cliente,
+  Proposta,
+  generatePublicLink,
+  createProposta,
+  updateProposta,
+} from '../lib/store';
 import { updateProposalStatusInCRM, type ExternalClient } from '../services/crmApi';
 import { createId } from '../lib/ids';
 import { replaceContractString, replaceVariablesInElements, type ContractContext } from '../lib/contractVariables';
@@ -49,6 +57,13 @@ const INITIAL_FORM_DATA: PropezFluidoFormData = {
   linkPagamento: '',
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function asUuidOrUndefined(value: string | undefined | null): string | undefined {
+  if (!value) return undefined;
+  return UUID_REGEX.test(value) ? value : undefined;
+}
+
 export default function PropezFluido({ navigate, initialData }: { navigate: NavigateFn; initialData?: RouteParams }) {
   const [step, setStep] = useState(1);
   const [createdPropostaId, setCreatedPropostaId] = useState<string>('');
@@ -59,6 +74,8 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
   const userConfig = useUserConfig();
   const [showLeadPicker, setShowLeadPicker] = useState(false);
   const [formData, setFormData] = useState<PropezFluidoFormData>(INITIAL_FORM_DATA);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [quotaGate, setQuotaGate] = useState<{ open: boolean; requiredPlan: PlanTier; reason?: string }>({
     open: false,
     requiredPlan: 'pro',
@@ -156,7 +173,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
   const replaceVariables = (elements: BuilderElement[]) =>
     replaceVariablesInElements(elements, buildContractContext());
 
-  const handleSave = (finalElements: BuilderElement[]) => {
+  const handleSave = async (finalElements: BuilderElement[]) => {
     const isEditing = !!initialData?.editId;
 
     // Só checamos a cota quando é proposta NOVA — edições não consomem quota.
@@ -176,11 +193,14 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
     const newPropostaId = initialData?.editId || createId();
     const finalContractText = replaceString(formData.contratoTexto);
 
+    const clienteId = asUuidOrUndefined(formData.clienteId);
+    const modeloId = asUuidOrUndefined(formData.modeloId);
+
     const newProposta: Proposta = {
       id: newPropostaId,
-      cliente_id: formData.clienteId || 'novo',
+      cliente_id: clienteId ?? '',
       cliente_nome: formData.clienteNome,
-      modelo_id: formData.modeloId,
+      modelo_id: modeloId,
       servicos: formData.servicos,
       valor: Number(formData.valor),
       desconto: Number(formData.desconto) || 0,
@@ -201,41 +221,60 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
       creatorPlan: resolvePlan(userConfig),
     };
 
-    const propostas = store.getPropostas();
-    const updated = isEditing
-      ? propostas.map(p => p.id === newProposta.id ? newProposta : p)
-      : [...propostas, newProposta];
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const persisted = isEditing
+        ? await updateProposta(newProposta.id, newProposta)
+        : await createProposta(newProposta);
 
-    store.savePropostas(updated);
-    if (!isEditing) {
-      store.incrementUsage('propostasThisMonth');
+      if (!isEditing) {
+        store.incrementUsage('propostasThisMonth');
+      }
+
+      if (formData.prosyncLeadId) {
+        void (async () => {
+          let proposalUrl = `${window.location.origin}/?route=visualizar-proposta&id=${persisted.id}`;
+          try {
+            const publicLink = await generatePublicLink(persisted.id);
+            if (publicLink?.url) proposalUrl = publicLink.url;
+          } catch (error) {
+            console.warn('[PropezFluido] falha ao gerar link publico para CRM:', error);
+          }
+
+          await updateProposalStatusInCRM({
+            proposalId: persisted.id,
+            crmClientId: formData.prosyncLeadId!,
+            status: 'pendente',
+            value: Number(formData.valor),
+            updatedAt: new Date().toISOString(),
+            proposalUrl,
+          });
+        })();
+      }
+
+      if (!clienteId && !formData.clienteId && formData.clienteNome) {
+        const localClientId = createId();
+        const newCliente: Cliente = {
+          id: localClientId,
+          nome: formData.clienteNome,
+          empresa: '',
+          email: formData.clienteEmail || '',
+          telefone: '',
+          data_cadastro: new Date().toISOString(),
+        };
+        store.saveClientes([...clientes, newCliente]);
+      }
+
+      setCreatedPropostaId(persisted.id);
+      setStep(SUCCESS_STEP);
+    } catch (error) {
+      console.error('[PropezFluido] erro ao salvar proposta:', error);
+      setSaveError('Nao foi possivel salvar a proposta. Revise os campos e tente novamente.');
+      alert('Erro ao salvar proposta. Tente novamente.');
+    } finally {
+      setIsSaving(false);
     }
-
-    if (formData.prosyncLeadId) {
-      updateProposalStatusInCRM({
-        proposalId: newPropostaId,
-        crmClientId: formData.prosyncLeadId,
-        status: 'pendente',
-        value: Number(formData.valor),
-        updatedAt: new Date().toISOString(),
-        proposalUrl: `${window.location.origin}/?route=visualizar-proposta&id=${newPropostaId}`,
-      });
-    }
-
-    if (!formData.clienteId && formData.clienteNome) {
-      const newCliente: Cliente = {
-        id: newProposta.cliente_id,
-        nome: formData.clienteNome,
-        empresa: '',
-        email: formData.clienteEmail || '',
-        telefone: '',
-        data_cadastro: new Date().toISOString(),
-      };
-      store.saveClientes([...clientes, newCliente]);
-    }
-
-    setCreatedPropostaId(newPropostaId);
-    setStep(SUCCESS_STEP);
   };
 
   if (step === SUCCESS_STEP && !createdPropostaId) {
@@ -255,7 +294,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
     );
   }
 
-  const handleAdvance = () => {
+  const handleAdvance = async () => {
     if (step === 2 && !formData.clienteNome) {
       alert('Preencha o nome do cliente.');
       return;
@@ -269,7 +308,11 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
         alert('Preencha as datas de envio e validade.');
         return;
       }
-      handleSave(replaceVariables(formData.elementos));
+      if (!formData.elementos.length) {
+        alert('Esta proposta está sem layout. Volte ao passo 1 e selecione um modelo para gerar a proposta.');
+        return;
+      }
+      await handleSave(replaceVariables(formData.elementos));
       return;
     }
     setStep(step + 1);
@@ -343,7 +386,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
           <div className="mt-6 md:mt-8 pt-6 shrink-0 border-t border-black/5 flex items-center justify-between gap-3">
             <button
               onClick={() => setStep(step - 1)}
-              disabled={step === 1}
+              disabled={step === 1 || isSaving}
               className={`px-6 py-3 rounded-xl text-sm font-medium transition-all ${
                 step === 1 ? 'opacity-0 pointer-events-none' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
               }`}
@@ -353,12 +396,16 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
 
             <button
               onClick={handleAdvance}
+              disabled={isSaving}
               className="bg-[#0a0a0a] text-white hover:bg-zinc-800 rounded-xl px-8 py-4 text-sm font-medium transition-all active:scale-[0.98] flex items-center gap-2 shadow-lg shadow-black/10"
             >
-              {step === TOTAL_WIZARD_STEPS ? 'Gerar Proposta' : 'Próximo Passo'}
+              {isSaving ? 'Salvando...' : step === TOTAL_WIZARD_STEPS ? 'Gerar Proposta' : 'Próximo Passo'}
               {step !== TOTAL_WIZARD_STEPS && <ArrowRight className="w-4 h-4" />}
             </button>
           </div>
+          {saveError && (
+            <p className="mt-3 text-sm text-red-600 font-medium">{saveError}</p>
+          )}
         </div>
       </div>
 

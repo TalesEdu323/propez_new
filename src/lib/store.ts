@@ -632,28 +632,52 @@ interface PropostaPayload {
   prosyncLeadId?: string | null;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function normalizeUuidOrNull(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return UUID_REGEX.test(value) ? value : null;
+}
+
+function normalizeDateTimeOrNull(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  // Campos de formulario HTML date chegam como YYYY-MM-DD.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return new Date(`${trimmed}T00:00:00.000Z`).toISOString();
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toISOString();
+}
+
 function toPropostaPayload(p: Proposta): PropostaPayload {
   return {
     id: p.id,
-    cliente_id: p.cliente_id || null,
+    cliente_id: normalizeUuidOrNull(p.cliente_id),
     cliente_nome: p.cliente_nome,
-    modelo_id: p.modelo_id ?? null,
+    modelo_id: normalizeUuidOrNull(p.modelo_id),
     servicos: p.servicos ?? [],
     valor: p.valor,
     desconto: p.desconto,
     recorrente: p.recorrente,
     ciclo_recorrencia: p.ciclo_recorrencia ?? null,
     duracao_recorrencia: p.duracao_recorrencia ?? null,
-    data_envio: p.data_envio ?? null,
-    data_validade: p.data_validade ?? null,
+    data_envio: normalizeDateTimeOrNull(p.data_envio),
+    data_validade: normalizeDateTimeOrNull(p.data_validade),
     status: p.status,
     elementos: p.elementos ?? [],
     contratoTexto: p.contratoTexto ?? null,
-    contratoId: p.contratoId ?? null,
+    contratoId: normalizeUuidOrNull(p.contratoId),
     chavePix: p.chavePix ?? null,
     linkPagamento: p.linkPagamento ?? null,
     pago: p.pago,
-    data_pagamento: p.data_pagamento ?? null,
+    data_pagamento: normalizeDateTimeOrNull(p.data_pagamento),
     creatorPlan: p.creatorPlan ?? null,
     prosyncLeadId: p.prosyncLeadId ?? null,
   };

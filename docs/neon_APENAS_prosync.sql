@@ -1,6 +1,3 @@
--- Neon: base de dados do PRO SYNC (DATABASE_URL do ProSync)
--- Exige tabelas organizations e users já criadas pelo schema normal do ProSync.
--- Idempotente.
 
 CREATE TABLE IF NOT EXISTS api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -26,7 +26,7 @@ const bodySchema = z.object({
   data_envio: z.string().datetime().optional().nullable(),
   data_validade: z.string().datetime().optional().nullable(),
   status: statusSchema.default('pendente'),
-  elementos: z.array(builderElement).default([]),
+  elementos: z.array(builderElement).min(1, 'A proposta precisa de ao menos um elemento visual'),
   contratoTexto: z.string().max(200_000).optional().nullable(),
   contratoId: z.string().uuid().optional().nullable(),
   chavePix: z.string().max(500).optional().nullable(),
@@ -145,7 +145,13 @@ export function createPropostasRouter(deps: {
   router.patch('/:id', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
     const parsed = patchSchema.safeParse(req.body)
-    if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' })
+    if (!parsed.success) {
+      console.warn('[propostas/update] payload inválido', {
+        proposalId: req.params.id,
+        orgId: req.auth.orgId,
+      })
+      return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
+    }
     const d = parsed.data
     try {
       const { rows } = await pool.query(

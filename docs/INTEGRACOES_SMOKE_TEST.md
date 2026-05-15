@@ -183,5 +183,19 @@ rejeitada no Propez, etc.).
   `?secret=...` inalterado; qualquer proxy que strip-e query vai quebrar.
 - `502 upstream=prosync.updateLead` → API key revogada, URL incorreta ou lead
   que pertence a outra organização.
+- `502 Falha de DNS ao acessar integração externa` → o host em
+  `PROSYNC_API_URL`/`RUBRICA_API_URL` não resolve neste ambiente (erro
+  `ENOTFOUND`/`EAI_AGAIN`).
+- `502 Timeout ao acessar integração externa` → upstream indisponível ou rede
+  degradada; validar conectividade e latência antes de retestar.
 - `pdfmake` falha com `ENOENT Roboto-*.ttf` → rodar `npm install` para trazer
   a pasta `node_modules/pdfmake/fonts/Roboto/*.ttf`.
+
+## Smoke extra de link público (produção)
+
+Após criar proposta no PropezFluido:
+
+1. Confirmar `POST /api/propostas/:id/public-link` retorna 200.
+2. Abrir `/p/{token}` em aba anônima.
+3. Enviar `approve` e depois repetir envio para validar retorno 409
+   (`Decisão já registrada para esta proposta`).
