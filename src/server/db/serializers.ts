@@ -4,6 +4,8 @@
  * facilitar a migração (cliente_nome, data_criacao, etc.).
  */
 
+import { parseProposalFlow, type ProposalFlowConfig } from '../../types/proposalFlow.js';
+
 export interface SerializedCliente {
   id: string
   nome: string
@@ -39,6 +41,7 @@ export interface SerializedModelo {
   chavePix?: string
   linkPagamento?: string
   tier: 'free' | 'pro' | 'business'
+  fluxo: ProposalFlowConfig
   data_criacao: string
 }
 
@@ -73,6 +76,10 @@ export interface SerializedProposta {
   rubricaSigningUrl?: string | null
   rubricaSignedPdfUrl?: string | null
   rubricaLastSyncAt?: string | null
+  fluxo: ProposalFlowConfig
+  clienteContratoRecebidoAt?: string | null
+  orgContratoAceitoAt?: string | null
+  contratoConcluidoAt?: string | null
 }
 
 type AnyRow = Record<string, any>
@@ -124,6 +131,7 @@ export function serializeModelo(r: AnyRow): SerializedModelo {
     chavePix: r.chave_pix ?? undefined,
     linkPagamento: r.link_pagamento ?? undefined,
     tier: (r.tier ?? 'free') as 'free' | 'pro' | 'business',
+    fluxo: parseProposalFlow(r.fluxo),
     data_criacao: r.created_at,
   }
 }
@@ -160,5 +168,9 @@ export function serializeProposta(r: AnyRow): SerializedProposta {
     rubricaSigningUrl: r.rubrica_signing_url,
     rubricaSignedPdfUrl: r.rubrica_signed_pdf_url,
     rubricaLastSyncAt: r.rubrica_last_sync_at,
+    fluxo: parseProposalFlow(r.fluxo),
+    clienteContratoRecebidoAt: r.cliente_contrato_recebido_at ?? undefined,
+    orgContratoAceitoAt: r.org_contrato_aceito_at ?? undefined,
+    contratoConcluidoAt: r.contrato_concluido_at ?? undefined,
   }
 }

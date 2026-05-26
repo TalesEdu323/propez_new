@@ -36,6 +36,7 @@ import {
 import { createHealthRouter } from './routes/health.js';
 import { createNotificationsRouter } from './routes/notifications.js';
 import { createAdminRouter } from './routes/admin.js';
+import { createMarketplaceRouter, createAdminMarketplaceRouter } from './routes/marketplace.js';
 import { errorHandler } from './errorHandler.js';
 import { logStartupIntegrationDiagnostics } from './startupDiagnostics.js';
 
@@ -153,11 +154,20 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   // 7) Rotas públicas (proposta pelo link)
   app.use(
     '/api/public/propostas',
-    createPublicPropostasRouter({ pool, mail, suiteProposalEvents, config }),
+    createPublicPropostasRouter({
+      pool,
+      mail,
+      suiteProposalEvents,
+      config,
+      integrationsConfig,
+      orgCredentialsRepo,
+    }),
   );
 
   // 8) Painel admin (super-admin do SaaS) — exige requireAuth + requirePlatformAdmin
+  app.use('/api/marketplace', createMarketplaceRouter({ pool, config }));
   app.use('/api/admin', createAdminRouter({ pool, config }));
+  app.use('/api/admin', createAdminMarketplaceRouter({ pool, config }));
 
   // 9) Utilitárias
   app.use('/api', createHealthRouter({ pool, integrationsConfig }));

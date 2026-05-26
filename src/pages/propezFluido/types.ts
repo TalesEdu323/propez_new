@@ -1,4 +1,6 @@
 import type { BuilderElement } from '../../types/builder';
+import type { ProposalFlowConfig } from '../../types/proposalFlow';
+import { DEFAULT_FLOW } from '../../types/proposalFlow';
 
 /**
  * Forma única usada pelos steps para ler e escrever os dados da proposta.
@@ -24,7 +26,30 @@ export interface PropezFluidoFormData {
   contratoId: string;
   chavePix: string;
   linkPagamento: string;
+  fluxo: ProposalFlowConfig;
 }
+
+export const INITIAL_PROPEZ_FLUIDO_FORM: PropezFluidoFormData = {
+  modeloId: '',
+  clienteId: '',
+  clienteNome: '',
+  clienteEmail: '',
+  prosyncLeadId: '',
+  servicos: [],
+  valor: '',
+  desconto: '',
+  recorrente: false,
+  cicloRecorrencia: 'mensal',
+  duracaoRecorrencia: '12',
+  envio: '',
+  validade: '',
+  elementos: [],
+  contratoTexto: '',
+  contratoId: '',
+  chavePix: '',
+  linkPagamento: '',
+  fluxo: DEFAULT_FLOW,
+};
 
 export interface StepDescriptor {
   id: number;

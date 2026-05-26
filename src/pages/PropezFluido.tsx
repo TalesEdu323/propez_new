@@ -24,6 +24,7 @@ import { Step1ModeloSelect } from './propezFluido/Step1ModeloSelect';
 import { Step2ClienteForm } from './propezFluido/Step2ClienteForm';
 import { Step3ServicosValores } from './propezFluido/Step3ServicosValores';
 import type { PropezFluidoFormData, StepDescriptor } from './propezFluido/types';
+import { INITIAL_PROPEZ_FLUIDO_FORM } from './propezFluido/types';
 import type { NavigateFn, RouteParams } from '../types/navigation';
 
 const TOTAL_WIZARD_STEPS = 3;
@@ -37,24 +38,9 @@ const STEPS: StepDescriptor[] = [
 ];
 
 const INITIAL_FORM_DATA: PropezFluidoFormData = {
-  modeloId: '',
-  clienteId: '',
-  clienteNome: '',
-  clienteEmail: '',
-  prosyncLeadId: '',
-  servicos: [],
-  valor: '',
-  desconto: '',
-  recorrente: false,
-  cicloRecorrencia: 'mensal',
-  duracaoRecorrencia: '12',
+  ...INITIAL_PROPEZ_FLUIDO_FORM,
   envio: new Date().toISOString().split('T')[0],
   validade: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  elementos: [],
-  contratoTexto: '',
-  contratoId: '',
-  chavePix: '',
-  linkPagamento: '',
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -127,6 +113,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
         contratoId: modelo.contratoId || '',
         chavePix: modelo.chavePix || '',
         linkPagamento: modelo.linkPagamento || '',
+        fluxo: modelo.fluxo ?? prev.fluxo,
       }));
     } else {
       setFormData(prev => ({
@@ -219,6 +206,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
       pago: false,
       prosyncLeadId: formData.prosyncLeadId || undefined,
       creatorPlan: resolvePlan(userConfig),
+      fluxo: formData.fluxo,
     };
 
     setIsSaving(true);
@@ -360,6 +348,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
                   onSelectModelo={handleModeloSelect}
                   onNext={() => setStep(2)}
                   onOpenModelos={() => navigate('modelos')}
+                  onOpenLoja={() => navigate('loja-templates')}
                 />
               )}
               {step === 2 && (

@@ -1,4 +1,5 @@
 import type { Proposta } from './store';
+import { getContractSignPhase } from '../types/proposalFlow';
 
 export type DateFilterMode = 'month' | 'year' | 'custom';
 
@@ -180,4 +181,27 @@ export function pendingPaymentInRange(propostas: Proposta[], start: Date, end: D
   return filterPropostasInRange(propostas, start, end)
     .filter((p) => p.status === 'aprovada' && !p.pago)
     .reduce((acc, p) => acc + (p.valor ?? 0), 0);
+}
+
+export function contractInsightsInRange(propostas: Proposta[], start: Date, end: Date) {
+  const slice = filterPropostasInRange(propostas, start, end);
+  let awaitingClientReceipt = 0;
+  let awaitingOrgAccept = 0;
+  let contractsCompleted = 0;
+  let rubricaSigned = 0;
+
+  for (const p of slice) {
+    const phase = getContractSignPhase({
+      rubricaStatus: p.rubricaStatus,
+      clienteContratoRecebidoAt: p.clienteContratoRecebidoAt,
+      orgContratoAceitoAt: p.orgContratoAceitoAt,
+      contratoConcluidoAt: p.contratoConcluidoAt,
+    });
+    if (p.rubricaStatus === 'signed') rubricaSigned += 1;
+    if (phase === 'awaiting_client_receipt') awaitingClientReceipt += 1;
+    if (phase === 'awaiting_org_accept') awaitingOrgAccept += 1;
+    if (phase === 'complete') contractsCompleted += 1;
+  }
+
+  return { awaitingClientReceipt, awaitingOrgAccept, contractsCompleted, rubricaSigned };
 }

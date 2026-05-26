@@ -121,6 +121,14 @@ para gestão da plataforma. Ele só fica visível para usuários marcados como
 - Smoke test integrações: `docs/INTEGRACOES_SMOKE_TEST.md`
 - Notas de integração: `docs/integracoes/`
 
+### Fluxo público de proposta (`/p/:token`)
+
+- Modelos definem `fluxo` (aprovar → assinar → pagar) no wizard **Criar modelo**.
+- CTAs do builder usam `proposalAction: approve` por padrão; **Recusar** só no rodapé da página pública.
+- Contrato: Rubrica (e-mail + assinatura na tela) → cliente **Confirmar recebimento** → org **Aceitar contrato** (`POST /api/propostas/:id/accept-contract`).
+- Loja de templates: `/api/marketplace/templates` (org) e admin em **Templates** no painel da plataforma.
+- Migration: `sql/008_proposal_flow_marketplace.sql` (aplicada no startup).
+
 ## Boas práticas de organização
 
 - Não commitar segredos (`.env`, tokens, chaves privadas)

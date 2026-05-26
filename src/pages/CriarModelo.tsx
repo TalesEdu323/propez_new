@@ -7,40 +7,35 @@ import { createId } from '../lib/ids';
 import { useContratos, useServicos } from '../hooks/useStoreEntity';
 import type { NavigateFn, RouteParams } from '../types/navigation';
 import type { BuilderElement } from '../types/builder';
-import type {
-  CriarModeloFormData,
-  CriarModeloStepDescriptor,
-} from './criarModelo/types';
+import { flowHasStep } from '../types/proposalFlow';
+import { applyStarterTemplate } from '../data/starterTemplates';
+import type { CriarModeloStepDescriptor } from './criarModelo/types';
+import { INITIAL_CRIAR_MODELO_FORM } from './criarModelo/types';
 import { CriarModeloStepper } from './criarModelo/CriarModeloStepper';
 import { StepConfig } from './criarModelo/StepConfig';
+import { StepFluxo } from './criarModelo/StepFluxo';
 import { StepContrato } from './criarModelo/StepContrato';
+import { EscolherPontoDePartida } from './criarModelo/EscolherPontoDePartida';
 
 const STEPS: CriarModeloStepDescriptor[] = [
   { id: 1, title: 'Configurações Base', desc: 'Nome, serviços e pagamentos' },
-  { id: 2, title: 'Contrato Padrão', desc: 'Selecione o contrato' },
-  { id: 3, title: 'Editor Visual', desc: 'Construa o layout da página' },
+  { id: 2, title: 'Fluxo da proposta', desc: 'Aprovar, assinar e pagar' },
+  { id: 3, title: 'Contrato Padrão', desc: 'Selecione o contrato' },
+  { id: 4, title: 'Editor Visual', desc: 'Construa o layout da página' },
 ];
 
-const INITIAL_FORM_DATA: CriarModeloFormData = {
-  nome: '',
-  servicos: [],
-  contratoTexto: '',
-  contratoId: '',
-  chavePix: '',
-  linkPagamento: '',
-};
-
 export default function CriarModelo({ navigate, initialData }: { navigate: NavigateFn; initialData?: RouteParams }) {
+  const [pickerDone, setPickerDone] = useState(!!initialData?.editId);
   const [step, setStep] = useState(1);
   const servicosDisponiveis = useServicos();
   const contratos = useContratos();
 
-  const [formData, setFormData] = useState<CriarModeloFormData>(INITIAL_FORM_DATA);
+  const [formData, setFormData] = useState(INITIAL_CRIAR_MODELO_FORM);
   const [elementos, setElementos] = useState<BuilderElement[]>([]);
 
   useEffect(() => {
     if (initialData?.editId) {
-      const modelo = store.getModelos().find(m => m.id === initialData.editId);
+      const modelo = store.getModelos().find((m) => m.id === initialData.editId);
       if (modelo) {
         setFormData({
           nome: modelo.nome,
@@ -49,6 +44,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
           contratoId: modelo.contratoId || '',
           chavePix: modelo.chavePix || '',
           linkPagamento: modelo.linkPagamento || '',
+          fluxo: modelo.fluxo ?? INITIAL_CRIAR_MODELO_FORM.fluxo,
         });
         setElementos(modelo.elementos);
       }
@@ -64,13 +60,14 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
       contratoId: formData.contratoId || undefined,
       chavePix: formData.chavePix,
       linkPagamento: formData.linkPagamento,
+      fluxo: formData.fluxo,
       elementos: finalElements,
       data_criacao: new Date().toISOString(),
     };
 
     const modelos = store.getModelos();
     if (initialData?.editId) {
-      store.saveModelos(modelos.map(m => m.id === newModelo.id ? newModelo : m));
+      store.saveModelos(modelos.map((m) => (m.id === newModelo.id ? newModelo : m)));
     } else {
       store.saveModelos([newModelo, ...modelos]);
     }
@@ -78,23 +75,42 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
     navigate('modelos');
   };
 
-  if (step === 3) {
+  const handleStarter = (starterId: string) => {
+    const applied = applyStarterTemplate(starterId);
+    if (applied) {
+      setFormData((prev) => ({
+        ...prev,
+        nome: prev.nome || `Modelo — ${applied.nome}`,
+        fluxo: applied.fluxo,
+      }));
+      setElementos(applied.elementos);
+    }
+    setPickerDone(true);
+  };
+
+  if (!pickerDone && !initialData?.editId) {
     return (
-      <motion.div
-        className="h-screen w-full bg-transparent flex flex-col"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-      >
+      <EscolherPontoDePartida
+        onBlank={() => setPickerDone(true)}
+        onStarter={handleStarter}
+      />
+    );
+  }
+
+  if (step === 4) {
+    return (
+      <motion.div className="h-screen w-full bg-transparent flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <Builder
           initialElements={elementos}
           onSave={handleSave}
-          onBack={() => setStep(2)}
+          onBack={() => setStep(3)}
           saveLabel="Salvar Modelo"
         />
       </motion.div>
     );
   }
+
+  const needsContractStep = flowHasStep(formData.fluxo, 'sign');
 
   const handleAdvance = () => {
     if (step === 1) {
@@ -104,15 +120,23 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
       }
       setStep(2);
     } else if (step === 2) {
-      setStep(3);
+      setStep(needsContractStep ? 3 : 4);
+    } else if (step === 3) {
+      setStep(4);
     }
+  };
+
+  const handleBackStep = () => {
+    if (step === 4) setStep(needsContractStep ? 3 : 2);
+    else if (step === 3) setStep(2);
+    else setStep(step - 1);
   };
 
   return (
     <div className="flex h-screen w-full bg-[#f5f5f4] overflow-hidden font-sans">
       <CriarModeloStepper
         step={step}
-        steps={STEPS}
+        steps={STEPS.filter((s) => s.id !== 3 || needsContractStep)}
         isEditing={!!initialData?.editId}
         formData={formData}
         onBack={() => navigate('modelos')}
@@ -123,7 +147,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
           <button onClick={() => navigate('modelos')} className="p-2 -ml-2 text-zinc-500">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Passo {step} de 3</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Passo {step} de 4</span>
           <div className="w-9" />
         </div>
 
@@ -131,26 +155,18 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
           <div className="flex-1">
             <AnimatePresence mode="wait">
               {step === 1 && (
-                <StepConfig
-                  formData={formData}
-                  setFormData={setFormData}
-                  servicosDisponiveis={servicosDisponiveis}
-                />
+                <StepConfig formData={formData} setFormData={setFormData} servicosDisponiveis={servicosDisponiveis} />
               )}
-
-              {step === 2 && (
-                <StepContrato
-                  formData={formData}
-                  setFormData={setFormData}
-                  contratos={contratos}
-                />
+              {step === 2 && <StepFluxo formData={formData} setFormData={setFormData} />}
+              {step === 3 && needsContractStep && (
+                <StepContrato formData={formData} setFormData={setFormData} contratos={contratos} />
               )}
             </AnimatePresence>
           </div>
 
           <div className="mt-12 pt-8 border-t border-black/5 flex items-center justify-between">
             <button
-              onClick={() => setStep(step - 1)}
+              onClick={handleBackStep}
               disabled={step === 1}
               className={`px-6 py-3 rounded-xl text-sm font-medium transition-all ${
                 step === 1 ? 'opacity-0 pointer-events-none' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
@@ -163,7 +179,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
               onClick={handleAdvance}
               className="bg-[#0a0a0a] text-white hover:bg-zinc-800 rounded-xl px-8 py-4 text-sm font-medium transition-all active:scale-[0.98] flex items-center gap-2 shadow-lg shadow-black/10"
             >
-              {step === 2 ? 'Ir para o Editor Visual' : 'Próximo Passo'}
+              {step === 3 || (step === 2 && !needsContractStep) ? 'Ir para o Editor Visual' : 'Próximo Passo'}
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

@@ -48,7 +48,12 @@ export default function Modelos({ navigate }: { navigate: NavigateFn }) {
       <motion.div variants={containerVariants} initial="hidden" animate="visible" className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 px-1 md:px-0">
         <motion.div variants={itemVariants}>
           <h1 className="page-title">Modelos.</h1>
-          <p className="text-zinc-400 mt-4 font-medium">Crie e gerencie seus templates de propostas.</p>
+          <p className="text-zinc-400 mt-4 font-medium">
+            Crie e gerencie seus templates.{' '}
+            <button type="button" onClick={() => navigate('loja-templates')} className="font-semibold text-zinc-900 underline underline-offset-2">
+              Explorar loja de templates
+            </button>
+          </p>
         </motion.div>
         <motion.button 
           variants={itemVariants}

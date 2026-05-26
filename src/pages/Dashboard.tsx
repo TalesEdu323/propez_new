@@ -12,6 +12,7 @@ import {
   getFilterRange,
   paidInRange,
   pendingPaymentInRange,
+  contractInsightsInRange,
 } from '../lib/dashboardStats';
 import { DateFilterControls, ProposalsChart } from '../components/dashboard/ProposalsChart';
 import { useClientes, usePropostas, useServicos } from '../hooks/useStoreEntity';
@@ -54,6 +55,11 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
 
   const totalPending = useMemo(
     () => pendingPaymentInRange(propostas, rangeStart, rangeEnd),
+    [propostas, rangeStart, rangeEnd],
+  );
+
+  const contractInsights = useMemo(
+    () => contractInsightsInRange(propostas, rangeStart, rangeEnd),
     [propostas, rangeStart, rangeEnd],
   );
 
@@ -164,6 +170,24 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
                 <h3 className="card-title mt-1.5">
                   {formatBRL(totalPaid, { fractionDigits: 0 })}
                 </h3>
+              </div>
+            </motion.div>
+
+            <motion.div variants={itemVariants} className="apple-card p-5 flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Contratos</span>
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Aguardando cliente</span>
+                  <span className="font-bold text-amber-700">{contractInsights.awaitingClientReceipt}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Aguardando seu aceite</span>
+                  <span className="font-bold text-emerald-700">{contractInsights.awaitingOrgAccept}</span>
+                </div>
+                <div className="flex justify-between border-t border-zinc-100 pt-2">
+                  <span className="text-zinc-500">Concluídos</span>
+                  <span className="font-bold text-zinc-900">{contractInsights.contractsCompleted}</span>
+                </div>
               </div>
             </motion.div>
 

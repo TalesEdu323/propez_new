@@ -13,8 +13,11 @@ import { ClientIdentificationModal } from './visualizarProposta/ClientIdentifica
 import { ProposalHeader } from './visualizarProposta/ProposalHeader';
 import { ProposalActions } from './visualizarProposta/ProposalActions';
 import { ContractView, type RubricaStatus } from './visualizarProposta/ContractView';
+import { ContractAcceptancePanel } from './visualizarProposta/ContractAcceptancePanel';
 import { PropezWatermark } from './visualizarProposta/PropezWatermark';
 import { shouldShowWatermark } from '../lib/featureFlags';
+import { flowHasStep } from '../types/proposalFlow';
+import { api } from '../lib/apiClient';
 import type { NavigateFn } from '../types/navigation';
 
 export default function VisualizarProposta({ navigate, id }: { navigate: NavigateFn; id: string }) {
@@ -63,7 +66,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
     if (!proposta) return;
     const lastEmail = localStorage.getItem('propez_last_email') || '';
     setClientData(prev => ({ ...prev, nome: proposta.cliente_nome, email: prev.email || lastEmail }));
-    if (proposta.status === 'aprovada') {
+    if (proposta.status === 'aprovada' && flowHasStep(proposta.fluxo, 'sign') && proposta.contratoTexto) {
       setViewState('contract');
     }
     if (proposta.rubricaStatus) {
@@ -140,7 +143,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
       let rubricaSigningUrl: string | undefined
       let rubricaInitialStatus: Proposta['rubricaStatus'] = 'pending'
 
-      if (proposta.contratoTexto) {
+      if (proposta.contratoTexto && flowHasStep(proposta.fluxo, 'sign')) {
         const result = await sendToRubricaForSigning({
           proposalId: proposta.id,
           clientName: clientData.nome || proposta.cliente_nome,
@@ -176,6 +179,19 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
     } catch (error) {
       console.error('Failed to update status:', error);
       alert('Erro ao aprovar proposta. Tente novamente.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleAcceptContract = async () => {
+    if (!proposta) return;
+    setIsUpdating(true);
+    try {
+      const updated = await api.post<Proposta>(`/api/propostas/${proposta.id}/accept-contract`, {});
+      persistProposta(updated);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Não foi possível aceitar o contrato.');
     } finally {
       setIsUpdating(false);
     }
@@ -284,12 +300,19 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
               {shouldShowWatermark(proposta.creatorPlan) && <PropezWatermark />}
             </motion.div>
           ) : (
-            <ContractView
-              proposta={proposta}
-              rubricaStatus={rubricaStatus}
-              userConfig={userConfig}
-              onBackToProposal={() => setViewState('proposal')}
-            />
+            <motion.div key="contract" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-5xl mx-auto">
+              <ContractAcceptancePanel
+                proposta={proposta}
+                onAccept={handleAcceptContract}
+                accepting={isUpdating}
+              />
+              <ContractView
+                proposta={proposta}
+                rubricaStatus={rubricaStatus}
+                userConfig={userConfig}
+                onBackToProposal={() => setViewState('proposal')}
+              />
+            </motion.div>
           )}
         </AnimatePresence>
 

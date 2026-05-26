@@ -15,6 +15,7 @@
  * Código novo deve preferir os helpers explícitos (`createCliente`, etc.).
  */
 import type { BuilderElement } from '../types/builder';
+import type { ProposalFlowConfig } from '../types/proposalFlow';
 import { api } from './apiClient';
 import {
   getSession,
@@ -67,6 +68,7 @@ export interface ModeloProposta {
   contratoId?: string;
   chavePix?: string;
   linkPagamento?: string;
+  fluxo?: ProposalFlowConfig;
   data_criacao: string;
   tier?: PlanTier;
 }
@@ -101,6 +103,10 @@ export interface Proposta {
   rubricaLastSyncAt?: string;
   creatorPlan?: PlanTier;
   publicToken?: string;
+  fluxo?: ProposalFlowConfig;
+  clienteContratoRecebidoAt?: string;
+  orgContratoAceitoAt?: string;
+  contratoConcluidoAt?: string;
 }
 
 export interface UserConfig {
@@ -257,6 +263,7 @@ interface ApiModelo {
   chavePix?: string | null;
   linkPagamento?: string | null;
   tier: PlanTier;
+  fluxo?: ProposalFlowConfig;
   data_criacao: string;
 }
 interface ApiProposta {
@@ -289,6 +296,10 @@ interface ApiProposta {
   rubricaSigningUrl?: string | null;
   rubricaSignedPdfUrl?: string | null;
   rubricaLastSyncAt?: string | null;
+  fluxo?: ProposalFlowConfig;
+  clienteContratoRecebidoAt?: string | null;
+  orgContratoAceitoAt?: string | null;
+  contratoConcluidoAt?: string | null;
 }
 
 function fromApiCliente(a: ApiCliente): Cliente {
@@ -325,6 +336,7 @@ function fromApiModelo(a: ApiModelo): ModeloProposta {
     chavePix: a.chavePix ?? undefined,
     linkPagamento: a.linkPagamento ?? undefined,
     tier: (a.tier ?? 'free') as PlanTier,
+    fluxo: a.fluxo,
     data_criacao: a.data_criacao,
   };
 }
@@ -359,6 +371,10 @@ function fromApiProposta(a: ApiProposta): Proposta {
     rubricaSigningUrl: a.rubricaSigningUrl ?? undefined,
     rubricaSignedPdfUrl: a.rubricaSignedPdfUrl ?? undefined,
     rubricaLastSyncAt: a.rubricaLastSyncAt ?? undefined,
+    fluxo: a.fluxo,
+    clienteContratoRecebidoAt: a.clienteContratoRecebidoAt ?? undefined,
+    orgContratoAceitoAt: a.orgContratoAceitoAt ?? undefined,
+    contratoConcluidoAt: a.contratoConcluidoAt ?? undefined,
   };
 }
 
@@ -588,6 +604,7 @@ interface ModeloPayload {
   chavePix?: string | null;
   linkPagamento?: string | null;
   tier: PlanTier;
+  fluxo?: ProposalFlowConfig;
 }
 const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
   toPayload: (m) => ({
@@ -599,6 +616,7 @@ const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
     chavePix: m.chavePix ?? null,
     linkPagamento: m.linkPagamento ?? null,
     tier: m.tier ?? 'free',
+    fluxo: m.fluxo ?? { steps: ['approve', 'sign', 'pay'] },
   }),
   create: async (p) => fromApiModelo(await api.post<ApiModelo>('/api/modelos', p as unknown as Record<string, unknown>)),
   update: async (id, p) => fromApiModelo(await api.patch<ApiModelo>(`/api/modelos/${id}`, p as unknown as Record<string, unknown>)),
@@ -630,6 +648,7 @@ interface PropostaPayload {
   data_pagamento?: string | null;
   creatorPlan?: PlanTier | null;
   prosyncLeadId?: string | null;
+  fluxo?: ProposalFlowConfig;
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -680,6 +699,7 @@ function toPropostaPayload(p: Proposta): PropostaPayload {
     data_pagamento: normalizeDateTimeOrNull(p.data_pagamento),
     creatorPlan: p.creatorPlan ?? null,
     prosyncLeadId: p.prosyncLeadId ?? null,
+    fluxo: p.fluxo ?? { steps: ['approve', 'sign', 'pay'] },
   };
 }
 

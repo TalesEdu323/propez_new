@@ -19,13 +19,14 @@ export interface Step1Props {
   onSelectModelo: (modeloId: string) => void;
   onNext: () => void;
   onOpenModelos?: () => void;
+  onOpenLoja?: () => void;
 }
 
 /**
  * Step 1 do wizard: escolha de modelo base para iniciar a proposta.
  * Mantém o layout em grid de cards com opção "Começar do Zero".
  */
-export function Step1ModeloSelect({ modelos, formData, onSelectModelo, onNext, onOpenModelos }: Step1Props) {
+export function Step1ModeloSelect({ modelos, formData, onSelectModelo, onNext, onOpenModelos, onOpenLoja }: Step1Props) {
   const userConfig = useUserConfig();
   const plan = resolvePlan(userConfig);
   const [gate, setGate] = useState<{ open: boolean; requiredPlan: PlanTier; nome: string }>({
@@ -56,19 +57,30 @@ export function Step1ModeloSelect({ modelos, formData, onSelectModelo, onNext, o
         <p className="text-zinc-500 text-lg">
           Selecione um template para preencher automaticamente os serviços, valores, layout e o contrato da proposta.
         </p>
-        {onOpenModelos && (
-          <p className="mt-3 text-sm text-zinc-600">
-            Quer criar ou editar modelos?{' '}
+        <p className="mt-3 text-sm text-zinc-600">
+          {onOpenLoja && (
+            <>
+              <button
+                type="button"
+                onClick={onOpenLoja}
+                className="inline-flex items-center gap-1 font-semibold text-zinc-900 underline underline-offset-2 hover:text-zinc-600"
+              >
+                Loja de templates
+              </button>
+              {onOpenModelos ? ' · ' : null}
+            </>
+          )}
+          {onOpenModelos && (
             <button
               type="button"
               onClick={onOpenModelos}
               className="inline-flex items-center gap-1 font-semibold text-zinc-900 underline underline-offset-2 hover:text-zinc-600"
             >
-              Abrir página de Modelos
+              Meus modelos
               <ExternalLink className="w-3.5 h-3.5 shrink-0" aria-hidden />
             </button>
-          </p>
-        )}
+          )}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

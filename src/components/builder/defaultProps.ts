@@ -11,12 +11,12 @@ import type { BuilderElementType } from '../../types/builder';
 export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
   heading: { text: 'Novo Título', color: '#18181b', align: 'left', size: 'text-4xl', weight: 'font-bold' },
   paragraph: { text: 'Digite seu texto aqui. Você pode editar as propriedades na barra lateral.', color: '#52525b', align: 'left', size: 'text-base' },
-  button: { text: 'Clique Aqui', bgColor: '#dc2626', textColor: '#ffffff', align: 'center', radius: 'rounded-md', animation: 'none' },
+  button: { text: 'Aprovar proposta', proposalAction: 'approve', bgColor: '#18181b', textColor: '#ffffff', align: 'center', radius: 'rounded-md', animation: 'none' },
   image: { url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop', alt: 'Imagem', width: '100%', radius: 'rounded-xl', shadow: 'shadow-none' },
   divider: { color: '#e5e7eb', thickness: '2', style: 'solid' },
   spacer: { height: '64' },
   video: { url: 'https://www.youtube.com/embed/dQw4w9WgXcQ', radius: 'rounded-xl', shadow: 'shadow-lg' },
-  card: { title: 'Título do Cartão', description: 'Uma breve descrição sobre o benefício ou recurso.', imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2426&auto=format&fit=crop', buttonText: 'Saiba Mais', bgColor: '#ffffff', radius: 'rounded-2xl', shadow: 'shadow-xl' },
+  card: { title: 'Título do Cartão', description: 'Uma breve descrição sobre o benefício ou recurso.', imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2426&auto=format&fit=crop', buttonText: 'Aprovar proposta', proposalAction: 'approve', bgColor: '#ffffff', radius: 'rounded-2xl', shadow: 'shadow-xl' },
   stats: { value: '100', label: 'Clientes Satisfeitos', suffix: '%', color: '#dc2626' },
   accordion: { title: 'Como funciona o serviço?', content: 'Nós oferecemos uma solução completa de ponta a ponta para o seu negócio crescer de forma escalável e previsível.', bgColor: '#ffffff' },
   animated_text: { text: 'Texto com Animação', animation: 'fade-up', color: '#dc2626', size: 'text-5xl', align: 'center', weight: 'font-extrabold' },
@@ -39,7 +39,8 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     price: 'R$ 997',
     period: '/mês',
     items: ['Acesso Completo à Plataforma', 'Suporte Prioritário 24/7', 'Atualizações Gratuitas', 'Consultoria Mensal'],
-    buttonText: 'Assinar Agora',
+    buttonText: 'Aprovar proposta',
+    proposalAction: 'approve',
     buttonColor: '#18181b',
     bgColor: '#ffffff'
   },
@@ -233,6 +234,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
   marketing_cta: {
     title: 'O custo de não agir é maior do que o investimento.',
     description: 'Cada semana sem anúncios é uma semana de vendas que ficaram para o concorrente.',
-    buttonText: 'Falar com Especialista agora'
+    buttonText: 'Aprovar proposta',
+    proposalAction: 'approve',
   }
 };

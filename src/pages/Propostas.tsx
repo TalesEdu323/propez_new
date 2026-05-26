@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { formatBRL } from '../lib/format';
 import { usePropostas, useServicos } from '../hooks/useStoreEntity';
 import type { NavigateFn } from '../types/navigation';
+import { getProposalSubStatusLabel } from '../lib/proposalSubStatus';
 
 export default function Propostas({ navigate }: { navigate: NavigateFn }) {
   const propostas = usePropostas();
@@ -172,13 +173,20 @@ export default function Propostas({ navigate }: { navigate: NavigateFn }) {
                             </div>
                           </td>
                           <td className="px-8 py-7">
-                            <span className={`px-3 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest ${
-                              proposta.status === 'aprovada' ? 'bg-emerald-50 text-emerald-600' :
-                              proposta.status === 'recusada' ? 'bg-red-50 text-red-600' :
-                              'bg-zinc-100 text-zinc-500'
-                            }`}>
-                              {proposta.status}
-                            </span>
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className={`px-3 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest ${
+                                proposta.status === 'aprovada' ? 'bg-emerald-50 text-emerald-600' :
+                                proposta.status === 'recusada' ? 'bg-red-50 text-red-600' :
+                                'bg-zinc-100 text-zinc-500'
+                              }`}>
+                                {proposta.status}
+                              </span>
+                              {getProposalSubStatusLabel(proposta) && (
+                                <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">
+                                  {getProposalSubStatusLabel(proposta)}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-8 py-7 text-right">
                             <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

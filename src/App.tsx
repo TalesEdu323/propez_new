@@ -22,6 +22,7 @@ const VisualizarProposta = lazy(() => import('./pages/VisualizarProposta'));
 const PublicProposta = lazy(() => import('./pages/PublicProposta'));
 const Servicos = lazy(() => import('./pages/Servicos'));
 const Modelos = lazy(() => import('./pages/Modelos'));
+const LojaTemplates = lazy(() => import('./pages/LojaTemplates'));
 const CriarModelo = lazy(() => import('./pages/CriarModelo'));
 const Contratos = lazy(() => import('./pages/Contratos'));
 const Configuracoes = lazy(() => import('./pages/Configuracoes'));
@@ -37,6 +38,7 @@ const AdminAcquisition = lazy(() => import('./pages/admin/AdminAcquisition'));
 const AdminProduct = lazy(() => import('./pages/admin/AdminProduct'));
 const AdminOperations = lazy(() => import('./pages/admin/AdminOperations'));
 const AdminOrganizationDetail = lazy(() => import('./pages/admin/AdminOrganizationDetail'));
+const AdminMarketplace = lazy(() => import('./pages/admin/AdminMarketplace'));
 
 const loadingFallback = (
   <div className="h-full min-h-screen w-full flex items-center justify-center text-zinc-500 bg-[#F5F5F7]">
@@ -148,6 +150,8 @@ export default function App() {
         return <Servicos navigate={navigate} />;
       case 'modelos':
         return <Modelos navigate={navigate} />;
+      case 'loja-templates':
+        return <LojaTemplates navigate={navigate} />;
       case 'contratos':
         return <Contratos />;
       case 'criar-modelo':
@@ -195,6 +199,10 @@ export default function App() {
       case 'admin-organization-detail':
         return session?.user.isPlatformAdmin
           ? <AdminOrganizationDetail navigate={navigate} orgId={routeParams.id ?? ''} />
+          : <Dashboard navigate={navigate} />;
+      case 'admin-marketplace':
+        return session?.user.isPlatformAdmin
+          ? <AdminMarketplace navigate={navigate} />
           : <Dashboard navigate={navigate} />;
       default:
         return <Dashboard navigate={navigate} />;

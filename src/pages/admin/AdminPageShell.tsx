@@ -18,6 +18,7 @@ const ADMIN_TABS: AdminTab[] = [
   { id: 'admin-subscriptions', label: 'Assinaturas' },
   { id: 'admin-users', label: 'Usuários' },
   { id: 'admin-operations', label: 'Operações' },
+  { id: 'admin-marketplace', label: 'Templates' },
 ];
 
 interface AdminPageShellProps {

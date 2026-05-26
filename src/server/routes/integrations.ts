@@ -376,6 +376,15 @@ export function buildIntegrationsRouter(deps: {
 
       const webhookUrl = `${config.appUrl.replace(/\/+$/, '')}/api/webhooks/rubrica?secret=${encodeURIComponent(secret)}`
 
+      const publicRow = await pool.query<{ public_token: string | null }>(
+        `SELECT public_token FROM propostas WHERE id::text = $1`,
+        [proposalId],
+      )
+      const publicToken = publicRow.rows[0]?.public_token
+      const redirectUrl = publicToken
+        ? `${envConfig.appUrl.replace(/\/+$/, '')}/p/${publicToken}?step=sign&rubrica=done`
+        : undefined
+
       const sendRes = await rb.sendForSignature({
         documentId,
         signers: [
@@ -384,11 +393,13 @@ export function buildIntegrationsRouter(deps: {
             email: clientEmail,
             phone: body.clientPhone ? String(body.clientPhone) : undefined,
             signatureType: 'padrao',
-            authOptions: { emailCode: true },
+            authOptions: { email: true },
           },
         ],
         webhookUrl,
         externalId: proposalId,
+        sendingMethod: 'email',
+        redirectUrl,
       })
 
       const signingUrl = sendRes.signatureLinks?.[0]?.link

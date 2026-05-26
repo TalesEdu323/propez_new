@@ -12,6 +12,7 @@ export type AppRoute =
   | 'pagamentos'
   | 'servicos'
   | 'modelos'
+  | 'loja-templates'
   | 'contratos'
   | 'criar-modelo'
   | 'propez-fluido'
@@ -26,7 +27,8 @@ export type AppRoute =
   | 'admin-organization-detail'
   | 'admin-users'
   | 'admin-subscriptions'
-  | 'admin-operations';
+  | 'admin-operations'
+  | 'admin-marketplace';
 
 export interface RouteParams {
   id?: string;

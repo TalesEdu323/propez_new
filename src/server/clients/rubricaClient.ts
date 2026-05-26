@@ -192,6 +192,8 @@ export function createRubricaClient(config: RubricaClientConfig) {
        * - `'email'`: comportamento default do Rubrica (envia convite por e-mail).
        */
       sendingMethod?: 'email' | 'link'
+      /** URL para redirecionar o signatário após concluir a assinatura */
+      redirectUrl?: string
     }): Promise<RubricaSendResult> {
       return jsonRequest<RubricaSendResult>(
         `/api/documents/${encodeURIComponent(input.documentId)}/send`,
@@ -202,6 +204,7 @@ export function createRubricaClient(config: RubricaClientConfig) {
             webhookUrl: input.webhookUrl,
             externalId: input.externalId,
             sendingMethod: input.sendingMethod ?? 'link',
+            redirectUrl: input.redirectUrl,
           }),
         },
       )

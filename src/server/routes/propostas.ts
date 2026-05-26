@@ -9,6 +9,8 @@ import { createOpaqueToken } from '../auth/tokens.js'
 import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.js'
 import type { MailClient } from '../mail/client.js'
 import { notifyProposalEventAsync } from '../services/notificationService.js'
+import { proposalFlowConfigSchema } from '../validation/proposalFlow.js'
+import { acceptContractByOrg } from '../services/proposalJourney.js'
 
 const builderElement = z.object({}).passthrough()
 
@@ -38,6 +40,7 @@ const bodySchema = z.object({
   data_pagamento: z.string().datetime().optional().nullable(),
   creatorPlan: z.string().max(50).optional().nullable(),
   prosyncLeadId: z.string().max(200).optional().nullable(),
+  fluxo: proposalFlowConfigSchema.optional(),
   clienteEmail: z
     .string()
     .trim()
@@ -57,7 +60,8 @@ const PROPOSTA_SELECT = `
   data_envio, data_validade, status, elementos, contrato_texto, contrato_id,
   chave_pix, link_pagamento, pago, data_pagamento, creator_plan, public_token,
   prosync_lead_id, rubrica_document_id, rubrica_status, rubrica_signing_url,
-  rubrica_signed_pdf_url, rubrica_last_sync_at, viewed_at, created_at
+  rubrica_signed_pdf_url, rubrica_last_sync_at, viewed_at, created_at,
+  fluxo, cliente_contrato_recebido_at, org_contrato_aceito_at, contrato_concluido_at
 `
 
 export function createPropostasRouter(deps: {
@@ -137,18 +141,28 @@ export function createPropostasRouter(deps: {
       )
       clienteEmail = ce.rows[0]?.email?.trim().toLowerCase() ?? ''
     }
+
+    let fluxoJson = JSON.stringify(d.fluxo ?? { steps: ['approve', 'sign', 'pay'] })
+    if (!d.fluxo && d.modelo_id) {
+      const mf = await pool.query<{ fluxo: unknown }>(
+        `SELECT fluxo FROM modelos_propostas WHERE id = $1 AND organization_id = $2`,
+        [d.modelo_id, req.auth.orgId],
+      )
+      if (mf.rows[0]?.fluxo) fluxoJson = JSON.stringify(mf.rows[0].fluxo)
+    }
+
     try {
       const { rows } = await pool.query(
         `INSERT INTO propostas (
            id, organization_id, cliente_id, cliente_nome, cliente_email, modelo_id, servicos,
            valor_cents, desconto_cents, recorrente, ciclo_recorrencia, duracao_recorrencia,
            data_envio, data_validade, status, elementos, contrato_texto, contrato_id,
-           chave_pix, link_pagamento, pago, data_pagamento, creator_plan, prosync_lead_id
+           chave_pix, link_pagamento, pago, data_pagamento, creator_plan, prosync_lead_id, fluxo
          ) VALUES (
            COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7::uuid[],
            $8, $9, $10, $11, $12,
            $13, $14, $15, $16::jsonb, $17, $18,
-           $19, $20, $21, $22, $23, $24
+           $19, $20, $21, $22, $23, $24, $25::jsonb
          )
          RETURNING ${PROPOSTA_SELECT}`,
         [
@@ -176,6 +190,7 @@ export function createPropostasRouter(deps: {
           d.data_pagamento ?? null,
           d.creatorPlan ?? null,
           d.prosyncLeadId ?? null,
+          fluxoJson,
         ],
       )
 
@@ -385,6 +400,26 @@ export function createPropostasRouter(deps: {
       [req.auth.orgId, req.params.id],
     )
     return res.json({ ok: true })
+  })
+
+  router.post('/:id/accept-contract', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    const result = await acceptContractByOrg({
+      pool,
+      proposalId: req.params.id,
+      organizationId: req.auth.orgId,
+      envConfig: config,
+      mail,
+    })
+    if (!result.ok) {
+      return res.status(result.status ?? 400).json({ error: result.error })
+    }
+    const { rows } = await pool.query(
+      `SELECT ${PROPOSTA_SELECT} FROM propostas WHERE organization_id = $1 AND id = $2`,
+      [req.auth.orgId, req.params.id],
+    )
+    if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
+    return res.json(serializeProposta(rows[0]))
   })
 
   return router

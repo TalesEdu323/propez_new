@@ -8,9 +8,48 @@ import type { BuilderElement } from '../../types/builder';
 
 type ElementData = BuilderElement;
 
+export type ProposalActionHandler = (action: 'approve') => void;
+
+function resolveProposalAction(
+  elType: string,
+  props: Record<string, unknown>,
+): 'approve' | 'none' {
+  if (props.proposalAction === 'none') return 'none';
+  if (props.proposalAction === 'approve') return 'approve';
+  if (['button', 'marketing_cta', 'pricing', 'card'].includes(elType)) return 'approve';
+  return 'none';
+}
+
+function proposalClickProps(
+  elType: string,
+  props: Record<string, unknown>,
+  previewMode: boolean | undefined,
+  onProposalAction?: ProposalActionHandler,
+): { onClick?: (e: React.MouseEvent) => void; type?: 'button' } {
+  if (!previewMode || !onProposalAction) return {};
+  if (resolveProposalAction(elType, props) !== 'approve') return {};
+  return {
+    type: 'button' as const,
+    onClick: (e: React.MouseEvent) => {
+      e.preventDefault();
+      onProposalAction('approve');
+    },
+  };
+}
+
 // --- Dynamic Renderer ---
-export function RenderElement({ element, previewMode }: { element: ElementData, previewMode?: boolean, key?: React.Key }) {
+export function RenderElement({
+  element,
+  previewMode,
+  onProposalAction,
+}: {
+  element: ElementData;
+  previewMode?: boolean;
+  onProposalAction?: ProposalActionHandler;
+  key?: React.Key;
+}) {
   const { type, props } = element;
+  const childRenderProps = { previewMode, onProposalAction };
 
   // Animation Helper for specific elements
   const getAnimationProps = (animType: string) => {
@@ -50,6 +89,7 @@ export function RenderElement({ element, previewMode }: { element: ElementData, 
       return (
         <motion.button 
           {...getAnimationProps(props.animation || 'scale')}
+          {...proposalClickProps('button', props, previewMode, onProposalAction)}
           whileHover={{ scale: 1.02, y: -2 }}
           whileTap={{ scale: 0.98 }}
           className={`px-8 py-4 font-bold ${props.radius} shadow-lg hover:shadow-xl transition-all duration-300 backdrop-blur-md border border-black/5`}
@@ -92,7 +132,7 @@ export function RenderElement({ element, previewMode }: { element: ElementData, 
           }}
         >
           {element.children?.map(child => (
-            <RenderElement key={child.id} element={child} previewMode={previewMode} />
+            <RenderElement key={child.id} element={child} {...childRenderProps} />
           ))}
         </div>
       );
@@ -109,7 +149,7 @@ export function RenderElement({ element, previewMode }: { element: ElementData, 
           }}
         >
           {element.children?.map(child => (
-            <RenderElement key={child.id} element={child} previewMode={previewMode} />
+            <RenderElement key={child.id} element={child} {...childRenderProps} />
           ))}
         </div>
       );
@@ -158,6 +198,7 @@ export function RenderElement({ element, previewMode }: { element: ElementData, 
             <p className="text-zinc-600 mb-8 leading-relaxed text-lg">{props.description}</p>
             <div>
               <motion.button 
+                {...proposalClickProps('card', props, previewMode, onProposalAction)}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className="px-6 py-3 bg-black/5 hover:bg-black/10 text-zinc-900 font-medium rounded-xl backdrop-blur-md border border-black/5 transition-colors"
@@ -391,7 +432,10 @@ export function RenderElement({ element, previewMode }: { element: ElementData, 
             <p className="text-xl text-gray-400 mb-12 leading-relaxed">
               {props.description}
             </p>
-            <button className="inline-flex items-center gap-3 px-10 py-5 rounded-2xl bg-white text-black font-bold text-xl hover:bg-gray-200 transition-all group">
+            <button
+              {...proposalClickProps('marketing_cta', props, previewMode, onProposalAction)}
+              className="inline-flex items-center gap-3 px-10 py-5 rounded-2xl bg-white text-black font-bold text-xl hover:bg-gray-200 transition-all group"
+            >
               {props.buttonText}
               <ArrowRight className="group-hover:translate-x-1 transition-transform" />
             </button>
@@ -596,6 +640,7 @@ export function RenderElement({ element, previewMode }: { element: ElementData, 
             ))}
           </ul>
           <motion.button 
+            {...proposalClickProps('pricing', props, previewMode, onProposalAction)}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className="w-full py-5 rounded-2xl font-bold text-white shadow-md mt-auto relative z-10 border border-black/10 backdrop-blur-md text-lg" 

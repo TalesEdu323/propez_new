@@ -5,8 +5,12 @@ import { z } from 'zod'
 import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import { serializeModelo } from '../db/serializers.js'
+import { proposalFlowConfigSchema } from '../validation/proposalFlow.js'
 
 const builderElement = z.object({}).passthrough()
+
+const MODEL_SELECT = `id, nome, elementos, servicos, contrato_id, contrato_texto,
+              chave_pix, link_pagamento, tier, fluxo, created_at`
 
 const bodySchema = z.object({
   nome: z.string().trim().min(1).max(200),
@@ -17,6 +21,7 @@ const bodySchema = z.object({
   chavePix: z.string().max(500).optional().nullable(),
   linkPagamento: z.string().max(2000).optional().nullable(),
   tier: z.enum(['free', 'pro', 'business']).default('free'),
+  fluxo: proposalFlowConfigSchema.optional(),
 })
 
 const patchSchema = bodySchema.partial()
@@ -32,8 +37,7 @@ export function createModelosRouter(deps: {
   router.get('/', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
     const { rows } = await pool.query(
-      `SELECT id, nome, elementos, servicos, contrato_id, contrato_texto,
-              chave_pix, link_pagamento, tier, created_at
+      `SELECT ${MODEL_SELECT}
        FROM modelos_propostas
        WHERE organization_id = $1 ORDER BY created_at DESC`,
       [req.auth.orgId],
@@ -44,8 +48,7 @@ export function createModelosRouter(deps: {
   router.get('/:id', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
     const { rows } = await pool.query(
-      `SELECT id, nome, elementos, servicos, contrato_id, contrato_texto,
-              chave_pix, link_pagamento, tier, created_at
+      `SELECT ${MODEL_SELECT}
        FROM modelos_propostas
        WHERE organization_id = $1 AND id = $2`,
       [req.auth.orgId, req.params.id],
@@ -62,10 +65,9 @@ export function createModelosRouter(deps: {
     const { rows } = await pool.query(
       `INSERT INTO modelos_propostas
          (organization_id, nome, elementos, servicos, contrato_id, contrato_texto,
-          chave_pix, link_pagamento, tier)
-       VALUES ($1, $2, $3::jsonb, $4::uuid[], $5, $6, $7, $8, $9)
-       RETURNING id, nome, elementos, servicos, contrato_id, contrato_texto,
-                 chave_pix, link_pagamento, tier, created_at`,
+          chave_pix, link_pagamento, tier, fluxo)
+       VALUES ($1, $2, $3::jsonb, $4::uuid[], $5, $6, $7, $8, $9, $10::jsonb)
+       RETURNING ${MODEL_SELECT}`,
       [
         req.auth.orgId,
         d.nome,
@@ -76,6 +78,7 @@ export function createModelosRouter(deps: {
         d.chavePix ?? null,
         d.linkPagamento ?? null,
         d.tier,
+        JSON.stringify(d.fluxo ?? { steps: ['approve', 'sign', 'pay'] }),
       ],
     )
     return res.status(201).json(serializeModelo(rows[0]))
@@ -95,10 +98,10 @@ export function createModelosRouter(deps: {
          contrato_texto = CASE WHEN $10::boolean THEN $11 ELSE contrato_texto END,
          chave_pix = CASE WHEN $12::boolean THEN $13 ELSE chave_pix END,
          link_pagamento = CASE WHEN $14::boolean THEN $15 ELSE link_pagamento END,
-         tier = COALESCE($16, tier)
+         tier = COALESCE($16, tier),
+         fluxo = CASE WHEN $17::boolean THEN $18::jsonb ELSE fluxo END
        WHERE organization_id = $1 AND id = $2
-       RETURNING id, nome, elementos, servicos, contrato_id, contrato_texto,
-                 chave_pix, link_pagamento, tier, created_at`,
+       RETURNING ${MODEL_SELECT}`,
       [
         req.auth.orgId,
         req.params.id,
@@ -116,6 +119,8 @@ export function createModelosRouter(deps: {
         'linkPagamento' in d,
         d.linkPagamento ?? null,
         d.tier ?? null,
+        d.fluxo !== undefined,
+        d.fluxo !== undefined ? JSON.stringify(d.fluxo) : null,
       ],
     )
     if (!rows[0]) return res.status(404).json({ error: 'Modelo não encontrado' })

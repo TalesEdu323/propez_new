@@ -5,6 +5,7 @@ import { TextFields, DateTimeFields, DescriptionFields, UrlFields } from './prop
 import { AlignField, LayoutFields } from './properties/LayoutFields';
 import { ColorFields } from './properties/ColorFields';
 import { ArrayEditors } from './properties/ArrayEditors';
+import { ProposalActionField } from './properties/ProposalActionField';
 
 export type BuilderTab = 'properties' | 'layers';
 
@@ -76,6 +77,7 @@ export function PropertiesPanel({
             </div>
 
             <div className="space-y-5">
+              <ProposalActionField element={selectedElement} updateElement={updateElement} />
               <TextFields element={selectedElement} updateElement={updateElement} />
               <DateTimeFields element={selectedElement} updateElement={updateElement} />
               <DescriptionFields element={selectedElement} updateElement={updateElement} />
