@@ -41,6 +41,7 @@ interface RevenueOverview {
 interface MrrPoint {
   date: string;
   mrrCents: number;
+  mrrBrl?: number;
   estimated?: boolean;
 }
 

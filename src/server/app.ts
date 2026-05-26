@@ -97,6 +97,27 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   // 3) JSON global.
   app.use(express.json({ limit: '5mb' }));
 
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      if (res.statusCode < 500) return;
+      const routePattern = req.route?.path
+        ? `${req.baseUrl || ''}${req.route.path}`
+        : req.path;
+      pool
+        .query(
+          `INSERT INTO api_error_stats (stat_date, route_pattern, status_code, error_count)
+           VALUES (CURRENT_DATE, $1, $2, 1)
+           ON CONFLICT (stat_date, route_pattern, status_code)
+           DO UPDATE SET error_count = api_error_stats.error_count + 1`,
+          [routePattern.slice(0, 200), res.statusCode],
+        )
+        .catch(() => {});
+      void start;
+    });
+    next();
+  });
+
   // 4) Auth (rate-limit mais restrito para proteger login/register)
   const authLimiter = createRateLimit({ windowMs: 60_000, max: 30 });
   app.use('/api', authLimiter, createAuthRouter({ pool, config, mail, suiteLookup }));
@@ -133,7 +154,7 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   );
 
   // 8) Painel admin (super-admin do SaaS) — exige requireAuth + requirePlatformAdmin
-  app.use('/api/admin', createAdminRouter({ pool, config, stripe }));
+  app.use('/api/admin', createAdminRouter({ pool, config }));
 
   // 9) Utilitárias
   app.use('/api', createHealthRouter({ pool, integrationsConfig }));

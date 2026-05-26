@@ -17,7 +17,9 @@
     "test:watch": "vitest",
     "check:integrations": "node scripts/check-integrations.mjs",
     "seed:dev": "node scripts/seed-dev.mjs",
-    "migrate:suite-credentials": "node scripts/migrate-suite-credentials.mjs"
+    "migrate:suite-credentials": "node scripts/migrate-suite-credentials.mjs",
+    "snapshot:mrr": "node scripts/snapshot-mrr.mjs",
+    "snapshot:mrr:backfill": "node scripts/snapshot-mrr.mjs --backfill"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

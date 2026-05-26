@@ -159,7 +159,11 @@ export default function AdminOrganizations({ navigate }: { navigate: NavigateFn 
                   </tr>
                 )}
                 {filtered.map((o) => (
-                  <tr key={o.id} className="border-t border-black/[0.04] hover:bg-zinc-50/40">
+                  <tr
+                    key={o.id}
+                    className="border-t border-black/[0.04] hover:bg-zinc-50/40 cursor-pointer"
+                    onClick={() => navigate('admin-organization-detail', { id: o.id })}
+                  >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-500">

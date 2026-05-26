@@ -4,11 +4,12 @@ Pasta central com tudo para configurar e testar a integração nativa entre **Pr
 
 ## Por onde começar
 
-| Ordem | Documento | Para quê |
-|-------|-----------|----------|
-| 1 | **[GUIA-COMPLETO.md](./GUIA-COMPLETO.md)** | Passo a passo do zero ao fim (siga na ordem) |
-| 2 | **[CHECKLIST.md](./CHECKLIST.md)** | Marcar cada item concluído |
-| 3 | [SUITE-TAGGO-TESTES.md](../SUITE-TAGGO-TESTES.md) | Detalhes de testes por fase + troubleshooting |
+| Situação | Documento |
+|----------|-----------|
+| **Teste real em produção** (ProSync/Rubrica já no ar) | **[TESTE-REAL-POR-PROJETO.md](./TESTE-REAL-POR-PROJETO.md)** |
+| Desenvolvimento local do zero | [GUIA-COMPLETO.md](./GUIA-COMPLETO.md) |
+| Marcar progresso | [CHECKLIST.md](./CHECKLIST.md) |
+| Detalhes por fase + troubleshooting | [SUITE-TAGGO-TESTES.md](../SUITE-TAGGO-TESTES.md) |
 
 ## Arquivos nesta pasta
 

@@ -31,6 +31,11 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminOrganizations = lazy(() => import('./pages/admin/AdminOrganizations'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
 const AdminSubscriptions = lazy(() => import('./pages/admin/AdminSubscriptions'));
+const AdminRetention = lazy(() => import('./pages/admin/AdminRetention'));
+const AdminAcquisition = lazy(() => import('./pages/admin/AdminAcquisition'));
+const AdminProduct = lazy(() => import('./pages/admin/AdminProduct'));
+const AdminOperations = lazy(() => import('./pages/admin/AdminOperations'));
+const AdminOrganizationDetail = lazy(() => import('./pages/admin/AdminOrganizationDetail'));
 
 const loadingFallback = (
   <div className="h-full min-h-screen w-full flex items-center justify-center text-zinc-500 bg-[#F5F5F7]">
@@ -169,6 +174,26 @@ export default function App() {
         return session?.user.isPlatformAdmin
           ? <AdminSubscriptions navigate={navigate} />
           : <Dashboard navigate={navigate} />;
+      case 'admin-retention':
+        return session?.user.isPlatformAdmin
+          ? <AdminRetention navigate={navigate} />
+          : <Dashboard navigate={navigate} />;
+      case 'admin-acquisition':
+        return session?.user.isPlatformAdmin
+          ? <AdminAcquisition navigate={navigate} />
+          : <Dashboard navigate={navigate} />;
+      case 'admin-product':
+        return session?.user.isPlatformAdmin
+          ? <AdminProduct navigate={navigate} />
+          : <Dashboard navigate={navigate} />;
+      case 'admin-operations':
+        return session?.user.isPlatformAdmin
+          ? <AdminOperations navigate={navigate} />
+          : <Dashboard navigate={navigate} />;
+      case 'admin-organization-detail':
+        return session?.user.isPlatformAdmin
+          ? <AdminOrganizationDetail navigate={navigate} orgId={routeParams.id ?? ''} />
+          : <Dashboard navigate={navigate} />;
       default:
         return <Dashboard navigate={navigate} />;
     }
@@ -208,11 +233,7 @@ export default function App() {
   ];
 
   const isPlatformAdmin = Boolean(session?.user.isPlatformAdmin);
-  const isAdminRoute =
-    route === 'admin-dashboard' ||
-    route === 'admin-organizations' ||
-    route === 'admin-users' ||
-    route === 'admin-subscriptions';
+  const isAdminRoute = route.startsWith('admin-');
 
   return (
     <div className="flex h-screen bg-[#F5F5F7] font-sans overflow-hidden">

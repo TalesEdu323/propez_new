@@ -7,8 +7,6 @@ import { buildRequireAuth } from '../auth/middleware.js'
 import { buildRequirePlatformAdmin } from '../auth/platformAdmin.js'
 import { registerAdminAnalyticsRoutes, enrichOrgDetail } from './adminAnalytics.js'
 import { isOrgActiveForMrr, mrrBrlForPlan } from '../services/mrrPricing.js'
-import type Stripe from 'stripe'
-
 function monthlyEquivalent(plan: string | null | undefined, cycle: string | null | undefined): number {
   return mrrBrlForPlan(plan, cycle)
 }
@@ -32,16 +30,15 @@ const updateUserSchema = z.object({
 export function createAdminRouter(deps: {
   pool: Pool
   config: EnvironmentConfig
-  stripe: Stripe
 }): Router {
-  const { pool, config, stripe } = deps
+  const { pool, config } = deps
   const router = express.Router()
   const requireAuth = buildRequireAuth(config.auth)
   const requirePlatformAdmin = buildRequirePlatformAdmin({ pool, config })
 
   router.use(requireAuth, requirePlatformAdmin)
 
-  registerAdminAnalyticsRoutes(router, { pool, config, stripe })
+  registerAdminAnalyticsRoutes(router, { pool, config })
 
   // ==========================================================================
   // GET /api/admin/saas/metrics — métricas agregadas
@@ -263,7 +260,7 @@ export function createAdminRouter(deps: {
         `SELECT id, name, cnpj, logo_url, plan, billing_cycle,
                 trial_ends_at, plan_started_at, plan_renews_at,
                 stripe_customer_id, stripe_subscription_id, onboarded,
-                created_at, updated_at
+                cs_notes, created_at, updated_at
          FROM organizations WHERE id = $1`,
         [req.params.id],
       )
@@ -303,6 +300,7 @@ export function createAdminRouter(deps: {
           stripeCustomerId: org.stripe_customer_id,
           stripeSubscriptionId: org.stripe_subscription_id,
           onboarded: org.onboarded,
+          csNotes: org.cs_notes,
           createdAt: org.created_at,
           updatedAt: org.updated_at,
         },

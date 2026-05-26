@@ -1,18 +1,17 @@
 import type { Request, Response, Router } from 'express'
 import type { Pool } from 'pg'
-import Stripe from 'stripe'
 import type { EnvironmentConfig } from '../env.js'
 import { listOpenAlerts, refreshAdminAlerts } from '../services/adminAlerts.js'
 import { fetchAllOrgsWithHealth, computeOrgHealthScore } from '../services/healthScore.js'
-import { isOrgActiveForMrr, mrrBrlForPlan, mrrCentsForPlan } from '../services/mrrPricing.js'
-import { computeCurrentMrr, snapshotMrrForDate } from '../services/mrrSnapshot.js'
+import { isOrgActiveForMrr, mrrBrlForPlan } from '../services/mrrPricing.js'
+import { computeCurrentMrr } from '../services/mrrSnapshot.js'
 import { createStripeClient, fetchStripeDunningSummary } from '../services/stripeMetrics.js'
 
 export function registerAdminAnalyticsRoutes(
   router: Router,
-  deps: { pool: Pool; config: EnvironmentConfig; stripe: Stripe },
+  deps: { pool: Pool; config: EnvironmentConfig },
 ): void {
-  const { pool, config, stripe } = deps
+  const { pool, config } = deps
   const stripeMetrics = createStripeClient(
     config.stripeSecretKey,
     process.env.STRIPE_RESTRICTED_KEY,
