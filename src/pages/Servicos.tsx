@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Plus, Search, Edit2, Trash2, X } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, LayoutTemplate } from 'lucide-react';
 import { store, Servico } from '../lib/store';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatBRL } from '../lib/format';
 import { createId } from '../lib/ids';
 import { useContratos, useServicos } from '../hooks/useStoreEntity';
 import type { NavigateFn } from '../types/navigation';
+import type { BuilderElement } from '../types/builder';
+import { ServicoEditorModal, type ServicoFormData } from './servicos/ServicoEditorModal';
 
 export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn }) {
   const servicos = useServicos();
@@ -13,29 +15,34 @@ export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftElementos, setDraftElementos] = useState<BuilderElement[]>([]);
 
-  const [formData, setFormData] = useState({
+  const emptyForm: ServicoFormData = {
     nome: '',
     descricao: '',
     valor: '',
-    tipo: 'unico' as 'unico' | 'recorrente',
-    contratoId: ''
-  });
+    tipo: 'unico',
+    contratoId: '',
+  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const [formData, setFormData] = useState<ServicoFormData>(emptyForm);
 
+  const handleSaveServico = (
+    data: Omit<Servico, 'id'> & { id?: string },
+    elementos: BuilderElement[],
+  ) => {
     const newServico: Servico = {
       id: editingId || createId(),
-      nome: formData.nome,
-      descricao: formData.descricao,
-      valor: parseFloat(formData.valor),
-      tipo: formData.tipo,
-      contratoId: formData.contratoId || undefined,
+      nome: data.nome,
+      descricao: data.descricao,
+      valor: data.valor,
+      tipo: data.tipo,
+      contratoId: data.contratoId,
+      elementos,
     };
 
     const updatedServicos = editingId
-      ? servicos.map(s => s.id === editingId ? newServico : s)
+      ? servicos.map((s) => (s.id === editingId ? newServico : s))
       : [newServico, ...servicos];
 
     store.saveServicos(updatedServicos);
@@ -54,11 +61,13 @@ export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn
         descricao: servico.descricao,
         valor: servico.valor.toString(),
         tipo: servico.tipo,
-        contratoId: servico.contratoId || ''
+        contratoId: servico.contratoId || '',
       });
+      setDraftElementos(servico.elementos ?? []);
     } else {
       setEditingId(null);
-      setFormData({ nome: '', descricao: '', valor: '', tipo: 'unico', contratoId: '' });
+      setFormData(emptyForm);
+      setDraftElementos([]);
     }
     setIsModalOpen(true);
   };
@@ -168,7 +177,13 @@ export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn
                         >
                           <td className="px-10 py-8">
                             <div className="font-bold text-zinc-900 text-lg tracking-tight">{servico.nome}</div>
-                            <div className="text-[9px] font-bold uppercase tracking-widest text-zinc-300 mt-1">ID: {servico.id.slice(0, 8)}</div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-300">ID: {servico.id.slice(0, 8)}</span>
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-full">
+                                <LayoutTemplate className="w-3 h-3" />
+                                {(servico.elementos?.length ?? 0)} blocos
+                              </span>
+                            </div>
                           </td>
                           <td className="px-10 py-8">
                             <div className="text-sm text-zinc-500 font-medium max-w-xs line-clamp-2">
@@ -273,121 +288,17 @@ export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn
         </motion.div>
       </div>
 
-      {/* Modal */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={closeModal}
-              className="absolute inset-0 bg-zinc-900/40 backdrop-blur-md"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden"
-            >
-              <div className="p-10 md:p-14 border-b border-zinc-100">
-                <div className="flex items-center justify-between">
-                  <h2 className="section-title font-semibold">
-                    {editingId ? 'Editar Serviço.' : 'Novo Serviço.'}
-                  </h2>
-                  <button 
-                    onClick={closeModal}
-                    className="p-3 text-zinc-300 hover:text-zinc-900 hover:bg-zinc-50 rounded-2xl transition-all"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-                <p className="text-zinc-400 text-sm font-medium mt-3">Configure os detalhes do seu serviço.</p>
-              </div>
-
-              <form onSubmit={handleSubmit} className="p-10 md:p-14 space-y-8">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 ml-4">Nome do Serviço *</label>
-                  <input 
-                    type="text"
-                    required
-                    value={formData.nome}
-                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    className="glass-input px-6 py-4 w-full text-sm font-medium"
-                    placeholder="Ex: Desenvolvimento de Site"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 ml-4">Descrição *</label>
-                  <textarea 
-                    required
-                    rows={3}
-                    value={formData.descricao}
-                    onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-                    className="glass-input px-6 py-4 w-full text-sm font-medium min-h-[120px] resize-none"
-                    placeholder="Descreva o serviço..."
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 ml-4">Valor (R$) *</label>
-                    <input 
-                      type="number"
-                      required
-                      min="0"
-                      step="0.01"
-                      value={formData.valor}
-                      onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
-                      className="glass-input px-6 py-4 w-full text-sm font-medium"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 ml-4">Tipo de Cobrança *</label>
-                    <select 
-                      value={formData.tipo}
-                      onChange={(e) => setFormData({ ...formData, tipo: e.target.value as 'unico' | 'recorrente' })}
-                      className="glass-input px-6 py-4 w-full text-sm font-medium appearance-none"
-                    >
-                      <option value="unico">Pagamento Único</option>
-                      <option value="recorrente">Recorrente (Mensal)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 ml-4">Contrato Padrão (Opcional)</label>
-                  <select 
-                    value={formData.contratoId}
-                    onChange={(e) => setFormData({ ...formData, contratoId: e.target.value })}
-                    className="glass-input px-6 py-4 w-full text-sm font-medium appearance-none"
-                  >
-                    <option value="">Nenhum contrato vinculado</option>
-                    {contratos.map(c => (
-                      <option key={c.id} value={c.id}>{c.titulo}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex gap-4 pt-4">
-                  <button 
-                    type="button"
-                    onClick={closeModal}
-                    className="flex-1 px-8 py-4 rounded-2xl font-bold text-[10px] uppercase tracking-widest text-zinc-400 hover:bg-zinc-50 transition-all"
-                  >
-                    Cancelar
-                  </button>
-                  <button 
-                    type="submit"
-                    className="flex-1 btn-primary"
-                  >
-                    Salvar Serviço
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
+          <ServicoEditorModal
+            open={isModalOpen}
+            editingId={editingId}
+            initialForm={formData}
+            initialElementos={draftElementos}
+            contratos={contratos}
+            onClose={closeModal}
+            onSave={handleSaveServico}
+          />
         )}
       </AnimatePresence>
     </div>

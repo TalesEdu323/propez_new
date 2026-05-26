@@ -5,6 +5,7 @@ import {
   Maximize2, MessageCircle, Minus, PlayCircle, Quote, Sparkles, Star
 } from 'lucide-react';
 import type { BuilderElement } from '../../types/builder';
+import { TabsElement } from './TabsElement';
 
 type ElementData = BuilderElement;
 
@@ -744,26 +745,26 @@ export function RenderElement({
 
     case 'tabs':
       return (
-        <motion.div 
+        <motion.div {...getAnimationProps('fade-up')} className="w-full">
+          <TabsElement
+            tabs={props.tabs ?? []}
+            activeColor={props.activeColor as string | undefined}
+            bgColor={props.bgColor as string | undefined}
+          />
+        </motion.div>
+      );
+
+    case 'service_stack':
+      return (
+        <motion.div
           {...getAnimationProps('fade-up')}
-          className="w-full rounded-3xl overflow-hidden shadow-lg glass-panel border border-black/5" 
-          style={{ backgroundColor: props.bgColor }}
+          className="w-full py-16 px-8 rounded-3xl border-2 border-dashed border-zinc-200 bg-zinc-50/80 text-center"
         >
-          <div className="flex border-b border-black/5 bg-white/50 backdrop-blur-md overflow-x-auto custom-scrollbar-hide">
-            {props.tabs.map((tab: any, idx: number) => (
-              <motion.button 
-                whileHover={{ backgroundColor: 'rgba(0,0,0,0.02)' }}
-                key={idx}
-                className={`flex-1 py-5 px-8 text-sm font-bold transition-all whitespace-nowrap ${idx === 0 ? 'text-zinc-900 border-b-2 border-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
-                style={idx === 0 ? { color: props.activeColor, borderBottom: `2px solid ${props.activeColor}`, backgroundColor: 'rgba(0,0,0,0.02)' } : {}}
-              >
-                {tab.title}
-              </motion.button>
-            ))}
-          </div>
-          <div className="p-8 md:p-10 text-zinc-600 leading-relaxed text-lg bg-white/50">
-            {props.tabs[0]?.content}
-          </div>
+          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Seção de serviços</p>
+          <h3 className="text-xl font-semibold text-zinc-800 mb-2">{props.title ?? 'Serviços da proposta'}</h3>
+          <p className="text-sm text-zinc-500 max-w-lg mx-auto">
+            {props.hint ?? 'Selecione serviços no modelo para preencher esta área automaticamente.'}
+          </p>
         </motion.div>
       );
 

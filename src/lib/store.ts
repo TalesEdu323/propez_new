@@ -50,6 +50,7 @@ export interface Servico {
   valor: number;
   tipo: 'unico' | 'recorrente';
   contratoId?: string;
+  elementos?: BuilderElement[];
 }
 
 export interface ContratoTemplate {
@@ -246,6 +247,7 @@ interface ApiServico {
   valor: number;
   tipo: 'unico' | 'recorrente';
   contratoId?: string | null;
+  elementos?: BuilderElement[];
 }
 interface ApiContrato {
   id: string;
@@ -320,6 +322,7 @@ function fromApiServico(a: ApiServico): Servico {
     valor: Number(a.valor ?? 0),
     tipo: (a.tipo ?? 'unico') as 'unico' | 'recorrente',
     contratoId: a.contratoId ?? undefined,
+    elementos: Array.isArray(a.elementos) ? a.elementos : [],
   };
 }
 function fromApiContrato(a: ApiContrato): ContratoTemplate {
@@ -566,6 +569,7 @@ interface ServicoPayload {
   valor: number;
   tipo: 'unico' | 'recorrente';
   contratoId?: string | null;
+  elementos?: BuilderElement[];
 }
 const servicoApi: EntityApi<Servico, ServicoPayload> = {
   toPayload: (s) => ({
@@ -574,6 +578,7 @@ const servicoApi: EntityApi<Servico, ServicoPayload> = {
     valor: s.valor,
     tipo: s.tipo,
     contratoId: s.contratoId ?? null,
+    elementos: s.elementos ?? [],
   }),
   create: async (p) => fromApiServico(await api.post<ApiServico>('/api/servicos', p as unknown as Record<string, unknown>)),
   update: async (id, p) => fromApiServico(await api.patch<ApiServico>(`/api/servicos/${id}`, p as unknown as Record<string, unknown>)),

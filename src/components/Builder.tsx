@@ -43,6 +43,9 @@ export default function Builder({
   previewMode: initialPreviewMode = false,
   /** Dentro do Propez Fluido: não usa viewport inteira; toolbar reduzida. */
   embedded = false,
+  /** Substitui a paleta do plano (ex.: mini-builder de serviço). */
+  widgetWhitelist,
+  hideImportExport = false,
 }: {
   initialElements?: ElementData[];
   onSave?: (elements: ElementData[]) => void;
@@ -51,6 +54,8 @@ export default function Builder({
   saveLabel?: string;
   previewMode?: boolean;
   embedded?: boolean;
+  widgetWhitelist?: ReadonlySet<BuilderElementType>;
+  hideImportExport?: boolean;
 }) {
   const [elements, setElements] = useBuilderPersistence({ initialElements, onChange });
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -59,7 +64,8 @@ export default function Builder({
 
   const userConfig = useUserConfig();
   const plan = resolvePlan(userConfig);
-  const allowedWidgets = getAllowedWidgets(plan);
+  const allowedWidgets = widgetWhitelist ?? getAllowedWidgets(plan);
+  const usePlanGate = !widgetWhitelist;
   const pdfGate = canUsePdfExport(userConfig);
   const [upgradeGate, setUpgradeGate] = useState<{
     open: boolean;
@@ -127,8 +133,11 @@ export default function Builder({
 
     // Segunda barreira: mesmo que alguém consiga iniciar o drag de um widget
     // bloqueado (ex.: DOM customizado), impedimos a inserção aqui.
-    if (!isWidgetAllowed(plan, type)) {
+    if (usePlanGate && !isWidgetAllowed(plan, type)) {
       openUpgradeForWidget(type);
+      return;
+    }
+    if (widgetWhitelist && !widgetWhitelist.has(type)) {
       return;
     }
 
@@ -232,9 +241,9 @@ export default function Builder({
             saveLabel={saveLabel}
             onBack={onBack}
             onTogglePreview={() => { setPreviewMode(!previewMode); setSelectedId(null); }}
-            onImport={handleImport}
-            onExport={handleExport}
-            exportLocked={!pdfGate.allowed}
+            onImport={hideImportExport ? undefined : handleImport}
+            onExport={hideImportExport ? undefined : handleExport}
+            exportLocked={hideImportExport || !pdfGate.allowed}
             onClear={() => { if (confirm('Tem certeza que deseja limpar tudo?')) setElements([]); }}
             onSave={onSave ? () => onSave(elements) : undefined}
           />

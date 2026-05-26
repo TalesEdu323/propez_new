@@ -9,6 +9,7 @@ import type { NavigateFn, RouteParams } from '../types/navigation';
 import type { BuilderElement } from '../types/builder';
 import { flowHasStep } from '../types/proposalFlow';
 import { applyStarterTemplate } from '../data/starterTemplates';
+import { mergeServiceLayouts } from '../lib/mergeServiceLayouts';
 import type { CriarModeloStepDescriptor } from './criarModelo/types';
 import { INITIAL_CRIAR_MODELO_FORM } from './criarModelo/types';
 import { CriarModeloStepper } from './criarModelo/CriarModeloStepper';
@@ -32,6 +33,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
 
   const [formData, setFormData] = useState(INITIAL_CRIAR_MODELO_FORM);
   const [elementos, setElementos] = useState<BuilderElement[]>([]);
+  const [importedServicoNames, setImportedServicoNames] = useState<string[]>([]);
 
   useEffect(() => {
     if (initialData?.editId) {
@@ -97,20 +99,34 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
     );
   }
 
+  const needsContractStep = flowHasStep(formData.fluxo, 'sign');
+
   if (step === 4) {
     return (
       <motion.div className="h-screen w-full bg-transparent flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        {importedServicoNames.length > 0 && (
+          <div className="shrink-0 px-4 py-2 bg-emerald-50 border-b border-emerald-100 text-center text-sm text-emerald-800">
+            Conteúdo importado dos serviços: <strong>{importedServicoNames.join(', ')}</strong> — você pode editar livremente.
+          </div>
+        )}
         <Builder
           initialElements={elementos}
           onSave={handleSave}
-          onBack={() => setStep(3)}
+          onBack={() => setStep(needsContractStep ? 3 : 2)}
           saveLabel="Salvar Modelo"
         />
       </motion.div>
     );
   }
 
-  const needsContractStep = flowHasStep(formData.fluxo, 'sign');
+  const goToEditorWithServices = () => {
+    const names = formData.servicos
+      .map((id) => servicosDisponiveis.find((s) => s.id === id)?.nome)
+      .filter((n): n is string => !!n);
+    setElementos((prev) => mergeServiceLayouts(prev, formData.servicos, servicosDisponiveis));
+    setImportedServicoNames(names);
+    setStep(4);
+  };
 
   const handleAdvance = () => {
     if (step === 1) {
@@ -120,9 +136,10 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
       }
       setStep(2);
     } else if (step === 2) {
-      setStep(needsContractStep ? 3 : 4);
+      if (needsContractStep) setStep(3);
+      else goToEditorWithServices();
     } else if (step === 3) {
-      setStep(4);
+      goToEditorWithServices();
     }
   };
 

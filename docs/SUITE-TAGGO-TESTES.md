@@ -484,6 +484,53 @@ Após rodar `CREATE_SUITE_INTEGRATION.sql`, keys manuais antigas têm `deprecate
 
 ---
 
+## Parte 10 — Serviços, modelos premium e proposta pública
+
+Fluxo recomendado para validar layout por serviço e composição no modelo.
+
+### Pré-requisitos
+
+- [ ] Migration `sql/009_servico_layout.sql` aplicada no Neon do Propez
+- [ ] API reiniciada (`npm run dev` ou deploy)
+
+### 1. Cadastrar serviço com mini-builder
+
+1. Menu **Serviços** → **Novo serviço**
+2. Passo 1: nome, descrição, valor, tipo (único/recorrente), contrato opcional
+3. Passo 2: **Montar layout do serviço** — paleta reduzida (título, entregas, pricing, abas, etc.)
+4. Salvar e conferir no card: contagem de **blocos** do layout
+
+### 2. Criar modelo a partir de starter premium
+
+1. **Modelos** → **Criar modelo** → escolher starter (Consultoria B2B, Agência ou Assinatura)
+2. Passo 1: marcar os **serviços** que entram na proposta
+3. Configurar fluxo e contrato (se assinatura no fluxo)
+4. **Ir para o Editor Visual** — banner verde lista serviços importados
+5. Verificar seção **Escopo dos serviços** virou **abas** (ou blocos empilhados no starter recorrente) com conteúdo dos serviços
+6. Salvar modelo
+
+### 3. Proposta no Propez Fluido
+
+1. **Nova proposta** → modelo do passo anterior
+2. Passo 3: alterar serviços marcados → layout da seção de serviços deve atualizar
+3. Enviar / gerar link público
+
+### 4. Página pública `/p/:token`
+
+- [ ] Página longa (scroll) com seções do starter
+- [ ] Abas de serviço **clicáveis** (conteúdo muda ao trocar aba)
+- [ ] CTA **Aprovar proposta** no fim ou via widget com `proposalAction`
+
+### API (opcional)
+
+```http
+GET /api/servicos
+PATCH /api/servicos/:id
+{ "elementos": [ { "id": "...", "type": "heading", "props": {} } ] }
+```
+
+---
+
 ## Referência de arquivos
 
 | Fase | Propez | ProSync | Rubrica | Site |

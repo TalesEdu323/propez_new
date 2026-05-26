@@ -236,5 +236,10 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     description: 'Cada semana sem anúncios é uma semana de vendas que ficaram para o concorrente.',
     buttonText: 'Aprovar proposta',
     proposalAction: 'approve',
-  }
+  },
+  service_stack: {
+    mode: 'tabs',
+    title: 'Serviços da proposta',
+    hint: 'O conteúdo desta seção é preenchido automaticamente pelos serviços selecionados no modelo.',
+  },
 };

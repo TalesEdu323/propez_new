@@ -134,8 +134,8 @@ export default function PublicProposta({ token }: Props) {
   };
 
   const handleProposalAction = () => {
+    setDockVisible(true);
     scrollToDecision();
-    setFormOpen('approve');
   };
 
   const decide = async (action: 'approve' | 'reject') => {
@@ -226,10 +226,10 @@ export default function PublicProposta({ token }: Props) {
         )}
       </AnimatePresence>
 
-      <div ref={anchorRef} id="proposal-decision-anchor" className="min-h-[40vh] flex flex-col justify-end pb-32">
-        {proposta.status === 'pendente' && (
-          <p className="text-center text-sm text-zinc-400 px-6 py-8">
-            Role até aqui ou use os botões da proposta para decidir.
+      <div ref={anchorRef} id="proposal-decision-anchor" className="min-h-[30vh] flex flex-col justify-end pb-4 sm:pb-8">
+        {proposta.status === 'pendente' && !dockVisible && (
+          <p className="text-center text-sm text-zinc-400 px-6 py-12">
+            Role até o final da proposta ou toque em &quot;Aprovar proposta&quot; no conteúdo para abrir as opções.
           </p>
         )}
 

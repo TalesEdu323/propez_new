@@ -8,8 +8,8 @@ export interface BuilderToolbarProps {
   saveLabel?: string;
   onBack?: () => void;
   onTogglePreview: () => void;
-  onImport: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onExport: () => void;
+  onImport?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onExport?: () => void;
   /** Quando true, o botão Exportar aparece com ícone de cadeado. */
   exportLocked?: boolean;
   onClear: () => void;
@@ -55,18 +55,22 @@ export function BuilderToolbar({
       </div>
       {!previewMode && !embedded && (
         <div className="flex items-center gap-2">
-          <label className="btn-secondary cursor-pointer">
-            <Upload className="w-4 h-4" /> Importar
-            <input type="file" accept=".json" onChange={onImport} className="hidden" />
-          </label>
-          <button onClick={onExport} className="btn-secondary relative">
-            {exportLocked ? <Lock className="w-4 h-4 text-amber-500" /> : <Download className="w-4 h-4" />}
-            Exportar
-            {exportLocked && (
-              <span className="ml-1 text-[9px] font-bold text-amber-600 uppercase tracking-widest">Pro</span>
-            )}
-          </button>
-          <div className="w-px h-6 bg-black/10 mx-2" />
+          {onImport && (
+            <label className="btn-secondary cursor-pointer">
+              <Upload className="w-4 h-4" /> Importar
+              <input type="file" accept=".json" onChange={onImport} className="hidden" />
+            </label>
+          )}
+          {onExport && (
+            <button onClick={onExport} className="btn-secondary relative">
+              {exportLocked ? <Lock className="w-4 h-4 text-amber-500" /> : <Download className="w-4 h-4" />}
+              Exportar
+              {exportLocked && (
+                <span className="ml-1 text-[9px] font-bold text-amber-600 uppercase tracking-widest">Pro</span>
+              )}
+            </button>
+          )}
+          {(onImport || onExport) && <div className="w-px h-6 bg-black/10 mx-2" />}
           <button onClick={onClear} className="btn-danger">
             <Trash className="w-4 h-4" /> Limpar
           </button>

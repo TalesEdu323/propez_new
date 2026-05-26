@@ -26,6 +26,7 @@ import { Step3ServicosValores } from './propezFluido/Step3ServicosValores';
 import type { PropezFluidoFormData, StepDescriptor } from './propezFluido/types';
 import { INITIAL_PROPEZ_FLUIDO_FORM } from './propezFluido/types';
 import type { NavigateFn, RouteParams } from '../types/navigation';
+import { mergeServiceLayouts } from '../lib/mergeServiceLayouts';
 
 const TOTAL_WIZARD_STEPS = 3;
 /** Passo após o último do wizard (tela de sucesso). */
@@ -108,7 +109,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
         modeloId,
         servicos: modelo.servicos,
         valor: totalValor.toString(),
-        elementos: modelo.elementos,
+        elementos: mergeServiceLayouts(modelo.elementos, modelo.servicos, servicosDisponiveis),
         contratoTexto: modelo.contratoTexto || '',
         contratoId: modelo.contratoId || '',
         chavePix: modelo.chavePix || '',

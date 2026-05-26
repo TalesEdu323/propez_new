@@ -19,7 +19,8 @@ export type BuilderElementType =
   | 'navbar' | 'slider' | 'feature_grid' | 'gallery' | 'grid' | 'container' | 'column'
   | 'countdown' | 'whatsapp_button' | 'tabs' | 'progress_bar' | 'star_rating'
   | 'google_map' | 'comparison_table' | 'image_carousel' | 'toast_notification'
-  | 'marketing_hero' | 'marketing_context' | 'marketing_strategy' | 'marketing_services' | 'marketing_pricing' | 'marketing_cta';
+  | 'marketing_hero' | 'marketing_context' | 'marketing_strategy' | 'marketing_services' | 'marketing_pricing' | 'marketing_cta'
+  | 'service_stack';
 
 /**
  * Mapa de props por tipo. Hoje quase todas usam `Record<string, unknown>` para manter
@@ -65,6 +66,7 @@ export interface BuilderElementPropsMap {
   marketing_services: Record<string, unknown>;
   marketing_pricing: Record<string, unknown>;
   marketing_cta: Record<string, unknown>;
+  service_stack: Record<string, unknown>;
 }
 
 /**

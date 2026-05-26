@@ -6,15 +6,20 @@ import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import { serializeServico } from '../db/serializers.js'
 
+const builderElement = z.object({}).passthrough()
+
 const bodySchema = z.object({
   nome: z.string().trim().min(1).max(200),
   descricao: z.string().max(4000).default(''),
   valor: z.number().finite().min(0),
   tipo: z.enum(['unico', 'recorrente']),
   contratoId: z.string().uuid().optional().nullable(),
+  elementos: z.array(builderElement).max(40).optional(),
 })
 
 const patchSchema = bodySchema.partial()
+
+const SERVICO_SELECT = `id, nome, descricao, valor_cents, tipo, contrato_id, elementos, created_at`
 
 export function createServicosRouter(deps: {
   pool: Pool
@@ -27,7 +32,7 @@ export function createServicosRouter(deps: {
   router.get('/', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
     const { rows } = await pool.query(
-      `SELECT id, nome, descricao, valor_cents, tipo, contrato_id, created_at
+      `SELECT ${SERVICO_SELECT}
        FROM servicos WHERE organization_id = $1 ORDER BY created_at DESC`,
       [req.auth.orgId],
     )
@@ -37,7 +42,7 @@ export function createServicosRouter(deps: {
   router.get('/:id', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
     const { rows } = await pool.query(
-      `SELECT id, nome, descricao, valor_cents, tipo, contrato_id, created_at
+      `SELECT ${SERVICO_SELECT}
        FROM servicos WHERE organization_id = $1 AND id = $2`,
       [req.auth.orgId, req.params.id],
     )
@@ -51,10 +56,18 @@ export function createServicosRouter(deps: {
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
     const d = parsed.data
     const { rows } = await pool.query(
-      `INSERT INTO servicos (organization_id, nome, descricao, valor_cents, tipo, contrato_id)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, nome, descricao, valor_cents, tipo, contrato_id, created_at`,
-      [req.auth.orgId, d.nome, d.descricao, Math.round(d.valor * 100), d.tipo, d.contratoId ?? null],
+      `INSERT INTO servicos (organization_id, nome, descricao, valor_cents, tipo, contrato_id, elementos)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+       RETURNING ${SERVICO_SELECT}`,
+      [
+        req.auth.orgId,
+        d.nome,
+        d.descricao,
+        Math.round(d.valor * 100),
+        d.tipo,
+        d.contratoId ?? null,
+        JSON.stringify(d.elementos ?? []),
+      ],
     )
     return res.status(201).json(serializeServico(rows[0]))
   })
@@ -70,9 +83,10 @@ export function createServicosRouter(deps: {
          descricao = COALESCE($4, descricao),
          valor_cents = COALESCE($5, valor_cents),
          tipo = COALESCE($6, tipo),
-         contrato_id = CASE WHEN $7::boolean THEN $8 ELSE contrato_id END
+         contrato_id = CASE WHEN $7::boolean THEN $8 ELSE contrato_id END,
+         elementos = CASE WHEN $9::boolean THEN $10::jsonb ELSE elementos END
        WHERE organization_id = $1 AND id = $2
-       RETURNING id, nome, descricao, valor_cents, tipo, contrato_id, created_at`,
+       RETURNING ${SERVICO_SELECT}`,
       [
         req.auth.orgId,
         req.params.id,
@@ -82,6 +96,8 @@ export function createServicosRouter(deps: {
         d.tipo ?? null,
         'contratoId' in d,
         d.contratoId ?? null,
+        d.elementos !== undefined,
+        JSON.stringify(d.elementos ?? []),
       ],
     )
     if (!rows[0]) return res.status(404).json({ error: 'Serviço não encontrado' })

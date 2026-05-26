@@ -22,6 +22,7 @@ export interface SerializedServico {
   valor: number
   tipo: 'unico' | 'recorrente'
   contratoId?: string
+  elementos: unknown[]
 }
 
 export interface SerializedContrato {
@@ -108,6 +109,7 @@ export function serializeServico(r: AnyRow): SerializedServico {
     valor: Number(r.valor_cents ?? 0) / 100,
     tipo: (r.tipo ?? 'unico') as 'unico' | 'recorrente',
     contratoId: r.contrato_id ?? undefined,
+    elementos: Array.isArray(r.elementos) ? r.elementos : [],
   }
 }
 
