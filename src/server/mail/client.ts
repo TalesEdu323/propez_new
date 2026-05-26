@@ -2,11 +2,12 @@ import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
 import { Resend } from 'resend'
 import type { MailConfig } from '../env.js'
-import { renderResetHtml, renderVerificationHtml } from './templates.js'
+import { renderResetHtml, renderVerificationHtml } from './templates/auth.js'
 
 export interface MailClient {
   sendVerificationEmail(input: { to: string; name: string; code: string }): Promise<void>
   sendPasswordResetEmail(input: { to: string; name: string; resetUrl: string }): Promise<void>
+  sendBusinessEmail(input: { to: string; subject: string; html: string; tag: string }): Promise<void>
 }
 
 function createSmtpTransporter(config: MailConfig): Transporter | null {
@@ -26,7 +27,7 @@ function createSmtpTransporter(config: MailConfig): Transporter | null {
   })
 }
 
-export function createMailClient(config: MailConfig): MailClient {
+export function createMailClient(config: MailConfig, appUrl: string): MailClient {
   const smtpTransporter =
     config.provider === 'smtp' ? createSmtpTransporter(config) : null
   const resend =
@@ -69,19 +70,22 @@ export function createMailClient(config: MailConfig): MailClient {
   return {
     async sendVerificationEmail({ to, name, code }) {
       await dispatch(
-        'Ative a sua conta Propez',
+        'Ative a sua conta PropEZ',
         to,
-        renderVerificationHtml(name, code),
+        renderVerificationHtml(appUrl, name, code),
         'verification',
       )
     },
     async sendPasswordResetEmail({ to, name, resetUrl }) {
       await dispatch(
-        'Redefinir a sua senha Propez',
+        'Redefinir a sua senha PropEZ',
         to,
-        renderResetHtml(name, resetUrl),
+        renderResetHtml(appUrl, name, resetUrl),
         'reset',
       )
+    },
+    async sendBusinessEmail({ to, subject, html, tag }) {
+      await dispatch(subject, to, html, tag)
     },
   }
 }

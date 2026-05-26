@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
   User, Building2, Shield, Bell, Download, 
   Smartphone, CheckCircle2, ChevronRight,
@@ -9,6 +9,11 @@ import { store, resolvePlan } from '../lib/store';
 import { PLAN_META } from '../lib/featureFlags';
 import { usePWA } from '../lib/usePWA';
 import type { NavigateFn } from '../types/navigation';
+import {
+  notificationTone,
+  openNotificationAction,
+  useNotifications,
+} from '../lib/useNotifications';
 
 interface ConfiguracoesProps {
   navigate: NavigateFn;
@@ -18,16 +23,9 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
   const [userConfig, setUserConfig] = useState(() => store.getUserConfig());
   const { installPrompt, isInstalled, installApp } = usePWA();
   const [isSaving, setIsSaving] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const { items: notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const plan = resolvePlan(userConfig);
   const planMeta = PLAN_META[plan];
-
-  useEffect(() => {
-    fetch('/api/notifications')
-      .then(res => res.json())
-      .then(data => setNotifications(data))
-      .catch(err => console.error('Erro ao buscar notificações:', err));
-  }, []);
 
   const handleGoToPlans = () => navigate('planos');
 
@@ -195,30 +193,72 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
 
             {/* Notifications Section */}
             <motion.div variants={itemVariants} className="apple-card p-6">
-              <div className="flex items-center gap-4 mb-8">
-                <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100">
-                  <Bell className="w-6 h-6" />
+              <div className="flex items-center justify-between gap-4 mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100">
+                    <Bell className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-zinc-900 tracking-tight">Notificações</h3>
+                    <p className="text-sm text-zinc-400 font-medium">
+                      {unreadCount > 0 ? `${unreadCount} não lida(s)` : 'Propostas e contratos em tempo real'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-zinc-900 tracking-tight">Notificações</h3>
-                  <p className="text-sm text-zinc-400 font-medium">Fique por dentro das novidades</p>
-                </div>
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void markAllRead()}
+                    className="text-xs font-bold text-zinc-500 hover:text-zinc-900 uppercase tracking-widest"
+                  >
+                    Marcar todas
+                  </button>
+                )}
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {notifications.length > 0 ? (
-                  notifications.map((notif) => (
-                    <div key={notif.id} className="p-4 rounded-2xl bg-zinc-50 border border-zinc-100 flex gap-4 items-start">
-                      <div className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0" />
-                      <div>
-                        <h4 className="text-sm font-bold text-zinc-900">{notif.title}</h4>
-                        <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{notif.message}</p>
-                        <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-2">
-                          {new Date(notif.date).toLocaleDateString('pt-BR')}
-                        </p>
-                      </div>
-                    </div>
-                  ))
+                  notifications.map((notif) => {
+                    const tone = notificationTone(notif.type);
+                    const dot =
+                      tone === 'success'
+                        ? 'bg-emerald-500'
+                        : tone === 'danger'
+                          ? 'bg-red-500'
+                          : tone === 'warning'
+                            ? 'bg-amber-500'
+                            : 'bg-zinc-400';
+                    return (
+                      <button
+                        key={notif.id}
+                        type="button"
+                        onClick={() => {
+                          if (!notif.readAt) void markRead(notif.id);
+                          if (notif.actionUrl) openNotificationAction(notif.actionUrl, navigate);
+                        }}
+                        className={`w-full text-left p-4 rounded-2xl border flex gap-4 items-start transition-all hover:border-zinc-300 ${
+                          notif.readAt ? 'bg-white border-zinc-100' : 'bg-zinc-50 border-zinc-200 shadow-sm'
+                        }`}
+                      >
+                        <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${notif.readAt ? 'opacity-30' : dot}`} />
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-bold text-zinc-900">{notif.title}</h4>
+                          <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{notif.message}</p>
+                          <div className="flex flex-wrap items-center gap-3 mt-2">
+                            <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">
+                              {new Date(notif.date).toLocaleString('pt-BR')}
+                            </p>
+                            {notif.actionLabel && notif.actionUrl && (
+                              <span className="text-[10px] font-bold text-[#ff5200] uppercase tracking-widest flex items-center gap-1">
+                                {notif.actionLabel}
+                                <ChevronRight className="w-3 h-3" />
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
                 ) : (
                   <div className="text-center py-8 text-zinc-400 text-sm font-medium">
                     Nenhuma notificação por enquanto.

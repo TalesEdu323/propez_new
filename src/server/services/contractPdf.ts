@@ -16,6 +16,7 @@
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import type { TDocumentDefinitions, Content } from 'pdfmake/interfaces'
+import { getPropezLogoDataUri } from './propezLogoAsset.js'
 
 const require = createRequire(import.meta.url)
 // Import dinâmico via CJS: `pdfmake` v0.3 expõe o singleton como
@@ -70,7 +71,26 @@ function fmtDate(d: Date): string {
 export async function generateContractPdf(input: ContractPdfInput): Promise<Buffer> {
   const issuedAt = input.issuedAt ?? new Date()
 
+  const logoUri = getPropezLogoDataUri()
   const headerLines: Content[] = []
+
+  const brandHeader: Content = logoUri
+    ? {
+        columns: [
+          { width: '*', text: '' },
+          { image: logoUri, width: 140, alignment: 'right' },
+        ],
+        margin: [0, 0, 0, 12] as [number, number, number, number],
+      }
+    : {
+        text: 'PropEZ',
+        style: 'brandFallback',
+        alignment: 'right',
+        margin: [0, 0, 0, 12] as [number, number, number, number],
+      }
+
+  headerLines.push(brandHeader)
+
   if (input.companyName) {
     headerLines.push({ text: input.companyName, style: 'companyName' })
   }
@@ -127,6 +147,7 @@ export async function generateContractPdf(input: ContractPdfInput): Promise<Buff
       lineHeight: 1.35,
     },
     styles: {
+      brandFallback: { fontSize: 16, bold: true, alignment: 'right', color: '#ff5200' },
       companyName: { fontSize: 13, bold: true, alignment: 'right' },
       companyMeta: { fontSize: 9, alignment: 'right', color: '#555555' },
       title: { fontSize: 18, bold: true, alignment: 'center', margin: [0, 20, 0, 20] },

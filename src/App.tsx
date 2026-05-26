@@ -11,6 +11,7 @@ import {
   useSession,
 } from './lib/authSession';
 import { PropezLogo } from './components/PropezLogo';
+import { useNotifications } from './lib/useNotifications';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Clientes = lazy(() => import('./pages/Clientes'));
@@ -53,6 +54,7 @@ export default function App() {
   const session = useSession();
   const initialLoaded = useInitialLoaded();
   const publicToken = useMemo(extractPublicToken, []);
+  const { unreadCount: notificationUnread } = useNotifications(Boolean(session));
 
   const [route, setRoute] = useState<AppRoute>('dashboard');
   const [routeParams, setRouteParams] = useState<RouteParams>({});
@@ -318,7 +320,11 @@ export default function App() {
             className="w-10 h-10 flex items-center justify-center text-zinc-500 bg-zinc-100 rounded-full active:scale-95 transition-all relative"
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-amber-500 rounded-full border-2 border-white"></span>
+            {notificationUnread > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-[#ff5200] text-white rounded-full border-2 border-white">
+                {notificationUnread > 9 ? '9+' : notificationUnread}
+              </span>
+            )}
           </button>
           <button 
             onClick={() => navigate('configuracoes')}

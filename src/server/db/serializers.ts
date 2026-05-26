@@ -46,6 +46,7 @@ export interface SerializedProposta {
   id: string
   cliente_id: string | null
   cliente_nome: string
+  clienteEmail?: string | null
   modelo_id?: string | null
   servicos: string[]
   valor: number
@@ -132,6 +133,7 @@ export function serializeProposta(r: AnyRow): SerializedProposta {
     id: r.id,
     cliente_id: r.cliente_id,
     cliente_nome: r.cliente_nome ?? '',
+    clienteEmail: r.cliente_email?.trim() || undefined,
     modelo_id: r.modelo_id,
     servicos: toArrayOfString(r.servicos),
     valor: Number(r.valor_cents ?? 0) / 100,

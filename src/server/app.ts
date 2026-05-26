@@ -57,7 +57,7 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   const integrationsConfig = loadIntegrationsConfig(config.appUrl);
   const stripe = new Stripe(config.stripeSecretKey);
   const pool = createPool(config);
-  const mail = createMailClient(config.mail);
+  const mail = createMailClient(config.mail, config.appUrl);
   const suiteLookup = createSuiteLookup(integrationsConfig);
   const suiteServiceToken = createSuiteServiceTokenClient(integrationsConfig);
   const suiteProposalEvents = createSuiteProposalEvents(integrationsConfig);
@@ -91,6 +91,8 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
       config: integrationsConfig,
       orgCredentialsRepo,
       suiteProposalEvents,
+      envConfig: config,
+      mail,
     }),
   );
 
@@ -129,7 +131,7 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   app.use('/api/servicos', createServicosRouter({ pool, config }));
   app.use('/api/contratos', createContratosRouter({ pool, config }));
   app.use('/api/modelos', createModelosRouter({ pool, config }));
-  app.use('/api/propostas', createPropostasRouter({ pool, config, suiteProposalEvents }));
+  app.use('/api/propostas', createPropostasRouter({ pool, config, mail, suiteProposalEvents }));
   app.use('/api/usage', createUsageRouter({ pool, config }));
 
   // 6) Integrations proxy (autenticado)
@@ -144,13 +146,14 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
       ensureSuiteCredential,
       orgCredentialsRepo,
       suiteProposalEvents,
+      mail,
     }),
   );
 
   // 7) Rotas públicas (proposta pelo link)
   app.use(
     '/api/public/propostas',
-    createPublicPropostasRouter({ pool, suiteProposalEvents, config }),
+    createPublicPropostasRouter({ pool, mail, suiteProposalEvents, config }),
   );
 
   // 8) Painel admin (super-admin do SaaS) — exige requireAuth + requirePlatformAdmin
@@ -159,7 +162,7 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   // 9) Utilitárias
   app.use('/api', createHealthRouter({ pool, integrationsConfig }));
   app.use('/api', createCheckoutRouter({ stripe, config }));
-  app.use('/api', createNotificationsRouter());
+  app.use('/api', createNotificationsRouter({ pool, config }));
 
   // 10) Error handler global sempre por último
   app.use(errorHandler);

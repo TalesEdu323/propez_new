@@ -2,6 +2,8 @@
 
 Documento único para configurar e testar **Propez + ProSync + Rubrica + login Taggo (IdP)** do zero.
 
+> **Teste real em produção** (ProSync e Rubrica já no ar): use **[TESTE-REAL-POR-PROJETO.md](./TESTE-REAL-POR-PROJETO.md)** — instruções separadas por projeto e URLs `https://`.
+
 Use junto com [CHECKLIST.md](./CHECKLIST.md) para marcar o progresso.
 
 ---

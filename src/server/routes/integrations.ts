@@ -17,6 +17,8 @@ import type { EnsureSuiteCredential } from '../integrations/ensureSuiteCredentia
 import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js'
 import type { SuiteApp } from '../clients/suiteLookup.js'
 import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.js'
+import type { MailClient } from '../mail/client.js'
+import { notifyProposalEventAsync } from '../services/notificationService.js'
 
 /**
  * Router de `/api/integrations/*`. Todas as rotas requerem auth e fazem proxy
@@ -34,6 +36,7 @@ export function buildIntegrationsRouter(deps: {
   orgCredentialsRepo?: OrgIntegrationCredentialsRepo
   /** Emissor de eventos de proposta (Fase 4). */
   suiteProposalEvents?: SuiteProposalEventsClient
+  mail?: MailClient
 }): Router {
   const router = express.Router()
   const {
@@ -43,6 +46,7 @@ export function buildIntegrationsRouter(deps: {
     ensureSuiteCredential,
     orgCredentialsRepo,
     suiteProposalEvents,
+    mail,
   } = deps
 
   router.use(buildRequireAuth(envConfig.auth))
@@ -400,12 +404,14 @@ export function buildIntegrationsRouter(deps: {
       // Reflete em propostas.rubrica_* para a UI atualizar direto do DB.
       await pool.query(
         `UPDATE propostas SET
+           cliente_email = COALESCE(NULLIF($5, ''), cliente_email),
+           cliente_nome = COALESCE(NULLIF($6, ''), cliente_nome),
            rubrica_document_id = $3,
            rubrica_signing_url = $4,
            rubrica_status = 'sent',
            rubrica_last_sync_at = NOW()
          WHERE id::text = $1 AND organization_id = $2`,
-        [proposalId, orgId, documentId, signingUrl ?? null],
+        [proposalId, orgId, documentId, signingUrl ?? null, clientEmail, clientName],
       ).catch((err) => console.error('[integrations:rubrica/send] propostas update failed:', err))
 
       await logIntegrationEvent(pool, {
@@ -438,7 +444,7 @@ export function buildIntegrationsRouter(deps: {
           const meta = publicTokenRow?.rows?.[0] ?? null
           const baseUrl = config.appUrl.replace(/\/+$/, '')
           const publicUrl = meta?.public_token
-            ? `${baseUrl}/propostas/p/${meta.public_token}`
+            ? `${baseUrl}/p/${meta.public_token}`
             : null
           const valueCents =
             meta?.valor_cents != null
@@ -457,6 +463,17 @@ export function buildIntegrationsRouter(deps: {
             metadata: { documentId, signingUrl },
           })
         }
+      }
+
+      if (mail) {
+        notifyProposalEventAsync({
+          pool,
+          mail,
+          config: envConfig,
+          proposalId,
+          type: 'contract_sent',
+          metadata: { documentId, signingUrl },
+        })
       }
 
       return res.json({

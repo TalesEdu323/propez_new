@@ -14,6 +14,9 @@ import {
 import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js'
 import type { SuiteApp } from '../clients/suiteLookup.js'
 import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.js'
+import type { EnvironmentConfig } from '../env.js'
+import type { MailClient } from '../mail/client.js'
+import { notifyProposalEventAsync } from '../services/notificationService.js'
 
 /**
  * Inbound webhooks dos integradores. Rotas públicas (sem auth) — protegidas
@@ -29,9 +32,11 @@ export function buildWebhooksRouter(deps: {
   orgCredentialsRepo?: OrgIntegrationCredentialsRepo
   /** Emite eventos de proposta para o ProSync (Fase 4). */
   suiteProposalEvents?: SuiteProposalEventsClient
+  envConfig?: EnvironmentConfig
+  mail?: MailClient
 }): Router {
   const router = express.Router()
-  const { pool, config, orgCredentialsRepo, suiteProposalEvents } = deps
+  const { pool, config, orgCredentialsRepo, suiteProposalEvents, envConfig, mail } = deps
 
   /**
    * Carrega a API Key da organização-dona do mapping (preferido) ou cai para
@@ -167,6 +172,17 @@ export function buildWebhooksRouter(deps: {
             metadata: { documentId: body.documentId, signedUrl },
           })
         }
+      }
+
+      if (mail && envConfig) {
+        notifyProposalEventAsync({
+          pool,
+          mail,
+          config: envConfig,
+          proposalId: mapping.propez_proposal_id,
+          type: 'contract_signed',
+          metadata: { documentId: body.documentId, signedUrl },
+        })
       }
 
       return res.json({ received: true, proposalId: updated.propez_proposal_id, status: 'signed' })

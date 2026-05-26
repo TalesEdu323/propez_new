@@ -69,7 +69,8 @@ Em produção **não** se usa `.env`: cadastre cada variável no painel do prove
 
 Runbooks relacionados:
 
-- **Suíte Taggo (Propez + ProSync + Rubrica + SSO):** [`docs/suite-taggo/GUIA-COMPLETO.md`](docs/suite-taggo/GUIA-COMPLETO.md) — passo a passo completo; [`docs/suite-taggo/CHECKLIST.md`](docs/suite-taggo/CHECKLIST.md) — marcar progresso
+- **Suíte Taggo (produção):** [`docs/suite-taggo/TESTE-REAL-POR-PROJETO.md`](docs/suite-taggo/TESTE-REAL-POR-PROJETO.md) — o que fazer em cada projeto (ProSync/Rubrica no ar)
+- **Suíte Taggo (local):** [`docs/suite-taggo/GUIA-COMPLETO.md`](docs/suite-taggo/GUIA-COMPLETO.md); [`docs/suite-taggo/CHECKLIST.md`](docs/suite-taggo/CHECKLIST.md)
 - Smoke test ponta a ponta: [`docs/INTEGRACOES_SMOKE_TEST.md`](docs/INTEGRACOES_SMOKE_TEST.md)
 - Checklist de deploy: [`docs/DEPLOY.md`](docs/DEPLOY.md)
 

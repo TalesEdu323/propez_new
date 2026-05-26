@@ -15,15 +15,14 @@ Pasta central com tudo para configurar e testar a integração nativa entre **Pr
 
 ```
 docs/suite-taggo/
-├── README.md                 ← você está aqui
-├── GUIA-COMPLETO.md          ← guia principal (siga este)
-├── CHECKLIST.md              ← lista para marcar
-├── templates/                ← copiar para .env de cada projeto
-│   ├── site-taggo.env.local.example
-│   ├── propez.env.example
-│   ├── prosync.env.local.example
-│   └── rubrica.env.example
-└── sql/                      ← SQL puro para colar no Neon
+├── README.md                      ← você está aqui
+├── TESTE-REAL-POR-PROJETO.md      ← produção, por projeto (comece aqui se já no ar)
+├── GUIA-COMPLETO.md               ← local + produção misto
+├── CHECKLIST.md
+├── templates/
+│   ├── *.env.production.example   ← Vercel produção (https)
+│   └── *.env.local.example        ← desenvolvimento local
+└── sql/
     ├── SITE-taggo-oidc.sql
     ├── PROPEZ-suite.sql
     ├── PROSYNC-suite.sql

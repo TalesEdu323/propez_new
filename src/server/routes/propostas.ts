@@ -7,6 +7,8 @@ import { buildRequireAuth } from '../auth/middleware.js'
 import { serializeProposta } from '../db/serializers.js'
 import { createOpaqueToken } from '../auth/tokens.js'
 import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.js'
+import type { MailClient } from '../mail/client.js'
+import { notifyProposalEventAsync } from '../services/notificationService.js'
 
 const builderElement = z.object({}).passthrough()
 
@@ -36,26 +38,36 @@ const bodySchema = z.object({
   data_pagamento: z.string().datetime().optional().nullable(),
   creatorPlan: z.string().max(50).optional().nullable(),
   prosyncLeadId: z.string().max(200).optional().nullable(),
+  clienteEmail: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .nullable()
+    .refine((v) => v == null || v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+      message: 'E-mail do cliente inválido',
+    }),
 })
 
 const patchSchema = bodySchema.partial()
 
 const PROPOSTA_SELECT = `
-  id, cliente_id, cliente_nome, modelo_id, servicos,
+  id, cliente_id, cliente_nome, cliente_email, modelo_id, servicos,
   valor_cents, desconto_cents, recorrente, ciclo_recorrencia, duracao_recorrencia,
   data_envio, data_validade, status, elementos, contrato_texto, contrato_id,
   chave_pix, link_pagamento, pago, data_pagamento, creator_plan, public_token,
   prosync_lead_id, rubrica_document_id, rubrica_status, rubrica_signing_url,
-  rubrica_signed_pdf_url, rubrica_last_sync_at, created_at
+  rubrica_signed_pdf_url, rubrica_last_sync_at, viewed_at, created_at
 `
 
 export function createPropostasRouter(deps: {
   pool: Pool
   config: EnvironmentConfig
+  mail: MailClient
   /** Emissor de eventos para o ProSync (Fase 4). Opcional. */
   suiteProposalEvents?: SuiteProposalEventsClient
 }): Router {
-  const { pool, config, suiteProposalEvents } = deps
+  const { pool, config, mail, suiteProposalEvents } = deps
   const router = express.Router()
   router.use(buildRequireAuth(config.auth))
 
@@ -74,7 +86,7 @@ export function createPropostasRouter(deps: {
     const finalValueCents =
       valorCents != null ? Math.max(0, valorCents - desconto) : null
     const publicUrl = proposal.public_token
-      ? `${config.appUrl.replace(/\/+$/, '')}/propostas/p/${proposal.public_token}`
+      ? `${config.appUrl.replace(/\/+$/, '')}/p/${proposal.public_token}`
       : null
     suiteProposalEvents.fireAndForget({
       event,
@@ -117,18 +129,26 @@ export function createPropostasRouter(deps: {
     const parsed = bodySchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
     const d = parsed.data
+    let clienteEmail = d.clienteEmail?.trim().toLowerCase() ?? ''
+    if (!clienteEmail && d.cliente_id) {
+      const ce = await pool.query<{ email: string }>(
+        `SELECT email FROM clientes WHERE id = $1 AND organization_id = $2`,
+        [d.cliente_id, req.auth.orgId],
+      )
+      clienteEmail = ce.rows[0]?.email?.trim().toLowerCase() ?? ''
+    }
     try {
       const { rows } = await pool.query(
         `INSERT INTO propostas (
-           id, organization_id, cliente_id, cliente_nome, modelo_id, servicos,
+           id, organization_id, cliente_id, cliente_nome, cliente_email, modelo_id, servicos,
            valor_cents, desconto_cents, recorrente, ciclo_recorrencia, duracao_recorrencia,
            data_envio, data_validade, status, elementos, contrato_texto, contrato_id,
            chave_pix, link_pagamento, pago, data_pagamento, creator_plan, prosync_lead_id
          ) VALUES (
-           COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6::uuid[],
-           $7, $8, $9, $10, $11,
-           $12, $13, $14, $15::jsonb, $16, $17,
-           $18, $19, $20, $21, $22, $23
+           COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7::uuid[],
+           $8, $9, $10, $11, $12,
+           $13, $14, $15, $16::jsonb, $17, $18,
+           $19, $20, $21, $22, $23, $24
          )
          RETURNING ${PROPOSTA_SELECT}`,
         [
@@ -136,6 +156,7 @@ export function createPropostasRouter(deps: {
           req.auth.orgId,
           d.cliente_id ?? null,
           d.cliente_nome,
+          clienteEmail,
           d.modelo_id ?? null,
           d.servicos,
           Math.round(d.valor * 100),
@@ -182,6 +203,13 @@ export function createPropostasRouter(deps: {
         status: inserted.status ?? 'pendente',
         externalCreatedAt: inserted.created_at ?? new Date(),
       })
+      notifyProposalEventAsync({
+        pool,
+        mail,
+        config,
+        proposalId: String(inserted.id),
+        type: 'proposal_created',
+      })
       return res.status(201).json(serializeProposta(inserted))
     } catch (err) {
       console.error('[propostas/create] erro:', err)
@@ -201,10 +229,22 @@ export function createPropostasRouter(deps: {
     }
     const d = parsed.data
     try {
+      const before = await pool.query<{ status: string; pago: boolean }>(
+        `SELECT status, pago FROM propostas WHERE organization_id = $1 AND id = $2`,
+        [req.auth.orgId, req.params.id],
+      )
+      if (!before.rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
+
+      let clienteEmailPatch: string | null = null
+      if ('clienteEmail' in d) {
+        clienteEmailPatch = d.clienteEmail?.trim().toLowerCase() ?? ''
+      }
+
       const { rows } = await pool.query(
         `UPDATE propostas SET
            cliente_id = CASE WHEN $3::boolean THEN $4 ELSE cliente_id END,
            cliente_nome = COALESCE($5, cliente_nome),
+           cliente_email = CASE WHEN $37::boolean THEN $38 ELSE cliente_email END,
            modelo_id = CASE WHEN $6::boolean THEN $7 ELSE modelo_id END,
            servicos = CASE WHEN $8::boolean THEN $9::uuid[] ELSE servicos END,
            valor_cents = COALESCE($10, valor_cents),
@@ -263,11 +303,16 @@ export function createPropostasRouter(deps: {
           d.data_pagamento ?? null,
           d.creatorPlan ?? null,
           d.prosyncLeadId ?? null,
+          'clienteEmail' in d,
+          clienteEmailPatch,
         ],
       )
       if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
       const updated = rows[0]
       const status = String(updated.status ?? '')
+      const prevStatus = String(before.rows[0].status ?? '')
+      const prevPago = !!before.rows[0].pago
+
       if (updated.prosync_lead_id) {
         if (status === 'aprovada') {
           emitEvent('proposal.approved', updated, updated.prosync_lead_id, { status })
@@ -275,6 +320,17 @@ export function createPropostasRouter(deps: {
           emitEvent('proposal.rejected', updated, updated.prosync_lead_id, { status })
         }
       }
+
+      const proposalId = String(updated.id)
+      if (status === 'aprovada' && prevStatus !== 'aprovada') {
+        notifyProposalEventAsync({ pool, mail, config, proposalId, type: 'proposal_approved' })
+      } else if (status === 'recusada' && prevStatus !== 'recusada') {
+        notifyProposalEventAsync({ pool, mail, config, proposalId, type: 'proposal_rejected' })
+      }
+      if (updated.pago && !prevPago) {
+        notifyProposalEventAsync({ pool, mail, config, proposalId, type: 'proposal_paid' })
+      }
+
       return res.json(serializeProposta(updated))
     } catch (err) {
       console.error('[propostas/update] erro:', err)
