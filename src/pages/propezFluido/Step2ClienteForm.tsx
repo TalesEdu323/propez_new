@@ -43,7 +43,7 @@ export function Step2ClienteForm({ clientes, formData, setFormData, onOpenLeadPi
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="mb-12">
-        <h2 className="text-4xl font-semibold text-zinc-900 mb-3 tracking-tight">Dados do Cliente</h2>
+        <h2 className="section-title font-semibold mb-2">Dados do Cliente</h2>
         <p className="text-zinc-500 text-lg">Para quem você está enviando esta proposta?</p>
       </div>
 

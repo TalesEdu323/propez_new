@@ -45,9 +45,9 @@ export default function Modelos({ navigate }: { navigate: NavigateFn }) {
 
   return (
     <div className="p-[7px] md:p-10 max-w-7xl mx-auto font-sans pb-[87px] md:pb-10">
-      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="flex flex-col sm:flex-row sm:items-end justify-between gap-8 mb-16 px-1 md:px-0">
+      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 px-1 md:px-0">
         <motion.div variants={itemVariants}>
-          <h1 className="text-4xl md:text-6xl font-semibold text-zinc-900 tracking-tightest leading-none">Modelos.</h1>
+          <h1 className="page-title">Modelos.</h1>
           <p className="text-zinc-400 mt-4 font-medium">Crie e gerencie seus templates de propostas.</p>
         </motion.div>
         <motion.button 

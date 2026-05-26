@@ -1,9 +1,17 @@
 import express from 'express';
 import type { Request, Response, Router } from 'express';
+import type { Pool } from 'pg';
 import Stripe from 'stripe';
 import type { EnvironmentConfig } from '../env.js';
+import { insertSubscriptionEvent, recordPlanChange } from '../services/subscriptionEvents.js';
 
 export interface StripeWebhookOptions {
+  stripe: Stripe;
+  config: EnvironmentConfig;
+  pool: Pool;
+}
+
+export interface StripeCheckoutOptions {
   stripe: Stripe;
   config: EnvironmentConfig;
 }
@@ -29,12 +37,122 @@ function resolvePlanFromPriceId(priceId: string | undefined | null, config: Envi
 }
 
 /**
+ * Tenta resolver `organization_id` a partir do customer/subscription do Stripe.
+ * Usa o índice único em organizations(stripe_customer_id) /
+ * organizations(stripe_subscription_id) — definido em sql/002_core.sql.
+ */
+async function fetchOrgBilling(
+  pool: Pool,
+  orgId: string,
+): Promise<{ plan: string | null; billing_cycle: string | null } | null> {
+  const { rows } = await pool.query<{ plan: string | null; billing_cycle: string | null }>(
+    `SELECT plan, billing_cycle FROM organizations WHERE id = $1`,
+    [orgId],
+  );
+  return rows[0] ?? null;
+}
+
+async function resolveOrgIdFromStripe(
+  pool: Pool,
+  hints: {
+    clientReferenceId?: string | null;
+    customerId?: string | null;
+    subscriptionId?: string | null;
+  },
+): Promise<string | null> {
+  if (hints.clientReferenceId) {
+    const { rows } = await pool.query<{ id: string }>(
+      `SELECT id FROM organizations WHERE id = $1`,
+      [hints.clientReferenceId],
+    );
+    if (rows[0]?.id) return rows[0].id;
+  }
+  if (hints.subscriptionId) {
+    const { rows } = await pool.query<{ id: string }>(
+      `SELECT id FROM organizations WHERE stripe_subscription_id = $1`,
+      [hints.subscriptionId],
+    );
+    if (rows[0]?.id) return rows[0].id;
+  }
+  if (hints.customerId) {
+    const { rows } = await pool.query<{ id: string }>(
+      `SELECT id FROM organizations WHERE stripe_customer_id = $1`,
+      [hints.customerId],
+    );
+    if (rows[0]?.id) return rows[0].id;
+  }
+  return null;
+}
+
+function derivePaymentMethod(
+  types: string[] | undefined | null,
+  fallback = 'card',
+): 'card' | 'pix' | 'boleto' | string {
+  if (!Array.isArray(types) || types.length === 0) return fallback;
+  if (types.includes('card')) return 'card';
+  if (types.includes('pix')) return 'pix';
+  if (types.includes('boleto')) return 'boleto';
+  return types[0] ?? fallback;
+}
+
+async function insertPayment(
+  pool: Pool,
+  payload: {
+    organizationId: string | null;
+    eventId: string;
+    sessionId?: string | null;
+    invoiceId?: string | null;
+    subscriptionId?: string | null;
+    customerId?: string | null;
+    paymentMethod: string;
+    amountCents: number;
+    currency: string;
+    status: 'paid' | 'failed' | 'refunded';
+    plan?: string | null;
+    billingCycle?: string | null;
+    raw: unknown;
+  },
+): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO stripe_payments (
+         organization_id, stripe_event_id, stripe_session_id, stripe_invoice_id,
+         stripe_subscription_id, stripe_customer_id, payment_method, amount_cents,
+         currency, status, plan, billing_cycle, raw
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       ON CONFLICT (stripe_event_id) DO NOTHING`,
+      [
+        payload.organizationId,
+        payload.eventId,
+        payload.sessionId ?? null,
+        payload.invoiceId ?? null,
+        payload.subscriptionId ?? null,
+        payload.customerId ?? null,
+        payload.paymentMethod,
+        payload.amountCents,
+        payload.currency,
+        payload.status,
+        payload.plan ?? null,
+        payload.billingCycle ?? null,
+        payload.raw ?? null,
+      ],
+    );
+  } catch (err) {
+    console.error('[stripe/webhook] insert payment falhou:', err);
+  }
+}
+
+/**
  * Cria o handler de webhook do Stripe.
  *
  * ATENÇÃO: este handler precisa ser registrado com `express.raw({ type: 'application/json' })`
  * ANTES de qualquer `express.json()` global, senão a assinatura do Stripe falha.
+ *
+ * Persiste:
+ *  - `stripe_payments` (idempotente por `stripe_event_id`)
+ *  - atualiza `organizations` com plano, ciclo, customer/subscription, datas
  */
-export function createStripeWebhookRouter({ stripe, config }: StripeWebhookOptions): Router {
+export function createStripeWebhookRouter({ stripe, config, pool }: StripeWebhookOptions): Router {
   const router = express.Router();
 
   router.post(
@@ -59,45 +177,254 @@ export function createStripeWebhookRouter({ stripe, config }: StripeWebhookOptio
         return res.status(400).send('Webhook validation failed');
       }
 
-      // Eventos de assinatura: logamos e deixamos a UI polar via /session/:id.
-      // Quando for implementada persistência por conta (DB de usuários), é aqui
-      // que o plano deverá ser atualizado para o `customerId` do evento.
-      switch (event.type) {
-        case 'checkout.session.completed': {
-          const session = event.data.object as Stripe.Checkout.Session;
-          console.log('[stripe/webhook] checkout.session.completed', {
-            sessionId: session.id,
-            mode: session.mode,
-            customer: session.customer,
-            subscription: session.subscription,
-            clientReferenceId: session.client_reference_id,
-          });
-          break;
+      try {
+        switch (event.type) {
+          case 'checkout.session.completed': {
+            const session = event.data.object as Stripe.Checkout.Session;
+            if (session.mode !== 'subscription') break;
+
+            // Expandimos subscription para extrair priceId + período
+            let subscription: Stripe.Subscription | null = null;
+            if (typeof session.subscription === 'string') {
+              try {
+                subscription = await stripe.subscriptions.retrieve(session.subscription, {
+                  expand: ['items.data.price'],
+                });
+              } catch (err) {
+                console.error('[stripe/webhook] retrieve subscription falhou:', err);
+              }
+            } else if (session.subscription && typeof session.subscription === 'object') {
+              subscription = session.subscription as Stripe.Subscription;
+            }
+
+            const customerId =
+              typeof session.customer === 'string'
+                ? session.customer
+                : session.customer?.id ?? null;
+            const subscriptionId = subscription?.id ?? null;
+            const priceId = subscription?.items.data[0]?.price?.id;
+            const planMatch = resolvePlanFromPriceId(priceId, config);
+
+            const orgId = await resolveOrgIdFromStripe(pool, {
+              clientReferenceId: session.client_reference_id ?? null,
+              customerId,
+              subscriptionId,
+            });
+
+            const before = orgId ? await fetchOrgBilling(pool, orgId) : null;
+
+            if (orgId && planMatch) {
+              const item = subscription?.items.data[0] as
+                | (Stripe.SubscriptionItem & { current_period_end?: number })
+                | undefined;
+              const periodEndSec =
+                item?.current_period_end ??
+                (subscription as (Stripe.Subscription & { current_period_end?: number }) | null)
+                  ?.current_period_end ??
+                null;
+              const periodEndIso = periodEndSec
+                ? new Date(periodEndSec * 1000).toISOString()
+                : null;
+
+              await pool.query(
+                `UPDATE organizations SET
+                   plan = $2,
+                   billing_cycle = $3,
+                   stripe_customer_id = COALESCE($4, stripe_customer_id),
+                   stripe_subscription_id = COALESCE($5, stripe_subscription_id),
+                   plan_started_at = COALESCE(plan_started_at, NOW()),
+                   plan_renews_at = $6
+                 WHERE id = $1`,
+                [orgId, planMatch.plan, planMatch.cycle, customerId, subscriptionId, periodEndIso],
+              );
+
+              await recordPlanChange(pool, {
+                organizationId: orgId,
+                fromPlan: before?.plan ?? 'free',
+                fromCycle: before?.billing_cycle ?? null,
+                toPlan: planMatch.plan,
+                toCycle: planMatch.cycle,
+                stripeEventId: `${event.id}:sub`,
+              });
+            }
+
+            await insertPayment(pool, {
+              organizationId: orgId,
+              eventId: event.id,
+              sessionId: session.id,
+              subscriptionId,
+              customerId,
+              paymentMethod: derivePaymentMethod(session.payment_method_types as string[] | null),
+              amountCents: session.amount_total ?? 0,
+              currency: (session.currency || 'brl').toLowerCase(),
+              status: 'paid',
+              plan: planMatch?.plan ?? null,
+              billingCycle: planMatch?.cycle ?? null,
+              raw: { type: event.type, sessionId: session.id },
+            });
+            break;
+          }
+
+          case 'customer.subscription.updated':
+          case 'customer.subscription.deleted': {
+            const sub = event.data.object as Stripe.Subscription;
+            const customerId =
+              typeof sub.customer === 'string' ? sub.customer : sub.customer?.id ?? null;
+            const priceId = sub.items.data[0]?.price?.id;
+            const planMatch = resolvePlanFromPriceId(priceId, config);
+            const orgId = await resolveOrgIdFromStripe(pool, {
+              customerId,
+              subscriptionId: sub.id,
+            });
+            if (!orgId) break;
+
+            const before = await fetchOrgBilling(pool, orgId);
+
+            const isCanceled =
+              event.type === 'customer.subscription.deleted' ||
+              sub.status === 'canceled' ||
+              sub.status === 'unpaid' ||
+              sub.status === 'incomplete_expired';
+
+            const item = sub.items.data[0] as
+              | (Stripe.SubscriptionItem & { current_period_end?: number })
+              | undefined;
+            const periodEndSec =
+              item?.current_period_end ??
+              (sub as Stripe.Subscription & { current_period_end?: number })
+                .current_period_end ??
+              null;
+            const periodEndIso = periodEndSec
+              ? new Date(periodEndSec * 1000).toISOString()
+              : null;
+
+            const cancelReason =
+              (sub as Stripe.Subscription & { cancellation_details?: { reason?: string } })
+                .cancellation_details?.reason ?? null;
+
+            if (isCanceled) {
+              await pool.query(
+                `UPDATE organizations SET
+                   plan = 'free',
+                   billing_cycle = NULL,
+                   plan_renews_at = NULL,
+                   stripe_subscription_id = NULL
+                 WHERE id = $1`,
+                [orgId],
+              );
+              await recordPlanChange(pool, {
+                organizationId: orgId,
+                fromPlan: before?.plan ?? null,
+                fromCycle: before?.billing_cycle ?? null,
+                toPlan: 'free',
+                toCycle: null,
+                stripeEventId: event.id,
+                isCancel: true,
+                cancelReason,
+              });
+            } else if (planMatch) {
+              await pool.query(
+                `UPDATE organizations SET
+                   plan = $2,
+                   billing_cycle = $3,
+                   plan_renews_at = $4
+                 WHERE id = $1`,
+                [orgId, planMatch.plan, planMatch.cycle, periodEndIso],
+              );
+              await recordPlanChange(pool, {
+                organizationId: orgId,
+                fromPlan: before?.plan ?? null,
+                fromCycle: before?.billing_cycle ?? null,
+                toPlan: planMatch.plan,
+                toCycle: planMatch.cycle,
+                stripeEventId: event.id,
+              });
+            }
+            break;
+          }
+
+          case 'invoice.payment_succeeded':
+          case 'invoice.payment_failed': {
+            const invoice = event.data.object as Stripe.Invoice;
+            const customerId =
+              typeof invoice.customer === 'string'
+                ? invoice.customer
+                : invoice.customer?.id ?? null;
+            const subscriptionId =
+              typeof (invoice as Stripe.Invoice & { subscription?: string | { id?: string } | null })
+                .subscription === 'string'
+                ? (invoice as Stripe.Invoice & { subscription?: string }).subscription ?? null
+                : ((invoice as Stripe.Invoice & { subscription?: { id?: string } })
+                    .subscription?.id ?? null);
+
+            // Tenta extrair priceId/plan da invoice. A linha pode trazer
+            // `price` (versões antigas) ou `pricing.price_details.price`
+            // (versões recentes). Tipamos como any para suportar ambos sem
+            // forçar uma versão específica da SDK.
+            const firstLine = invoice.lines?.data?.[0] as
+              | (Stripe.InvoiceLineItem & {
+                  price?: { id?: string };
+                  pricing?: { price_details?: { price?: string } };
+                })
+              | undefined;
+            const priceId =
+              firstLine?.price?.id ??
+              firstLine?.pricing?.price_details?.price ??
+              undefined;
+            const planMatch = resolvePlanFromPriceId(priceId, config);
+
+            const orgId = await resolveOrgIdFromStripe(pool, {
+              customerId,
+              subscriptionId,
+            });
+
+            // Métodos de pagamento: invoice tem `payment_method_types` (recente)
+            // ou cai no fallback `card`.
+            const methodTypes = (invoice as Stripe.Invoice & {
+              payment_method_types?: string[] | null;
+            }).payment_method_types as string[] | null;
+
+            const amountCents =
+              event.type === 'invoice.payment_succeeded'
+                ? invoice.amount_paid ?? 0
+                : invoice.amount_due ?? 0;
+
+            await insertPayment(pool, {
+              organizationId: orgId,
+              eventId: event.id,
+              invoiceId: invoice.id,
+              subscriptionId,
+              customerId,
+              paymentMethod: derivePaymentMethod(methodTypes),
+              amountCents,
+              currency: (invoice.currency || 'brl').toLowerCase(),
+              status: event.type === 'invoice.payment_succeeded' ? 'paid' : 'failed',
+              plan: planMatch?.plan ?? null,
+              billingCycle: planMatch?.cycle ?? null,
+              raw: { type: event.type, invoiceId: invoice.id },
+            });
+
+            if (orgId && event.type === 'invoice.payment_failed') {
+              await insertSubscriptionEvent(pool, {
+                organizationId: orgId,
+                eventType: 'payment_failed',
+                fromPlan: planMatch?.plan ?? null,
+                toPlan: planMatch?.plan ?? null,
+                fromCycle: planMatch?.cycle ?? null,
+                toCycle: planMatch?.cycle ?? null,
+                stripeEventId: `${event.id}:fail`,
+                metadata: { invoiceId: invoice.id },
+              });
+            }
+            break;
+          }
+
+          default:
+            // Eventos não tratados são silenciosamente ignorados.
+            break;
         }
-        case 'customer.subscription.created':
-        case 'customer.subscription.updated':
-        case 'customer.subscription.deleted': {
-          const sub = event.data.object as Stripe.Subscription;
-          console.log(`[stripe/webhook] ${event.type}`, {
-            subscriptionId: sub.id,
-            status: sub.status,
-            customer: sub.customer,
-            priceId: sub.items.data[0]?.price?.id,
-          });
-          break;
-        }
-        case 'invoice.payment_succeeded':
-        case 'invoice.payment_failed': {
-          const invoice = event.data.object as Stripe.Invoice;
-          console.log(`[stripe/webhook] ${event.type}`, {
-            invoiceId: invoice.id,
-            customer: invoice.customer,
-            amount: invoice.amount_paid,
-          });
-          break;
-        }
-        default:
-          console.log(`[stripe/webhook] unhandled ${event.type}`);
+      } catch (err) {
+        console.error(`[stripe/webhook] erro ao processar ${event.type}:`, err);
       }
 
       res.json({ received: true });
@@ -107,7 +434,7 @@ export function createStripeWebhookRouter({ stripe, config }: StripeWebhookOptio
   return router;
 }
 
-export function createCheckoutRouter({ stripe, config }: StripeWebhookOptions): Router {
+export function createCheckoutRouter({ stripe, config }: StripeCheckoutOptions): Router {
   const router = express.Router();
 
   // Retorna os planos disponíveis com os price IDs configurados no servidor.

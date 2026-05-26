@@ -54,9 +54,9 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
     <div className="min-h-full bg-[#F5F5F7] font-sans selection:bg-zinc-200">
       <div className="page-container">
         
-        <header className="mb-12">
-          <h1 className="text-4xl md:text-6xl font-bold text-zinc-900 tracking-tightest leading-none">Ajustes.</h1>
-          <p className="text-zinc-400 mt-4 font-medium">Personalize sua experiência e gerencie sua conta.</p>
+        <header className="mb-8">
+          <h1 className="page-title font-bold">Ajustes.</h1>
+          <p className="text-zinc-400 mt-2 text-sm font-medium">Personalize sua experiência e gerencie sua conta.</p>
         </header>
 
         <motion.div 
@@ -67,7 +67,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
         >
           {/* Profile Sidebar */}
           <div className="lg:col-span-4 space-y-6">
-            <motion.div variants={itemVariants} className="apple-card p-8 text-center">
+            <motion.div variants={itemVariants} className="apple-card p-6 text-center">
               <div className="relative w-24 h-24 mx-auto mb-6">
                 <div className="w-full h-full bg-zinc-100 rounded-[2rem] flex items-center justify-center text-zinc-300 border border-zinc-200/50">
                   <User className="w-10 h-10" />
@@ -114,7 +114,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
             </motion.div>
 
             {/* PWA Install Card */}
-            <motion.div variants={itemVariants} className="apple-card p-8 bg-zinc-900 text-white relative overflow-hidden group">
+            <motion.div variants={itemVariants} className="apple-card p-6 bg-zinc-900 text-white relative overflow-hidden group">
               <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
               <div className="relative z-10">
                 <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center mb-6 backdrop-blur-md border border-white/10">
@@ -148,7 +148,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
 
           {/* Settings Main */}
           <div className="lg:col-span-8 space-y-8">
-            <motion.div variants={itemVariants} className="apple-card p-8 md:p-10">
+            <motion.div variants={itemVariants} className="apple-card p-6 md:p-7">
               <div className="flex items-center gap-4 mb-10">
                 <div className="w-12 h-12 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-900 border border-zinc-100">
                   <Building2 className="w-6 h-6" />
@@ -194,7 +194,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
             </motion.div>
 
             {/* Notifications Section */}
-            <motion.div variants={itemVariants} className="apple-card p-8">
+            <motion.div variants={itemVariants} className="apple-card p-6">
               <div className="flex items-center gap-4 mb-8">
                 <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100">
                   <Bell className="w-6 h-6" />
@@ -228,7 +228,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
             </motion.div>
 
             {/* Integrations Section */}
-            <motion.div variants={itemVariants} className="apple-card p-8">
+            <motion.div variants={itemVariants} className="apple-card p-6">
               <div className="flex items-center gap-4 mb-8">
                 <div className="w-12 h-12 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-900 border border-zinc-100">
                   <Smartphone className="w-6 h-6" />

@@ -95,7 +95,7 @@ export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn
             <div className="flex items-center gap-2 text-zinc-500 text-[11px] font-semibold uppercase tracking-[0.15em]">
               Catálogo
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold text-zinc-900 tracking-tight">
+            <h1 className="page-title font-bold">
               Serviços. <span className="text-zinc-400 font-medium">Seu portfólio.</span>
             </h1>
           </div>
@@ -292,7 +292,7 @@ export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn
             >
               <div className="p-10 md:p-14 border-b border-zinc-100">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-3xl font-semibold text-zinc-900 tracking-tight">
+                  <h2 className="section-title font-semibold">
                     {editingId ? 'Editar Serviço.' : 'Novo Serviço.'}
                   </h2>
                   <button 

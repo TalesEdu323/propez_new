@@ -36,7 +36,7 @@ Marque cada item antes de promover para produção:
 - [ ] `STRIPE_SECRET_KEY` em modo live (`sk_live_...`)
 - [ ] `STRIPE_WEBHOOK_SECRET` do webhook cadastrado em `{APP_URL}/api/stripe/webhook`
 - [ ] `STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_YEARLY`, `STRIPE_PRICE_BUSINESS_MONTHLY`, `STRIPE_PRICE_BUSINESS_YEARLY`
-- [ ] `RESEND_API_KEY` + `MAIL_FROM` (sem isso a verificação de email não envia)
+- [ ] `MAIL_FROM` + (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` **ou** `RESEND_API_KEY`) — sem isso a verificação de email não envia
 - [ ] `PROSYNC_API_URL` + `PROSYNC_API_KEY` (`ps_live_...`) + `PROSYNC_WEBHOOK_SECRET` (mesmo secret cadastrado no outbound webhook do ProSync)
 - [ ] `RUBRICA_API_URL` + `RUBRICA_API_KEY` (`dm_live_...`) + `RUBRICA_WEBHOOK_SECRET`
 - [ ] `CORS_ORIGINS` com domínios alternativos (www, apex, staging) separados por vírgula

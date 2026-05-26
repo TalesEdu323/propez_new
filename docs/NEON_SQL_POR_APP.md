@@ -70,7 +70,7 @@ Ver [`.env.example`](../.env.example) — precisa de:
 
 - `DATABASE_URL` — Neon do Propez
 - `JWT_SECRET` — segredo do token de acesso (obrigatório em prod)
-- `RESEND_API_KEY` + `MAIL_FROM` — email de verificação/reset
+- `MAIL_FROM` + SMTP (`SMTP_HOST`, …) ou `RESEND_API_KEY` — email de verificação/reset
 - `APP_URL` — base para o link de reset de senha e `/p/{token}` públicos
 
 ---

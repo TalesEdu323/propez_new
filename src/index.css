@@ -18,7 +18,7 @@ body {
   }
   
   .apple-card {
-    @apply bg-white rounded-3xl sm:rounded-[2.5rem] border border-black/[0.02] shadow-[0_8px_40px_-12px_rgba(0,0,0,0.03)] transition-all duration-700;
+    @apply bg-white rounded-2xl sm:rounded-3xl border border-black/[0.02] shadow-[0_4px_24px_-8px_rgba(0,0,0,0.04)] transition-all duration-500;
   }
   
   .apple-card-hover {
@@ -30,15 +30,35 @@ body {
   }
 
   .glass-input {
-    @apply w-full bg-zinc-100/40 border border-transparent rounded-xl sm:rounded-2xl px-4 py-3 sm:py-4 text-sm focus:outline-none focus:bg-white focus:ring-1 focus:ring-black/5 focus:border-black/5 transition-all duration-500 text-zinc-900 placeholder:text-zinc-400;
+    @apply w-full bg-zinc-100/40 border border-transparent rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:bg-white focus:ring-1 focus:ring-black/5 focus:border-black/5 transition-all duration-500 text-zinc-900 placeholder:text-zinc-400;
   }
 
   .btn-primary {
-    @apply bg-zinc-900 text-white hover:bg-black rounded-xl sm:rounded-2xl px-6 py-3 sm:py-4 text-sm font-semibold transition-all duration-500 active:scale-[0.97] flex items-center justify-center gap-2 shadow-xl shadow-black/5;
+    @apply bg-zinc-900 text-white hover:bg-black rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-500 active:scale-[0.97] flex items-center justify-center gap-2 shadow-lg shadow-black/5;
   }
 
   .btn-secondary {
-    @apply bg-zinc-100/80 hover:bg-zinc-200/80 text-zinc-900 rounded-xl sm:rounded-2xl px-6 py-3 sm:py-4 text-sm font-semibold transition-all duration-500 active:scale-[0.97] flex items-center justify-center gap-2;
+    @apply bg-zinc-100/80 hover:bg-zinc-200/80 text-zinc-900 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-500 active:scale-[0.97] flex items-center justify-center gap-2;
+  }
+
+  .page-title {
+    @apply text-2xl md:text-[1.65rem] font-semibold text-zinc-900 tracking-tight leading-tight;
+  }
+
+  .section-title {
+    @apply text-lg font-bold text-zinc-900 tracking-tight;
+  }
+
+  .card-title {
+    @apply text-base font-bold text-zinc-900 tracking-tight;
+  }
+
+  .stat-value {
+    @apply text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight;
+  }
+
+  .hero-stat {
+    @apply text-3xl md:text-4xl font-bold text-zinc-900 tracking-tight;
   }
 
   .text-balance {
@@ -69,7 +89,7 @@ body {
   }
 
   .page-container {
-    @apply p-5 sm:p-8 md:p-10 lg:p-12 max-w-7xl mx-auto space-y-8 sm:space-y-10;
+    @apply p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-5 sm:space-y-6;
   }
 
   .mobile-safe-top {

@@ -6,6 +6,7 @@ import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import { serializeProposta } from '../db/serializers.js'
 import { createOpaqueToken } from '../auth/tokens.js'
+import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.js'
 
 const builderElement = z.object({}).passthrough()
 
@@ -51,10 +52,44 @@ const PROPOSTA_SELECT = `
 export function createPropostasRouter(deps: {
   pool: Pool
   config: EnvironmentConfig
+  /** Emissor de eventos para o ProSync (Fase 4). Opcional. */
+  suiteProposalEvents?: SuiteProposalEventsClient
 }): Router {
-  const { pool, config } = deps
+  const { pool, config, suiteProposalEvents } = deps
   const router = express.Router()
   router.use(buildRequireAuth(config.auth))
+
+  function emitEvent(
+    event: Parameters<NonNullable<SuiteProposalEventsClient>['fireAndForget']>[0]['event'],
+    proposal: Record<string, any>,
+    leadId: string | null | undefined,
+    extra: Partial<Parameters<NonNullable<SuiteProposalEventsClient>['fireAndForget']>[0]> = {},
+  ): void {
+    if (!suiteProposalEvents?.isEnabled()) return
+    if (!leadId) return
+    const valorCents =
+      typeof proposal.valor_cents === 'number' ? proposal.valor_cents : null
+    const desconto =
+      typeof proposal.desconto_cents === 'number' ? proposal.desconto_cents : 0
+    const finalValueCents =
+      valorCents != null ? Math.max(0, valorCents - desconto) : null
+    const publicUrl = proposal.public_token
+      ? `${config.appUrl.replace(/\/+$/, '')}/propostas/p/${proposal.public_token}`
+      : null
+    suiteProposalEvents.fireAndForget({
+      event,
+      externalId: String(proposal.id),
+      leadId,
+      title: proposal.cliente_nome
+        ? `Proposta para ${proposal.cliente_nome}`
+        : `Proposta ${String(proposal.id).slice(0, 8)}`,
+      publicUrl,
+      valueCents: finalValueCents,
+      currency: 'BRL',
+      externalUpdatedAt: new Date(),
+      ...extra,
+    })
+  }
 
   router.get('/', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
@@ -135,7 +170,19 @@ export function createPropostasRouter(deps: {
         )
         .catch((err) => console.error('[propostas/create] usage upsert failed:', err))
 
-      return res.status(201).json(serializeProposta(rows[0]))
+      const inserted = rows[0]
+      const { trackProductEvent } = await import('../services/productEvents.js')
+      void trackProductEvent(pool, {
+        organizationId: req.auth.orgId,
+        userId: req.auth.userId,
+        eventName: 'proposal_created',
+        metadata: { propostaId: inserted.id },
+      })
+      emitEvent('proposal.created', inserted, inserted.prosync_lead_id, {
+        status: inserted.status ?? 'pendente',
+        externalCreatedAt: inserted.created_at ?? new Date(),
+      })
+      return res.status(201).json(serializeProposta(inserted))
     } catch (err) {
       console.error('[propostas/create] erro:', err)
       return res.status(500).json({ error: 'Erro ao criar proposta' })
@@ -219,7 +266,16 @@ export function createPropostasRouter(deps: {
         ],
       )
       if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
-      return res.json(serializeProposta(rows[0]))
+      const updated = rows[0]
+      const status = String(updated.status ?? '')
+      if (updated.prosync_lead_id) {
+        if (status === 'aprovada') {
+          emitEvent('proposal.approved', updated, updated.prosync_lead_id, { status })
+        } else if (status === 'recusada') {
+          emitEvent('proposal.rejected', updated, updated.prosync_lead_id, { status })
+        }
+      }
+      return res.json(serializeProposta(updated))
     } catch (err) {
       console.error('[propostas/update] erro:', err)
       return res.status(500).json({ error: 'Erro ao atualizar proposta' })

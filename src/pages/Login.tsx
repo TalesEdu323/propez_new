@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, ShieldCheck, ChevronLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { api, ApiError } from '../lib/apiClient';
 import { bootstrapSession } from '../lib/authSession';
+import { PropezLogo } from '../components/PropezLogo';
 
 interface LoginProps {
   onLogin: () => void;
@@ -136,17 +137,14 @@ export default function Login({ onLogin }: LoginProps) {
       {/* Left Side: Form */}
       <div className="w-full lg:w-[45%] flex items-center justify-center p-8 md:p-12 relative z-10 bg-white">
         <div className="w-full max-w-[360px]">
-          {/* Logo / Brand */}
-          <div className="flex items-center gap-3 mb-16">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="w-9 h-9 bg-zinc-900 rounded-xl flex items-center justify-center text-white font-bold text-base shadow-sm"
-            >
-              P
-            </motion.div>
-            <h1 className="text-base font-semibold text-zinc-900 tracking-tight">Propez</h1>
-          </div>
+          {/* Logo / Brand — arquivo: public/logo.png */}
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="mb-10"
+          >
+            <PropezLogo height="xl" />
+          </motion.div>
 
           {(errorMsg || info) && (
             <div
@@ -172,7 +170,7 @@ export default function Login({ onLogin }: LoginProps) {
                   transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <div className="mb-10">
-                    <h2 className="text-3xl font-semibold text-zinc-900 tracking-tightest mb-2">Bem-vindo</h2>
+                    <h2 className="text-xl font-semibold text-zinc-900 tracking-tight mb-2">Bem-vindo</h2>
                     <p className="text-zinc-400 text-sm">Acesse sua conta para gerenciar propostas.</p>
                   </div>
 
@@ -246,7 +244,7 @@ export default function Login({ onLogin }: LoginProps) {
                     >
                       <ChevronLeft className="w-3 h-3" /> Voltar
                     </button>
-                    <h2 className="text-3xl font-semibold text-zinc-900 tracking-tightest mb-2">Criar conta</h2>
+                    <h2 className="text-xl font-semibold text-zinc-900 tracking-tight mb-2">Criar conta</h2>
                     <p className="text-zinc-400 text-sm">Comece a criar propostas profissionais hoje.</p>
                   </div>
 
@@ -322,7 +320,7 @@ export default function Login({ onLogin }: LoginProps) {
                     <div className="w-16 h-16 bg-zinc-50 text-zinc-900 rounded-2xl flex items-center justify-center mx-auto mb-8 border border-black/[0.02]">
                       <ShieldCheck className="w-8 h-8" />
                     </div>
-                    <h2 className="text-3xl font-semibold text-zinc-900 tracking-tightest mb-2">Verificação</h2>
+                    <h2 className="text-xl font-semibold text-zinc-900 tracking-tight mb-2">Verificação</h2>
                     <p className="text-zinc-400 text-sm">Enviamos um código para <span className="text-zinc-900 font-medium">{email}</span></p>
                   </div>
 
@@ -379,7 +377,7 @@ export default function Login({ onLogin }: LoginProps) {
                     >
                       <ChevronLeft className="w-3 h-3" /> Voltar
                     </button>
-                    <h2 className="text-3xl font-semibold text-zinc-900 tracking-tightest mb-2">Recuperar acesso</h2>
+                    <h2 className="text-xl font-semibold text-zinc-900 tracking-tight mb-2">Recuperar acesso</h2>
                     <p className="text-zinc-400 text-sm">Informe seu email para receber o link de redefinição.</p>
                   </div>
                   <form onSubmit={handleForgot} className="space-y-4">
@@ -417,7 +415,7 @@ export default function Login({ onLogin }: LoginProps) {
                   <div className="w-16 h-16 bg-zinc-50 text-zinc-900 rounded-2xl flex items-center justify-center mx-auto mb-8 border border-black/[0.02]">
                     <CheckCircle2 className="w-8 h-8" />
                   </div>
-                  <h2 className="text-3xl font-semibold text-zinc-900 tracking-tightest mb-2">Verifique seu email</h2>
+                  <h2 className="text-xl font-semibold text-zinc-900 tracking-tight mb-2">Verifique seu email</h2>
                   <p className="text-zinc-400 text-sm mb-8">Se o email existir, você receberá um link em poucos segundos.</p>
                   <button
                     onClick={() => setMode('login')}
@@ -453,7 +451,7 @@ export default function Login({ onLogin }: LoginProps) {
               <span className="flex h-1.5 w-1.5 rounded-full bg-zinc-900" />
               <span className="text-[10px] font-bold text-zinc-500 tracking-widest uppercase">Propostas Fluídas</span>
             </div>
-            <h2 className="text-5xl font-semibold text-zinc-900 tracking-tightest leading-[1.05] mb-8 text-balance">
+            <h2 className="text-2xl lg:text-3xl font-semibold text-zinc-900 tracking-tight leading-snug mb-6 text-balance">
               A maneira mais elegante de fechar negócios.
             </h2>
             <p className="text-zinc-500 text-base leading-relaxed mb-16 text-balance">

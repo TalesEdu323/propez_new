@@ -61,7 +61,7 @@ export function Step3ServicosValores({
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="mb-12">
-        <h2 className="text-4xl font-semibold text-zinc-900 mb-3 tracking-tight">Serviços e Valores</h2>
+        <h2 className="section-title font-semibold mb-2">Serviços e Valores</h2>
         <p className="text-zinc-500 text-lg">Defina o escopo, prazos e o investimento necessário.</p>
         {onOpenModelos && (
           <p className="mt-4 text-sm text-zinc-600 max-w-2xl">

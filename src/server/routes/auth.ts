@@ -20,6 +20,7 @@ import {
 } from '../auth/cookies.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import type { MailClient } from '../mail/resend.js'
+import type { SuiteLookupClient } from '../clients/suiteLookup.js'
 
 const EMAIL_CODE_TTL_MINUTES = 15
 const RESET_TOKEN_TTL_MINUTES = 30
@@ -62,8 +63,14 @@ export function createAuthRouter(deps: {
   pool: Pool
   config: EnvironmentConfig
   mail: MailClient
+  /**
+   * Cliente da suíte Taggo: descobre se o email já tem conta no
+   * ProSync/Rubrica para vincular automaticamente. Opcional — quando ausente
+   * (sem TAGGO_SUITE_SECRET) o registro segue normal sem lookup.
+   */
+  suiteLookup?: SuiteLookupClient
 }): Router {
-  const { pool, config, mail } = deps
+  const { pool, config, mail, suiteLookup } = deps
   const router = express.Router()
   const requireAuth = buildRequireAuth(config.auth)
 
@@ -182,6 +189,27 @@ export function createAuthRouter(deps: {
         await mail.sendVerificationEmail({ to: email, name, code })
       } catch (err) {
         console.error('[auth/register] send verification email failed:', err)
+      }
+
+      // Descoberta cross-app na suíte Taggo: pergunta ao ProSync/Rubrica se
+      // este email já tem conta. Best-effort, não bloqueia o cadastro. O
+      // resultado é apenas logado por agora; a Fase 1 (service-token) usa
+      // essa informação para vincular contas automaticamente.
+      if (suiteLookup?.isEnabled()) {
+        void suiteLookup
+          .lookupAll({ email, password })
+          .then((results) => {
+            for (const r of results) {
+              if (r.ok && r.exists) {
+                console.info(
+                  `[auth/register] suite-lookup ${r.app}: exists=true userId=${r.userId} org=${r.organizationId} pwOk=${r.passwordMatches}`,
+                )
+              } else if (!r.ok) {
+                console.warn(`[auth/register] suite-lookup ${r.app} indisponível:`, r.error)
+              }
+            }
+          })
+          .catch((err) => console.error('[auth/register] suite-lookup falhou:', err))
       }
 
       return res.status(201).json({ userId, email, requiresVerification: true })
@@ -312,8 +340,9 @@ export function createAuthRouter(deps: {
         email: string
         password_hash: string
         email_verified_at: string | null
+        is_platform_admin: boolean
       }>(
-        `SELECT id, name, email, password_hash, email_verified_at
+        `SELECT id, name, email, password_hash, email_verified_at, is_platform_admin
          FROM users WHERE LOWER(email) = LOWER($1)`,
         [email],
       )
@@ -330,6 +359,13 @@ export function createAuthRouter(deps: {
 
       await pool.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [u.id])
 
+      const { trackProductEvent } = await import('../services/productEvents.js')
+      void trackProductEvent(pool, {
+        organizationId: membership.organization_id,
+        userId: u.id,
+        eventName: 'login',
+      })
+
       await issueTokensForUser({
         res,
         userId: u.id,
@@ -341,7 +377,13 @@ export function createAuthRouter(deps: {
         ip: req.ip,
       })
 
-      return res.json({ user: { id: u.id, name: u.name, email: u.email } })
+      const isPlatformAdmin =
+        u.is_platform_admin === true ||
+        config.platformAdminEmails.includes((u.email || '').toLowerCase())
+
+      return res.json({
+        user: { id: u.id, name: u.name, email: u.email, isPlatformAdmin },
+      })
     } catch (err) {
       console.error('[auth/login] erro:', err)
       return res.status(500).json({ error: 'Erro ao entrar' })
@@ -512,9 +554,17 @@ export function createAuthRouter(deps: {
         name: string
         email: string
         email_verified_at: string | null
-      }>(`SELECT id, name, email, email_verified_at FROM users WHERE id = $1`, [req.auth.userId])
+        is_platform_admin: boolean
+      }>(
+        `SELECT id, name, email, email_verified_at, is_platform_admin
+         FROM users WHERE id = $1`,
+        [req.auth.userId],
+      )
       const user = userRows[0]
       if (!user) return res.status(401).json({ error: 'Não autenticado' })
+      const isPlatformAdmin =
+        user.is_platform_admin === true ||
+        config.platformAdminEmails.includes((user.email || '').toLowerCase())
 
       const { rows: orgRows } = await pool.query<{
         id: string
@@ -549,6 +599,7 @@ export function createAuthRouter(deps: {
           name: user.name,
           email: user.email,
           emailVerifiedAt: user.email_verified_at,
+          isPlatformAdmin,
         },
         organization: {
           id: org.id,

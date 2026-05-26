@@ -184,14 +184,14 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
   return (
     <div className="min-h-full bg-[#F5F5F7] font-sans">
       <div className="page-container">
-        <header className="mb-12">
+        <header className="mb-8">
           <button
             onClick={() => navigate('dashboard')}
             className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400 hover:text-zinc-900 transition-colors mb-6"
           >
             <ChevronLeft className="w-4 h-4" /> Voltar
           </button>
-          <h1 className="text-4xl md:text-6xl font-bold text-zinc-900 tracking-tight leading-none">Escolha seu plano.</h1>
+          <h1 className="page-title font-bold">Escolha seu plano.</h1>
           <p className="text-zinc-500 mt-4 font-medium max-w-2xl">
             Desbloqueie todo o potencial do Propez. Comece com o Free, evolua quando precisar — sem multa, sem fidelidade.
           </p>
@@ -248,7 +248,7 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: orderedPlans.indexOf(planId) * 0.08 }}
-                className={`relative p-8 rounded-[2.5rem] border-2 bg-white shadow-sm transition-all ${
+                className={`relative p-6 rounded-3xl border-2 bg-white shadow-sm transition-all ${
                   isHighlighted
                     ? 'border-zinc-900 shadow-xl shadow-zinc-900/10 lg:-translate-y-2'
                     : 'border-transparent hover:border-zinc-200'
@@ -268,7 +268,7 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
 
                 <div className="mb-8">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-5xl font-bold text-zinc-900 tracking-tight">R$ {price}</span>
+                    <span className="text-3xl font-bold text-zinc-900 tracking-tight">R$ {price}</span>
                     {price > 0 && <span className="text-sm text-zinc-400 font-medium">/mês</span>}
                   </div>
                   {planId !== 'free' && cycle === 'yearly' && (

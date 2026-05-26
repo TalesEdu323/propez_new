@@ -5,6 +5,13 @@
 
 export interface IntegrationsConfig {
   appUrl: string
+  /**
+   * Segredo compartilhado da suíte Taggo (Propez/ProSync/Rubrica) usado em
+   * HMAC para descoberta cross-app e provisionamento de service tokens.
+   *
+   * Deve ser idêntico nos três apps. Gerar com `openssl rand -hex 64`.
+   */
+  suiteSecret: string | null
   prosync: {
     baseUrl: string
     apiKey: string | null
@@ -27,12 +34,16 @@ function trimEnv(name: string): string | null {
 export function loadIntegrationsConfig(appUrl: string): IntegrationsConfig {
   return {
     appUrl,
+    suiteSecret: trimEnv('TAGGO_SUITE_SECRET'),
     prosync: {
-      baseUrl: trimEnv('PROSYNC_API_URL') || 'https://app.prosync.com.br',
+      // Default aponta para a produção atual do ProSync (Vercel: prosync.tech).
+      // Em dev, defina PROSYNC_API_URL no .env para sobrescrever.
+      baseUrl: trimEnv('PROSYNC_API_URL') || 'https://prosync.tech',
       apiKey: trimEnv('PROSYNC_API_KEY'),
       webhookSecret: trimEnv('PROSYNC_WEBHOOK_SECRET'),
     },
     rubrica: {
+      // Default aponta para a produção atual do Rubrica (Vercel: app.rubrica.com.br).
       baseUrl: trimEnv('RUBRICA_API_URL') || 'https://app.rubrica.com.br',
       apiKey: trimEnv('RUBRICA_API_KEY'),
       webhookSecret: trimEnv('RUBRICA_WEBHOOK_SECRET'),

@@ -24,7 +24,7 @@ export function StepContrato({ formData, setFormData, contratos }: StepContratoP
     >
       <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-semibold text-zinc-900 mb-2 tracking-tight">Contrato Padrão</h2>
+          <h2 className="section-title font-semibold mb-2">Contrato Padrão</h2>
           <p className="text-zinc-500">Selecione um dos seus templates de contrato para este modelo.</p>
         </div>
 

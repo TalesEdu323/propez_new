@@ -30,7 +30,7 @@ export function StepConfig({ formData, setFormData, servicosDisponiveis }: StepC
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3 }}
     >
-      <h2 className="text-3xl font-semibold text-zinc-900 mb-2 tracking-tight">Configurações do Modelo</h2>
+      <h2 className="section-title font-semibold mb-2">Configurações do Modelo</h2>
       <p className="text-zinc-500 mb-12">Defina as informações padrão que serão carregadas ao usar este modelo.</p>
 
       <div className="space-y-10">

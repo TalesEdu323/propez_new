@@ -31,7 +31,7 @@ export function WizardStepper({ step, steps, isEditing, formData, onBack }: Wiza
           <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" /> Voltar
         </button>
 
-        <h1 className="text-5xl font-semibold tracking-tightest mb-6 leading-none">
+        <h1 className="page-title mb-4">
           {isEditing ? 'Editar.' : 'Criar.'}
         </h1>
         <p className="text-white/40 text-sm mb-20 leading-relaxed max-w-[300px] font-medium">

@@ -13,6 +13,10 @@ import {
   logIntegrationEvent,
   upsertMapping,
 } from '../db/mappings.js'
+import type { EnsureSuiteCredential } from '../integrations/ensureSuiteCredential.js'
+import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js'
+import type { SuiteApp } from '../clients/suiteLookup.js'
+import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.js'
 
 /**
  * Router de `/api/integrations/*`. Todas as rotas requerem auth e fazem proxy
@@ -24,30 +28,172 @@ export function buildIntegrationsRouter(deps: {
   pool: Pool
   config: IntegrationsConfig
   envConfig: EnvironmentConfig
+  /** Provisionamento automático de credenciais via suíte Taggo (Fase 1). */
+  ensureSuiteCredential?: EnsureSuiteCredential
+  /** Repositório de credenciais por organização (Fase 1). */
+  orgCredentialsRepo?: OrgIntegrationCredentialsRepo
+  /** Emissor de eventos de proposta (Fase 4). */
+  suiteProposalEvents?: SuiteProposalEventsClient
 }): Router {
   const router = express.Router()
-  const { pool, config, envConfig } = deps
+  const {
+    pool,
+    config,
+    envConfig,
+    ensureSuiteCredential,
+    orgCredentialsRepo,
+    suiteProposalEvents,
+  } = deps
 
   router.use(buildRequireAuth(envConfig.auth))
 
-  function prosync() {
-    if (!config.prosync.apiKey) {
-      throw new Error('PROSYNC_API_KEY não configurada')
+  // --------------------------------------------------------------------------
+  // GET /api/integrations/credentials
+  // Lista credenciais (sem segredos) para a organização atual.
+  // --------------------------------------------------------------------------
+  router.get('/credentials', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
+    if (!orgCredentialsRepo) {
+      return res.json({ providers: [], suiteEnabled: false })
     }
-    return createProsyncClient({
-      baseUrl: config.prosync.baseUrl,
-      apiKey: config.prosync.apiKey,
-    })
+    const orgId = req.auth.orgId
+    try {
+      const [prosync, rubrica] = await Promise.all([
+        orgCredentialsRepo.getCredential(orgId, 'prosync'),
+        orgCredentialsRepo.getCredential(orgId, 'rubrica'),
+      ])
+      const summarize = (c: Awaited<ReturnType<typeof orgCredentialsRepo.getCredential>>) =>
+        c
+          ? {
+              configured: true,
+              source: c.source,
+              keyPrefix: c.keyPrefix,
+              externalUserId: c.externalUserId,
+              externalOrgId: c.externalOrgId,
+              scopes: c.scopes,
+              lastVerifiedAt: c.lastVerifiedAt,
+            }
+          : { configured: false }
+      return res.json({
+        suiteEnabled: Boolean(config.suiteSecret),
+        prosync: summarize(prosync),
+        rubrica: summarize(rubrica),
+      })
+    } catch (err) {
+      console.error('[integrations/credentials] list erro:', err)
+      return res.status(500).json({ error: 'Erro ao listar credenciais' })
+    }
+  })
+
+  // --------------------------------------------------------------------------
+  // POST /api/integrations/credentials/:provider/provision
+  // Dispara provisionamento automático via suíte Taggo (Fase 1).
+  // --------------------------------------------------------------------------
+  router.post('/credentials/:provider/provision', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
+    if (!ensureSuiteCredential) {
+      return res
+        .status(503)
+        .json({ error: 'Provisionamento da suíte indisponível neste ambiente' })
+    }
+    const provider = String(req.params.provider || '').toLowerCase()
+    if (provider !== 'prosync' && provider !== 'rubrica') {
+      return res.status(400).json({ error: 'provider deve ser prosync ou rubrica' })
+    }
+
+    const createIfMissing = Boolean(req.body?.createIfMissing ?? true)
+    const force = Boolean(req.body?.force)
+    const company =
+      typeof req.body?.company === 'string' && req.body.company.length > 0
+        ? String(req.body.company).slice(0, 200)
+        : undefined
+
+    try {
+      const { rows } = await pool.query<{ name: string }>(
+        `SELECT name FROM organizations WHERE id = $1`,
+        [req.auth.orgId],
+      )
+      const orgName = rows[0]?.name
+
+      const result = await ensureSuiteCredential(provider as SuiteApp, {
+        organizationId: req.auth.orgId,
+        ownerEmail: req.auth.email,
+        keyName: `Propez (${orgName || req.auth.orgId.slice(0, 8)})`,
+        createIfMissing,
+        company: company ?? orgName ?? undefined,
+        force,
+      })
+
+      if (result.ok !== true) {
+        const status = result.status === 404 || result.status === 409 ? result.status : 502
+        return res.status(status).json({ error: result.reason })
+      }
+
+      return res.status(result.provisioned ? 201 : 200).json({
+        provisioned: result.provisioned,
+        provider: result.credential.provider,
+        keyPrefix: result.credential.keyPrefix,
+        externalUserId: result.credential.externalUserId,
+        externalOrgId: result.credential.externalOrgId,
+        source: result.credential.source,
+      })
+    } catch (err) {
+      console.error(`[integrations/credentials/${provider}/provision] erro:`, err)
+      return res.status(500).json({ error: 'Erro ao provisionar credencial' })
+    }
+  })
+
+  /**
+   * Resolve a chave de integração da organização autenticada para o provider
+   * indicado. Ordem de busca:
+   *   1. `org_integration_credentials` (cifrada).
+   *   2. Provisionamento automático via suíte Taggo (vincula sem criar).
+   *   3. Fallback para `PROSYNC_API_KEY`/`RUBRICA_API_KEY` global do `.env`.
+   * Lança erro se nada funcionar.
+   */
+  async function resolveProviderApiKey(
+    req: Request,
+    provider: SuiteApp,
+  ): Promise<string> {
+    const orgId = req.auth?.orgId
+    const email = req.auth?.email
+    if (!orgId) throw new Error('Sem organização autenticada')
+
+    if (orgCredentialsRepo) {
+      const cred = await orgCredentialsRepo
+        .getCredential(orgId, provider)
+        .catch(() => null)
+      if (cred) return cred.apiKey
+    }
+
+    if (ensureSuiteCredential && email) {
+      const result = await ensureSuiteCredential(provider, {
+        organizationId: orgId,
+        ownerEmail: email,
+        createIfMissing: false,
+      })
+      if (result.ok) return result.credential.apiKey
+    }
+
+    const fallback =
+      provider === 'prosync' ? config.prosync.apiKey : config.rubrica.apiKey
+    if (fallback) return fallback
+
+    const envName = provider === 'prosync' ? 'PROSYNC_API_KEY' : 'RUBRICA_API_KEY'
+    throw new Error(
+      `${provider} sem credencial para esta organização: rode ` +
+        `POST /api/integrations/credentials/${provider}/provision ou defina ${envName}.`,
+    )
   }
 
-  function rubrica() {
-    if (!config.rubrica.apiKey) {
-      throw new Error('RUBRICA_API_KEY não configurada')
-    }
-    return createRubricaClient({
-      baseUrl: config.rubrica.baseUrl,
-      apiKey: config.rubrica.apiKey,
-    })
+  async function prosyncFor(req: Request) {
+    const apiKey = await resolveProviderApiKey(req, 'prosync')
+    return createProsyncClient({ baseUrl: config.prosync.baseUrl, apiKey })
+  }
+
+  async function rubricaFor(req: Request) {
+    const apiKey = await resolveProviderApiKey(req, 'rubrica')
+    return createRubricaClient({ baseUrl: config.rubrica.baseUrl, apiKey })
   }
 
   function handleUpstreamError(res: Response, err: unknown, label: string) {
@@ -87,7 +233,8 @@ export function buildIntegrationsRouter(deps: {
   router.get('/prosync/leads', async (req: Request, res: Response) => {
     try {
       const { status, search, limit, offset } = req.query
-      const data = await prosync().listLeads({
+      const client = await prosyncFor(req)
+      const data = await client.listLeads({
         status: typeof status === 'string' ? status : undefined,
         search: typeof search === 'string' ? search : undefined,
         limit: typeof limit === 'string' ? Number(limit) : undefined,
@@ -101,7 +248,8 @@ export function buildIntegrationsRouter(deps: {
 
   router.get('/prosync/leads/:id', async (req: Request, res: Response) => {
     try {
-      const data = await prosync().getLead(req.params.id)
+      const client = await prosyncFor(req)
+      const data = await client.getLead(req.params.id)
       res.json(data)
     } catch (err) {
       handleUpstreamError(res, err, 'prosync.getLead')
@@ -110,7 +258,8 @@ export function buildIntegrationsRouter(deps: {
 
   router.patch('/prosync/leads/:id', async (req: Request, res: Response) => {
     try {
-      const data = await prosync().updateLead(req.params.id, req.body || {})
+      const client = await prosyncFor(req)
+      const data = await client.updateLead(req.params.id, req.body || {})
       await logIntegrationEvent(pool, {
         source: 'internal',
         event: 'prosync.lead.updated',
@@ -129,7 +278,8 @@ export function buildIntegrationsRouter(deps: {
       if (!product_id || !quantity) {
         return res.status(400).json({ error: 'product_id e quantity obrigatórios' })
       }
-      const data = await prosync().createSale(req.params.id, {
+      const client = await prosyncFor(req)
+      const data = await client.createSale(req.params.id, {
         product_id,
         quantity,
         unit_price,
@@ -148,9 +298,10 @@ export function buildIntegrationsRouter(deps: {
     }
   })
 
-  router.get('/prosync/products', async (_req: Request, res: Response) => {
+  router.get('/prosync/products', async (req: Request, res: Response) => {
     try {
-      const data = await prosync().listProducts()
+      const client = await prosyncFor(req)
+      const data = await client.listProducts()
       res.json(data)
     } catch (err) {
       handleUpstreamError(res, err, 'prosync.listProducts')
@@ -211,7 +362,7 @@ export function buildIntegrationsRouter(deps: {
         status: 'pending',
       })
 
-      const rb = rubrica()
+      const rb = await rubricaFor(req)
       const uploadRes = await rb.uploadDocument({
         fileBuffer: pdf,
         fileName: `${sanitizeFileName(title)}.pdf`,
@@ -265,12 +416,47 @@ export function buildIntegrationsRouter(deps: {
         payload: { documentId, signingUrl },
       })
 
-      if (mapping.prosync_lead_id && config.prosync.apiKey) {
-        prosync()
-          .updateLead(mapping.prosync_lead_id, { status: 'contacted' })
+      if (mapping.prosync_lead_id) {
+        // Best-effort: marca o lead como contactado no ProSync. Não trava o
+        // fluxo se a credencial não existir.
+        void prosyncFor(req)
+          .then((client) =>
+            client.updateLead(mapping.prosync_lead_id as string, { status: 'contacted' }),
+          )
           .catch((err) =>
             console.error('[integrations:rubrica/send] updateLead contacted failed:', err),
           )
+
+        // Notifica a suíte ProSync via partner endpoint (Fase 4).
+        if (suiteProposalEvents?.isEnabled()) {
+          const publicTokenRow = await pool
+            .query<{ public_token: string | null; valor_cents: number | null; desconto_cents: number | null }>(
+              `SELECT public_token, valor_cents, desconto_cents FROM propostas WHERE id::text = $1`,
+              [proposalId],
+            )
+            .catch(() => null)
+          const meta = publicTokenRow?.rows?.[0] ?? null
+          const baseUrl = config.appUrl.replace(/\/+$/, '')
+          const publicUrl = meta?.public_token
+            ? `${baseUrl}/propostas/p/${meta.public_token}`
+            : null
+          const valueCents =
+            meta?.valor_cents != null
+              ? Math.max(0, meta.valor_cents - (meta.desconto_cents || 0))
+              : null
+          suiteProposalEvents.fireAndForget({
+            event: 'proposal.sent',
+            externalId: proposalId,
+            leadId: String(mapping.prosync_lead_id),
+            title,
+            publicUrl,
+            status: 'sent',
+            valueCents,
+            currency: 'BRL',
+            externalUpdatedAt: new Date(),
+            metadata: { documentId, signingUrl },
+          })
+        }
       }
 
       return res.json({
@@ -308,13 +494,10 @@ export function buildIntegrationsRouter(deps: {
         signedPdfUrl: mapping.rubrica_signed_pdf_url,
       }
 
-      if (
-        mapping.rubrica_document_id &&
-        mapping.status !== 'signed' &&
-        config.rubrica.apiKey
-      ) {
+      if (mapping.rubrica_document_id && mapping.status !== 'signed') {
         try {
-          const live = await rubrica().getSignatureStatus(mapping.rubrica_document_id)
+          const client = await rubricaFor(req)
+          const live = await client.getSignatureStatus(mapping.rubrica_document_id)
           result.live = live
         } catch (err) {
           result.liveError = err instanceof Error ? err.message : String(err)
@@ -336,7 +519,8 @@ export function buildIntegrationsRouter(deps: {
       if (mapping.organization_id && mapping.organization_id !== req.auth?.orgId) {
         return res.status(404).json({ error: 'Proposta sem documento Rubrica' })
       }
-      const dl = await rubrica().downloadDocument(mapping.rubrica_document_id, { type: 'signed' })
+      const client = await rubricaFor(req)
+      const dl = await client.downloadDocument(mapping.rubrica_document_id, { type: 'signed' })
       res.setHeader('Content-Type', dl.contentType)
       res.setHeader('Content-Disposition', `attachment; filename="${dl.fileName}"`)
       res.send(dl.buffer)

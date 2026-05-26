@@ -100,6 +100,14 @@ export function createOrganizationsRouter(deps: {
         ],
       )
       const o = rows[0]
+      if (patch.onboarded === true) {
+        const { trackProductEvent } = await import('../services/productEvents.js')
+        void trackProductEvent(pool, {
+          organizationId: req.auth.orgId,
+          userId: req.auth.userId,
+          eventName: 'onboarding_complete',
+        })
+      }
       return res.json({
         id: o.id,
         name: o.name,

@@ -11,6 +11,9 @@ import {
   logIntegrationEvent,
   upsertMapping,
 } from '../db/mappings.js'
+import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js'
+import type { SuiteApp } from '../clients/suiteLookup.js'
+import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.js'
 
 /**
  * Inbound webhooks dos integradores. Rotas públicas (sem auth) — protegidas
@@ -22,9 +25,32 @@ import {
 export function buildWebhooksRouter(deps: {
   pool: Pool
   config: IntegrationsConfig
+  /** Resolve credenciais por organização (Fase 2). Opcional para compat. */
+  orgCredentialsRepo?: OrgIntegrationCredentialsRepo
+  /** Emite eventos de proposta para o ProSync (Fase 4). */
+  suiteProposalEvents?: SuiteProposalEventsClient
 }): Router {
   const router = express.Router()
-  const { pool, config } = deps
+  const { pool, config, orgCredentialsRepo, suiteProposalEvents } = deps
+
+  /**
+   * Carrega a API Key da organização-dona do mapping (preferido) ou cai para
+   * a chave global do `.env`. Como webhooks não têm sessão, dependemos do
+   * `organization_id` que viaja junto do mapping criado quando o Propez
+   * disparou o envio.
+   */
+  async function loadApiKeyForOrg(
+    organizationId: string | null,
+    provider: SuiteApp,
+  ): Promise<string | null> {
+    if (orgCredentialsRepo && organizationId) {
+      const cred = await orgCredentialsRepo
+        .getCredential(organizationId, provider)
+        .catch(() => null)
+      if (cred) return cred.apiKey
+    }
+    return provider === 'prosync' ? config.prosync.apiKey : config.rubrica.apiKey
+  }
 
   // --- Rubrica: inbound document.signed -----------------------------------
   router.post('/rubrica', express.json({ limit: '256kb' }), async (req: Request, res: Response) => {
@@ -74,11 +100,12 @@ export function buildWebhooksRouter(deps: {
       }
 
       let signedUrl: string | null = mapping.rubrica_signed_pdf_url
-      if (config.rubrica.apiKey) {
+      const rubricaKey = await loadApiKeyForOrg(mapping.organization_id, 'rubrica')
+      if (rubricaKey) {
         try {
           const rb = createRubricaClient({
             baseUrl: config.rubrica.baseUrl,
-            apiKey: config.rubrica.apiKey,
+            apiKey: rubricaKey,
           })
           await rb.downloadDocument(body.documentId, { type: 'signed' })
           signedUrl = body.downloadUrl || signedUrl || `${config.rubrica.baseUrl.replace(/\/+$/, '')}/api/documents/${body.documentId}/download?type=signed`
@@ -107,15 +134,38 @@ export function buildWebhooksRouter(deps: {
         )
         .catch((err) => console.error('[webhooks/rubrica] propostas update failed:', err))
 
-      if (updated.prosync_lead_id && config.prosync.apiKey) {
-        try {
-          const ps = createProsyncClient({
-            baseUrl: config.prosync.baseUrl,
-            apiKey: config.prosync.apiKey,
+      if (updated.prosync_lead_id) {
+        const prosyncKey = await loadApiKeyForOrg(updated.organization_id, 'prosync')
+        if (prosyncKey) {
+          try {
+            const ps = createProsyncClient({
+              baseUrl: config.prosync.baseUrl,
+              apiKey: prosyncKey,
+            })
+            await ps.updateLead(updated.prosync_lead_id, { status: 'converted' })
+          } catch (err) {
+            console.error('[webhooks/rubrica] prosync.updateLead failed:', err)
+          }
+        }
+
+        if (suiteProposalEvents?.isEnabled()) {
+          const meta = await loadProposalMeta(pool, mapping.propez_proposal_id)
+          suiteProposalEvents.fireAndForget({
+            event: 'proposal.signed',
+            externalId: String(mapping.propez_proposal_id),
+            leadId: String(updated.prosync_lead_id),
+            title: meta?.cliente_nome
+              ? `Proposta para ${meta.cliente_nome}`
+              : `Proposta ${String(mapping.propez_proposal_id).slice(0, 8)}`,
+            status: 'signed',
+            valueCents:
+              meta?.valor_cents != null
+                ? Math.max(0, meta.valor_cents - (meta.desconto_cents || 0))
+                : null,
+            currency: 'BRL',
+            externalUpdatedAt: new Date(),
+            metadata: { documentId: body.documentId, signedUrl },
           })
-          await ps.updateLead(updated.prosync_lead_id, { status: 'converted' })
-        } catch (err) {
-          console.error('[webhooks/rubrica] prosync.updateLead failed:', err)
         }
       }
 
@@ -185,6 +235,25 @@ function timingSafeEqual(a: string, b: string): boolean {
   const bb = Buffer.from(b)
   if (ab.length !== bb.length) return false
   return crypto.timingSafeEqual(ab, bb)
+}
+
+async function loadProposalMeta(
+  pool: Pool,
+  proposalId: string,
+): Promise<{ cliente_nome: string | null; valor_cents: number | null; desconto_cents: number | null } | null> {
+  try {
+    const r = await pool.query<{
+      cliente_nome: string | null
+      valor_cents: number | null
+      desconto_cents: number | null
+    }>(
+      `SELECT cliente_nome, valor_cents, desconto_cents FROM propostas WHERE id = $1`,
+      [proposalId],
+    )
+    return r.rows[0] ?? null
+  } catch {
+    return null
+  }
 }
 
 async function lookupProposalByLead(

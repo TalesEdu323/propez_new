@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { LayoutDashboard, Users, FileText, Settings, LogOut, Layers, Briefcase, Bell, DollarSign, User } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Settings, LogOut, Layers, Briefcase, Bell, DollarSign, User, Shield } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { hydrateStore, store } from './lib/store';
 import { subscribeToPlanosRequest } from './lib/navigationEvents';
@@ -10,6 +10,7 @@ import {
   useInitialLoaded,
   useSession,
 } from './lib/authSession';
+import { PropezLogo } from './components/PropezLogo';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Clientes = lazy(() => import('./pages/Clientes'));
@@ -26,6 +27,10 @@ const Configuracoes = lazy(() => import('./pages/Configuracoes'));
 const Planos = lazy(() => import('./pages/Planos'));
 const Onboarding = lazy(() => import('./components/Onboarding'));
 const Login = lazy(() => import('./pages/Login'));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminOrganizations = lazy(() => import('./pages/admin/AdminOrganizations'));
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminSubscriptions = lazy(() => import('./pages/admin/AdminSubscriptions'));
 
 const loadingFallback = (
   <div className="h-full min-h-screen w-full flex items-center justify-center text-zinc-500 bg-[#F5F5F7]">
@@ -148,6 +153,22 @@ export default function App() {
         return <Configuracoes navigate={navigate} />;
       case 'planos':
         return <Planos navigate={navigate} targetPlan={routeParams.targetPlan as 'free' | 'pro' | 'business' | undefined} />;
+      case 'admin-dashboard':
+        return session?.user.isPlatformAdmin
+          ? <AdminDashboard navigate={navigate} />
+          : <Dashboard navigate={navigate} />;
+      case 'admin-organizations':
+        return session?.user.isPlatformAdmin
+          ? <AdminOrganizations navigate={navigate} />
+          : <Dashboard navigate={navigate} />;
+      case 'admin-users':
+        return session?.user.isPlatformAdmin
+          ? <AdminUsers navigate={navigate} />
+          : <Dashboard navigate={navigate} />;
+      case 'admin-subscriptions':
+        return session?.user.isPlatformAdmin
+          ? <AdminSubscriptions navigate={navigate} />
+          : <Dashboard navigate={navigate} />;
       default:
         return <Dashboard navigate={navigate} />;
     }
@@ -186,14 +207,20 @@ export default function App() {
     { id: 'pagamentos', label: 'Pagamentos', icon: <DollarSign className="w-5 h-5" /> },
   ];
 
+  const isPlatformAdmin = Boolean(session?.user.isPlatformAdmin);
+  const isAdminRoute =
+    route === 'admin-dashboard' ||
+    route === 'admin-organizations' ||
+    route === 'admin-users' ||
+    route === 'admin-subscriptions';
+
   return (
     <div className="flex h-screen bg-[#F5F5F7] font-sans overflow-hidden">
       
       {/* Desktop Sidebar - Apple Inspired */}
       <div className="hidden md:flex flex-col w-64 bg-white/80 backdrop-blur-2xl border-r border-black/[0.05] z-40 relative">
-        <div className="p-6 flex items-center gap-3">
-          <div className="w-8 h-8 bg-zinc-900 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">P</div>
-          <span className="font-semibold text-zinc-900 tracking-tight text-lg">Propez</span>
+        <div className="p-6">
+          <PropezLogo height="md" />
         </div>
         
         <nav className="flex-1 px-4 mt-8 space-y-1.5 overflow-y-auto custom-scrollbar">
@@ -216,6 +243,27 @@ export default function App() {
               </button>
             );
           })}
+
+          {isPlatformAdmin && (
+            <>
+              <div className="px-5 pt-6 pb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-400">
+                Plataforma
+              </div>
+              <button
+                onClick={() => navigate('admin-dashboard')}
+                className={`w-full flex items-center gap-3 px-5 py-3 rounded-2xl text-sm font-semibold transition-all duration-500 ${
+                  isAdminRoute
+                    ? 'bg-zinc-900 text-white shadow-[0_10px_20px_-5px_rgba(0,0,0,0.15)]'
+                    : 'text-zinc-400 hover:bg-zinc-50 hover:text-zinc-900'
+                }`}
+              >
+                <div className={`transition-transform duration-500 ${isAdminRoute ? 'scale-110' : 'scale-100 opacity-50'}`}>
+                  <Shield className="w-5 h-5" />
+                </div>
+                Admin
+              </button>
+            </>
+          )}
         </nav>
 
         <div className="p-4 border-t border-black/[0.02]">
@@ -242,10 +290,7 @@ export default function App() {
 
       {/* Mobile Top Bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-2xl border-b border-black/[0.05] z-40 flex items-center justify-between px-5">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-zinc-900 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">P</div>
-          <span className="font-semibold text-zinc-900 tracking-tight">Propez</span>
-        </div>
+        <PropezLogo height="md" />
         <div className="flex items-center gap-3">
           <button 
             onClick={() => navigate('configuracoes')}

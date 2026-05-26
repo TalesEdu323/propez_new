@@ -10,11 +10,17 @@ import { loadConfig } from './env.js';
 import { createCorsOptions } from './cors.js';
 import { createPool, runStartupMigrations } from './db.js';
 import { loadIntegrationsConfig } from './config.js';
-import { createMailClient } from './mail/resend.js';
+import { createMailClient } from './mail/client.js';
 import { createRateLimit } from './middleware/rateLimit.js';
 import { buildIntegrationsRouter } from './routes/integrations.js';
 import { buildWebhooksRouter } from './routes/webhooks.js';
 import { createAuthRouter } from './routes/auth.js';
+import { createSsoRouter } from './routes/sso.js';
+import { createSuiteLookup } from './clients/suiteLookup.js';
+import { createSuiteServiceTokenClient } from './clients/suiteServiceToken.js';
+import { createSuiteProposalEvents } from './clients/suiteProposalEvents.js';
+import { createOrgIntegrationCredentialsRepo } from './storage/orgIntegrationCredentials.js';
+import { createEnsureSuiteCredential } from './integrations/ensureSuiteCredential.js';
 import { createOrganizationsRouter } from './routes/organizations.js';
 import { createClientesRouter } from './routes/clientes.js';
 import { createServicosRouter } from './routes/servicos.js';
@@ -29,6 +35,7 @@ import {
 } from './routes/stripe.js';
 import { createHealthRouter } from './routes/health.js';
 import { createNotificationsRouter } from './routes/notifications.js';
+import { createAdminRouter } from './routes/admin.js';
 import { errorHandler } from './errorHandler.js';
 import { logStartupIntegrationDiagnostics } from './startupDiagnostics.js';
 
@@ -51,6 +58,16 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   const stripe = new Stripe(config.stripeSecretKey);
   const pool = createPool(config);
   const mail = createMailClient(config.mail);
+  const suiteLookup = createSuiteLookup(integrationsConfig);
+  const suiteServiceToken = createSuiteServiceTokenClient(integrationsConfig);
+  const suiteProposalEvents = createSuiteProposalEvents(integrationsConfig);
+  const orgCredentialsRepo = createOrgIntegrationCredentialsRepo(pool, integrationsConfig);
+  const ensureSuiteCredential = createEnsureSuiteCredential({
+    pool,
+    config: integrationsConfig,
+    repo: orgCredentialsRepo,
+    serviceToken: suiteServiceToken,
+  });
 
   await runStartupMigrations(pool);
   logStartupIntegrationDiagnostics(config, integrationsConfig);
@@ -62,14 +79,19 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   app.use(cookieParser());
 
   // 1) Stripe webhook (raw body) — tem que vir antes do express.json global.
-  app.use('/api', createStripeWebhookRouter({ stripe, config }));
+  app.use('/api', createStripeWebhookRouter({ stripe, config, pool }));
 
   // 2) Integration webhooks com rate-limit próprio.
   const webhooksLimiter = createRateLimit({ windowMs: 60_000, max: 300 });
   app.use(
     '/api/webhooks',
     webhooksLimiter,
-    buildWebhooksRouter({ pool, config: integrationsConfig }),
+    buildWebhooksRouter({
+      pool,
+      config: integrationsConfig,
+      orgCredentialsRepo,
+      suiteProposalEvents,
+    }),
   );
 
   // 3) JSON global.
@@ -77,7 +99,8 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
 
   // 4) Auth (rate-limit mais restrito para proteger login/register)
   const authLimiter = createRateLimit({ windowMs: 60_000, max: 30 });
-  app.use('/api', authLimiter, createAuthRouter({ pool, config, mail }));
+  app.use('/api', authLimiter, createAuthRouter({ pool, config, mail, suiteLookup }));
+  app.use('/api', createSsoRouter({ pool, config }));
 
   // 5) CRUDs autenticados (todas com requireAuth internamente)
   app.use('/api/organizations', createOrganizationsRouter({ pool, config }));
@@ -85,7 +108,7 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   app.use('/api/servicos', createServicosRouter({ pool, config }));
   app.use('/api/contratos', createContratosRouter({ pool, config }));
   app.use('/api/modelos', createModelosRouter({ pool, config }));
-  app.use('/api/propostas', createPropostasRouter({ pool, config }));
+  app.use('/api/propostas', createPropostasRouter({ pool, config, suiteProposalEvents }));
   app.use('/api/usage', createUsageRouter({ pool, config }));
 
   // 6) Integrations proxy (autenticado)
@@ -93,18 +116,31 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   app.use(
     '/api/integrations',
     integrationsLimiter,
-    buildIntegrationsRouter({ pool, config: integrationsConfig, envConfig: config }),
+    buildIntegrationsRouter({
+      pool,
+      config: integrationsConfig,
+      envConfig: config,
+      ensureSuiteCredential,
+      orgCredentialsRepo,
+      suiteProposalEvents,
+    }),
   );
 
   // 7) Rotas públicas (proposta pelo link)
-  app.use('/api/public/propostas', createPublicPropostasRouter({ pool }));
+  app.use(
+    '/api/public/propostas',
+    createPublicPropostasRouter({ pool, suiteProposalEvents, config }),
+  );
 
-  // 8) Utilitárias
+  // 8) Painel admin (super-admin do SaaS) — exige requireAuth + requirePlatformAdmin
+  app.use('/api/admin', createAdminRouter({ pool, config, stripe }));
+
+  // 9) Utilitárias
   app.use('/api', createHealthRouter({ pool, integrationsConfig }));
   app.use('/api', createCheckoutRouter({ stripe, config }));
   app.use('/api', createNotificationsRouter());
 
-  // 9) Error handler global sempre por último
+  // 10) Error handler global sempre por último
   app.use(errorHandler);
 
   return { app, config };

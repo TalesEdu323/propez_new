@@ -21,7 +21,7 @@ export function Step5Contrato({ contratos, formData, setFormData }: Step5Props) 
     >
       <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-semibold text-zinc-900 mb-2 tracking-tight">Prazos e Contrato</h2>
+          <h2 className="section-title font-semibold mb-2">Prazos e Contrato</h2>
           <p className="text-zinc-500">Configure as datas, recorrência e termos legais.</p>
         </div>
 

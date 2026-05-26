@@ -99,7 +99,7 @@ export default function Contratos() {
       <div className="page-container">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-8 mb-4">
           <div>
-            <h1 className="text-4xl md:text-6xl font-semibold text-zinc-900 tracking-tightest leading-none">Contratos.</h1>
+            <h1 className="page-title">Contratos.</h1>
             <p className="text-zinc-400 mt-4 font-medium">Gerencie seus modelos de contrato e termos legais.</p>
           </div>
           <button 

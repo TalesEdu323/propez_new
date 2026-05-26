@@ -19,11 +19,63 @@ export interface AuthConfig {
   cookieSecure: boolean;
 }
 
+export interface SmtpConfig {
+  host: string;
+  port: number;
+  /** true para porta 465 (SSL); false para 587/25 com STARTTLS. */
+  secure: boolean;
+  user: string | null;
+  pass: string | null;
+  connectionTimeout: number;
+  greetingTimeout: number;
+}
+
 export interface MailConfig {
+  /** Provedor ativo: smtp, resend ou none (simula no console). */
+  provider: 'smtp' | 'resend' | 'none';
+  smtp: SmtpConfig | null;
   resendApiKey: string | null;
   from: string;
   /** Quando true, o app recusa registros se não houver provedor (prod). */
   required: boolean;
+}
+
+function parseBoolEnv(value: string | undefined, fallback = false): boolean {
+  if (value === undefined || value === '') return fallback;
+  const v = value.trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
+/** Ignora placeholders do .env.example e chaves Resend inválidas. */
+function normalizeResendApiKey(raw: string | undefined): string | null {
+  const key = raw?.trim() || '';
+  if (!key) return null;
+  const lower = key.toLowerCase();
+  if (lower.includes('preencher') || lower.includes('change-me') || lower.includes('your_')) {
+    return null;
+  }
+  if (!key.startsWith('re_')) return null;
+  return key;
+}
+
+function resolveMailProvider(input: {
+  mailProvider: string;
+  emailProvider: string;
+  smtpHost: string | null;
+  resendApiKey: string | null;
+}): MailConfig['provider'] {
+  const forced = input.mailProvider.trim().toLowerCase();
+  if (forced === 'smtp') return 'smtp';
+  if (forced === 'resend') return input.resendApiKey ? 'resend' : 'none';
+
+  const emailProv = input.emailProvider.trim().toLowerCase();
+  if (emailProv === 'nodemailer' || emailProv === 'smtp') {
+    if (input.smtpHost) return 'smtp';
+  }
+
+  if (input.smtpHost) return 'smtp';
+  if (input.resendApiKey) return 'resend';
+  return 'none';
 }
 
 export interface EnvironmentConfig {
@@ -37,6 +89,11 @@ export interface EnvironmentConfig {
   allowedOrigins: string[];
   auth: AuthConfig;
   mail: MailConfig;
+  /**
+   * E-mails (lowercase) com acesso ao painel /admin mesmo sem flag
+   * is_platform_admin no DB. Usado como fallback para bootstrap.
+   */
+  platformAdminEmails: string[];
 }
 
 function getRequiredEnv(name: string): string {
@@ -88,11 +145,59 @@ export function loadConfig(): EnvironmentConfig {
     console.warn('[env] JWT_SECRET ausente — usando fallback inseguro de DEV. Defina JWT_SECRET no .env.');
   }
 
-  const resendApiKey = process.env.RESEND_API_KEY?.trim() || null;
+  const resendApiKey = normalizeResendApiKey(process.env.RESEND_API_KEY);
   const mailFrom = process.env.MAIL_FROM?.trim() || 'Propez <no-reply@propez.local>';
-  if (isProd && !resendApiKey) {
-    console.warn('[env] RESEND_API_KEY ausente em produção — verificação de email não funcionará.');
+  const smtpHost = (process.env.SMTP_HOST || process.env.EMAIL_HOST)?.trim() || null;
+  const smtpPort = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || '587');
+  const smtpSecure = parseBoolEnv(
+    process.env.SMTP_SECURE ?? process.env.EMAIL_SECURE,
+    smtpPort === 465,
+  );
+  const smtpUser = (process.env.SMTP_USER || process.env.EMAIL_USER)?.trim() || null;
+  const smtpPass = (process.env.SMTP_PASS || process.env.EMAIL_PASS)?.trim() || null;
+  const smtpConnectionTimeout = Number(
+    process.env.SMTP_TIMEOUT || process.env.EMAIL_TIMEOUT || '30000',
+  );
+  const smtpGreetingTimeout = Number(
+    process.env.SMTP_GREETING_TIMEOUT || process.env.EMAIL_GREETING_TIMEOUT || '8000',
+  );
+  const mailProvider = resolveMailProvider({
+    mailProvider: process.env.MAIL_PROVIDER || '',
+    emailProvider: process.env.EMAIL_PROVIDER || '',
+    smtpHost,
+    resendApiKey,
+  });
+
+  if (smtpHost && (!Number.isFinite(smtpPort) || smtpPort <= 0)) {
+    throw new Error('SMTP_PORT deve ser um número positivo');
   }
+
+  const smtp: SmtpConfig | null = smtpHost
+    ? {
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+        user: smtpUser,
+        pass: smtpPass,
+        connectionTimeout: smtpConnectionTimeout,
+        greetingTimeout: smtpGreetingTimeout,
+      }
+    : null;
+
+  if (isProd && mailProvider === 'none') {
+    console.warn(
+      '[env] Nenhum provedor de email em produção (SMTP_HOST ou RESEND_API_KEY) — verificação de email não funcionará.',
+    );
+  } else if (mailProvider === 'smtp') {
+    console.info(`[env] Email via SMTP (${smtpHost}:${smtpPort}, secure=${smtpSecure})`);
+  } else if (mailProvider === 'resend') {
+    console.info('[env] Email via Resend');
+  }
+
+  const platformAdminEmails = (process.env.PLATFORM_ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
 
   return {
     appUrl,
@@ -120,9 +225,12 @@ export function loadConfig(): EnvironmentConfig {
       cookieSecure: isProd,
     },
     mail: {
+      provider: mailProvider,
+      smtp,
       resendApiKey,
       from: mailFrom,
       required: isProd,
     },
+    platformAdminEmails,
   };
 }

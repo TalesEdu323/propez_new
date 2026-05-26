@@ -19,6 +19,7 @@ export interface CurrentUser {
   name: string;
   email: string;
   emailVerifiedAt: string | null;
+  isPlatformAdmin?: boolean;
 }
 
 export interface CurrentOrg {

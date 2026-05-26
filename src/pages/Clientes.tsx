@@ -75,7 +75,7 @@ export default function Clientes({ navigate: _navigate }: { navigate: NavigateFn
               <Users className="w-3.5 h-3.5" />
               CRM & Relacionamento
             </div>
-            <motion.h1 variants={itemVariants} className="text-4xl md:text-5xl font-bold text-zinc-900 tracking-tight">
+            <motion.h1 variants={itemVariants} className="page-title font-bold">
               Clientes.
             </motion.h1>
             <motion.p variants={itemVariants} className="text-zinc-500 font-medium tracking-tight">

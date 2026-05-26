@@ -47,6 +47,19 @@ export function logStartupIntegrationDiagnostics(
     console.info('[startup] Rubrica: API key carregada; baseUrl=', integrations.rubrica.baseUrl);
   }
 
+  // Suíte Taggo (descoberta cross-app + service tokens).
+  if (!integrations.suiteSecret) {
+    console.info(
+      '[startup] Suíte Taggo: desligada (TAGGO_SUITE_SECRET ausente). Sem lookup automático em ProSync/Rubrica.',
+    );
+  } else if (integrations.suiteSecret.length < 32) {
+    console.warn(
+      '[startup] TAGGO_SUITE_SECRET muito curto (< 32 chars). Gere com `openssl rand -hex 64`.',
+    );
+  } else {
+    console.info('[startup] Suíte Taggo: secret carregado; lookup cross-app habilitado.');
+  }
+
   const { pro, business } = config.stripePlans;
   const missingPrices = [
     !pro.monthly && 'STRIPE_PRICE_PRO_MONTHLY',

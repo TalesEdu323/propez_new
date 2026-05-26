@@ -17,7 +17,16 @@ export type AppRoute =
   | 'propez-fluido'
   | 'visualizar-proposta'
   | 'configuracoes'
-  | 'planos';
+  | 'planos'
+  | 'admin-dashboard'
+  | 'admin-retention'
+  | 'admin-acquisition'
+  | 'admin-product'
+  | 'admin-organizations'
+  | 'admin-organization-detail'
+  | 'admin-users'
+  | 'admin-subscriptions'
+  | 'admin-operations';
 
 export interface RouteParams {
   id?: string;

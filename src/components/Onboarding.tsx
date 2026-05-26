@@ -52,7 +52,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
             <Rocket className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-zinc-900 tracking-tight">Bem-vindo ao Propez</h1>
+          <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Bem-vindo ao Propez</h1>
           <p className="text-zinc-500 mt-2">Vamos configurar seu perfil profissional em poucos segundos.</p>
         </div>
 

@@ -28,7 +28,7 @@ export function CriarModeloStepper({ step, steps, isEditing, formData, onBack }:
           <ChevronLeft className="w-4 h-4" /> Voltar
         </button>
 
-        <h1 className="text-4xl font-semibold tracking-tight mb-4 leading-tight">
+        <h1 className="page-title mb-3">
           {isEditing ? 'Editar Modelo' : 'Novo Modelo'}
         </h1>
         <p className="text-white/50 text-sm mb-16 leading-relaxed">

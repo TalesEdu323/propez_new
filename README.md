@@ -69,6 +69,7 @@ Em produção **não** se usa `.env`: cadastre cada variável no painel do prove
 
 Runbooks relacionados:
 
+- **Suíte Taggo (Propez + ProSync + Rubrica + SSO):** [`docs/suite-taggo/GUIA-COMPLETO.md`](docs/suite-taggo/GUIA-COMPLETO.md) — passo a passo completo; [`docs/suite-taggo/CHECKLIST.md`](docs/suite-taggo/CHECKLIST.md) — marcar progresso
 - Smoke test ponta a ponta: [`docs/INTEGRACOES_SMOKE_TEST.md`](docs/INTEGRACOES_SMOKE_TEST.md)
 - Checklist de deploy: [`docs/DEPLOY.md`](docs/DEPLOY.md)
 
@@ -81,6 +82,36 @@ Runbooks relacionados:
 - `npm run test`: executa testes unitários (Vitest)
 - `npm run check:integrations`: smoke check das integrações
 - `npm run seed:dev`: seed básico para ambiente local
+
+## Painel Admin (super-admin do SaaS)
+
+O Propez tem um painel `/admin/*` (Métricas, Organizações, Usuários, Assinaturas)
+para gestão da plataforma. Ele só fica visível para usuários marcados como
+`platform admin`.
+
+### Bootstrap do primeiro admin
+
+1. Defina o e-mail (ou lista CSV) no `.env`:
+   ```bash
+   PLATFORM_ADMIN_EMAILS=voce@empresa.com
+   ```
+2. Reinicie o servidor (`npm run dev`).
+3. Faça login normalmente. A tela "Admin" aparece no sidebar com ícone de escudo.
+4. Em **Admin → Usuários**, ative o toggle de `Admin` para o próprio usuário —
+   isso persiste no DB (`users.is_platform_admin`) e dispensa o env var.
+
+### Como funciona
+
+- A flag `users.is_platform_admin` é a fonte de verdade. O env var
+  `PLATFORM_ADMIN_EMAILS` é fallback para bootstrap.
+- O middleware `requirePlatformAdmin` ([`src/server/auth/platformAdmin.ts`](src/server/auth/platformAdmin.ts))
+  protege todos os endpoints `/api/admin/*` com cache de 30s para reduzir hits no DB.
+- Métricas reais de pagamentos vêm de `stripe_payments`, populada pelo webhook
+  do Stripe em [`src/server/routes/stripe.ts`](src/server/routes/stripe.ts).
+  Para isso funcionar em dev, exponha a porta com um túnel
+  (`ngrok http 3000`) e configure `STRIPE_WEBHOOK_SECRET` da CLI/dashboard
+  apontando para `https://<seu-tunnel>/api/stripe/webhook`.
+- O webhook também atualiza `organizations` (plano, ciclo, datas, customer/subscription).
 
 ## Documentação
 

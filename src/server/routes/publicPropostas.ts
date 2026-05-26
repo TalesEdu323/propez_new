@@ -3,6 +3,8 @@ import type { Request, Response, Router } from 'express'
 import type { Pool } from 'pg'
 import { z } from 'zod'
 import { serializeProposta } from '../db/serializers.js'
+import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.js'
+import type { EnvironmentConfig } from '../env.js'
 
 const PROPOSTA_SELECT = `
   id, cliente_id, cliente_nome, modelo_id, servicos,
@@ -24,8 +26,14 @@ const approveSchema = z.object({
  * Endpoints públicos (sem autenticação) para o cliente final visualizar e
  * aprovar a proposta via `/p/{token}`.
  */
-export function createPublicPropostasRouter(deps: { pool: Pool }): Router {
-  const { pool } = deps
+export function createPublicPropostasRouter(deps: {
+  pool: Pool
+  /** Emissor de eventos para o ProSync (Fase 4). Opcional. */
+  suiteProposalEvents?: SuiteProposalEventsClient
+  /** Necessário para montar a URL pública da proposta no evento. */
+  config?: EnvironmentConfig
+}): Router {
+  const { pool, suiteProposalEvents, config } = deps
   const router = express.Router()
 
   router.get('/:token', async (req: Request, res: Response) => {
@@ -86,7 +94,31 @@ export function createPublicPropostasRouter(deps: { pool: Pool }): Router {
         [token, status, clientName ?? null],
       )
       if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
-      return res.json(serializeProposta(rows[0]))
+      const updated = rows[0]
+      if (suiteProposalEvents?.isEnabled() && updated.prosync_lead_id) {
+        const valor = typeof updated.valor_cents === 'number' ? updated.valor_cents : null
+        const desconto =
+          typeof updated.desconto_cents === 'number' ? updated.desconto_cents : 0
+        const finalValueCents = valor != null ? Math.max(0, valor - desconto) : null
+        const baseUrl = config?.appUrl?.replace(/\/+$/, '') ?? ''
+        const publicUrl = updated.public_token
+          ? `${baseUrl}/propostas/p/${updated.public_token}`
+          : null
+        suiteProposalEvents.fireAndForget({
+          event: status === 'aprovada' ? 'proposal.approved' : 'proposal.rejected',
+          externalId: String(updated.id),
+          leadId: String(updated.prosync_lead_id),
+          title: updated.cliente_nome
+            ? `Proposta para ${updated.cliente_nome}`
+            : `Proposta ${String(updated.id).slice(0, 8)}`,
+          publicUrl,
+          status,
+          valueCents: finalValueCents,
+          currency: 'BRL',
+          externalUpdatedAt: new Date(),
+        })
+      }
+      return res.json(serializeProposta(updated))
     } catch (err) {
       console.error('[public/decision] erro:', err)
       return res.status(500).json({ error: 'Erro ao registrar decisão' })

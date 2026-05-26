@@ -52,7 +52,7 @@ export function Step1ModeloSelect({ modelos, formData, onSelectModelo, onNext, o
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="mb-12">
-        <h2 className="text-4xl font-semibold text-zinc-900 mb-3 tracking-tight">Escolha um Modelo Base</h2>
+        <h2 className="section-title font-semibold mb-2">Escolha um Modelo Base</h2>
         <p className="text-zinc-500 text-lg">
           Selecione um template para preencher automaticamente os serviços, valores, layout e o contrato da proposta.
         </p>
