@@ -6,10 +6,14 @@ import { runMigrations } from './db/migrations.js';
 const { Pool } = pg;
 
 export function createPool(config: EnvironmentConfig): pg.Pool {
+  const isServerless = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
   return new Pool({
     connectionString: config.databaseUrl,
+    // Neon + Vercel: poucas conexões por instância; use DATABASE_URL com "-pooler" no host.
+    max: isServerless ? 1 : 10,
+    idleTimeoutMillis: isServerless ? 5_000 : 30_000,
     ssl: config.nodeEnv === 'production'
-      ? { rejectUnauthorized: true }
+      ? { rejectUnauthorized: false }
       : { rejectUnauthorized: false },
   });
 }

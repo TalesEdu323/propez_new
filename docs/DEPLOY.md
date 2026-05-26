@@ -128,6 +128,14 @@ Usa as rewrites do `vercel.json` (API + SPA). Para dev com HMR, continue com
 - `PORT` no `.env` é ignorado na Vercel; não é necessário.
 - Após mudar env no painel, fazer **Redeploy**.
 - `APP_URL` deve ser o domínio público final (webhooks Stripe/ProSync no mesmo host).
+- Copie as mesmas variáveis para o ambiente **Preview** (URLs `*.vercel.app`), não só
+  Production — senão login e `/api/health` falham com 500 no preview.
+- `DATABASE_URL`: preferir o endpoint **pooler** do Neon (`…-pooler.…neon.tech`).
+- **Deployment Protection** (Settings → Deployment Protection): em previews protegidos,
+  ficheiros estáticos como `manifest.webmanifest` podem devolver **401** antes de chegar à app.
+  Desative a proteção no preview ou use o domínio de produção para testar.
+- Erros **500** em `/api/auth/login`: ver **Deployments → Functions → Logs** (falta env,
+  DB inacessível ou tabela `sessions` ausente). O deploy inclui `sql/**` para migrations no boot.
 
 ### Render / Railway / Fly.io
 
