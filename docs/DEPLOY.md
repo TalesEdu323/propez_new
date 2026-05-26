@@ -36,7 +36,9 @@ Marque cada item antes de promover para produção:
 - [ ] `STRIPE_SECRET_KEY` em modo live (`sk_live_...`)
 - [ ] `STRIPE_WEBHOOK_SECRET` do webhook cadastrado em `{APP_URL}/api/stripe/webhook`
 - [ ] `STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_YEARLY`, `STRIPE_PRICE_BUSINESS_MONTHLY`, `STRIPE_PRICE_BUSINESS_YEARLY`
-- [ ] `MAIL_FROM` + (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` **ou** `RESEND_API_KEY`) — sem isso a verificação de email não envia
+- [ ] `MAIL_FROM` + (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` **ou** `RESEND_API_KEY`) — auth + alertas de proposta/contrato
+- [ ] `APP_URL` público e acessível (logo em e-mails: `{APP_URL}/logo.svg`)
+- [ ] Migração `sql/007_notifications.sql` aplicada no boot (tabela `notifications`, colunas `propostas.cliente_email` / `viewed_at`)
 - [ ] `PROSYNC_API_URL` + `PROSYNC_API_KEY` (`ps_live_...`) + `PROSYNC_WEBHOOK_SECRET` (mesmo secret cadastrado no outbound webhook do ProSync)
 - [ ] `RUBRICA_API_URL` + `RUBRICA_API_KEY` (`dm_live_...`) + `RUBRICA_WEBHOOK_SECRET`
 - [ ] `CORS_ORIGINS` com domínios alternativos (www, apex, staging) separados por vírgula
@@ -74,15 +76,58 @@ Webhooks externos a registrar nas plataformas parceiras:
 
 ### Vercel
 
-1. Project Settings → Environment Variables → adicionar uma a uma para os
-   environments `Production`, `Preview` e `Development` (se necessário).
-2. Marcar como **Sensitive** todos os secrets (`STRIPE_SECRET_KEY`,
-   `STRIPE_WEBHOOK_SECRET`, `JWT_SECRET`, `*_API_KEY`, `*_WEBHOOK_SECRET`,
-   `DATABASE_URL`, `RESEND_API_KEY`).
-3. `APP_URL` deve refletir o domínio público (não o `*.vercel.app` se você
-   tiver domínio customizado — webhooks Stripe/ProSync devem bater no mesmo).
-4. Após cada mudança de env, gatilhar um **redeploy** — Vercel não recarrega
-   envs em runtime.
+O repositório inclui [`vercel.json`](../vercel.json) e [`api/index.ts`](../api/index.ts):
+
+- **`dist/`** — frontend (resultado de `npm run build`).
+- **`api/index.ts`** — função serverless com o Express (rotas `/api/*`).
+
+**Não** use o preset “Vite” só com output estático — isso gera 404 em `/api/auth/me`.
+O `vercel.json` define `framework: null` e o rewrite `/api/*` → função Node.
+
+#### Passo a passo no painel Vercel
+
+1. Importar o repositório Git (ou `vercel link` na pasta do projeto).
+2. **Framework Preset:** deixar **Other** (o `vercel.json` na raiz manda no build).
+3. Confirmar (ou deixar o ficheiro definir):
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+   - Install Command: `npm ci`
+4. **Environment Variables** → Production (e Preview se quiser):
+   - `NODE_ENV=production`
+   - `APP_URL=https://<dominio-real>` (ex.: `https://propez.taggo.com.br`)
+   - `DATABASE_URL`, `JWT_SECRET`, `STRIPE_*`, mail, integrações — ver checklist
+     universal acima.
+5. Marcar como **Sensitive** todos os secrets.
+6. **Deploy** → aguardar build verde.
+
+#### Validar
+
+```bash
+curl https://<APP_URL>/api/health
+# deve retornar status "ok"
+
+curl -i https://<APP_URL>/api/auth/me
+# sem cookie: HTTP 401 (não 404)
+```
+
+Se `/api/health` der **404**, o projeto ainda está como site estático: confirme que
+`vercel.json` e `api/index.ts` estão no commit deployado e que o preset não é só Vite.
+
+#### Desenvolvimento local com rotas Vercel
+
+```bash
+npm run build
+npx vercel dev
+```
+
+Usa as rewrites do `vercel.json` (API + SPA). Para dev com HMR, continue com
+`npm run dev`.
+
+#### Notas
+
+- `PORT` no `.env` é ignorado na Vercel; não é necessário.
+- Após mudar env no painel, fazer **Redeploy**.
+- `APP_URL` deve ser o domínio público final (webhooks Stripe/ProSync no mesmo host).
 
 ### Render / Railway / Fly.io
 
@@ -148,6 +193,16 @@ Sinais de problema:
 
 Após o health passar, rodar o smoke test ponta a ponta documentado em
 [`INTEGRACOES_SMOKE_TEST.md`](INTEGRACOES_SMOKE_TEST.md).
+
+### E-mails transacionais (proposta / contrato)
+
+Preview de template HTML via SMTP (usa o `.env` local):
+
+```bash
+node scripts/test-business-email.mjs seu@email.com proposal_approved
+```
+
+Tipos: `proposal_approved`, `proposal_rejected`, `contract_sent`, `contract_signed`, `proposal_paid`.
 
 ## Segurança de segredos
 
