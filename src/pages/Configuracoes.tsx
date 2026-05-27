@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { 
   User, Building2, Shield, Bell, Download, 
   Smartphone, CheckCircle2, ChevronRight,
@@ -14,6 +14,18 @@ import {
   openNotificationAction,
   useNotifications,
 } from '../lib/useNotifications';
+import { api, ApiError } from '../lib/apiClient';
+import {
+  IntegrationProviderCard,
+  type IntegrationCredentialSummary,
+} from './configuracoes/IntegrationProviderCard';
+
+interface IntegrationsCredentialsResponse {
+  suiteEnabled: boolean;
+  canSaveManual: boolean;
+  prosync: IntegrationCredentialSummary;
+  rubrica: IntegrationCredentialSummary;
+}
 
 interface ConfiguracoesProps {
   navigate: NavigateFn;
@@ -24,8 +36,43 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
   const { installPrompt, isInstalled, installApp } = usePWA();
   const [isSaving, setIsSaving] = useState(false);
   const { items: notifications, unreadCount, markRead, markAllRead } = useNotifications();
+  const [integrations, setIntegrations] = useState<IntegrationsCredentialsResponse | null>(null);
+  const [integrationsLoading, setIntegrationsLoading] = useState(true);
+  const [provisioning, setProvisioning] = useState<'prosync' | 'rubrica' | null>(null);
   const plan = resolvePlan(userConfig);
   const planMeta = PLAN_META[plan];
+
+  const loadIntegrations = useCallback(async () => {
+    setIntegrationsLoading(true);
+    try {
+      const data = await api.get<IntegrationsCredentialsResponse>('/api/integrations/credentials');
+      setIntegrations(data);
+    } catch (err) {
+      console.error('[Configuracoes] credenciais indisponíveis:', err);
+      setIntegrations(null);
+    } finally {
+      setIntegrationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadIntegrations();
+  }, [loadIntegrations]);
+
+  const handleProvision = async (provider: 'prosync' | 'rubrica') => {
+    setProvisioning(provider);
+    try {
+      await api.post(`/api/integrations/credentials/${provider}/provision`, {
+        createIfMissing: true,
+      });
+      await loadIntegrations();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Erro ao conectar integração';
+      alert(message);
+    } finally {
+      setProvisioning(null);
+    }
+  };
 
   const handleGoToPlans = () => navigate('planos');
 
@@ -279,28 +326,41 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 font-bold">PS</div>
-                    <div>
-                      <h4 className="text-sm font-bold text-zinc-900">ProSync CRM</h4>
-                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Status: Conectado</p>
-                    </div>
-                  </div>
-                  <button className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-900 transition-colors">Configurar</button>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 font-bold">RB</div>
-                    <div>
-                      <h4 className="text-sm font-bold text-zinc-900">Rubrica Assinatura</h4>
-                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Status: Aguardando Chave</p>
-                    </div>
-                  </div>
-                  <button className="text-[10px] font-bold text-amber-600 uppercase tracking-widest hover:text-amber-700 transition-colors">Conectar</button>
-                </div>
+              <p className="text-sm text-zinc-500 mb-4">
+                Cada organização usa sua própria chave API. Gere a chave no painel do ProSync ou
+                Rubrica e cole abaixo — não é necessário configurar no servidor (Vercel).
+              </p>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <IntegrationProviderCard
+                  provider="prosync"
+                  title="ProSync CRM"
+                  badge="PS"
+                  badgeClass="bg-blue-50 text-blue-600"
+                  defaultBaseUrl="https://prosync.tech"
+                  keyPlaceholder="ps_live_..."
+                  credential={integrations?.prosync}
+                  suiteEnabled={integrations?.suiteEnabled ?? false}
+                  canSaveManual={integrations?.canSaveManual ?? false}
+                  loading={integrationsLoading}
+                  provisioning={provisioning === 'prosync'}
+                  onProvision={() => void handleProvision('prosync')}
+                  onRefresh={loadIntegrations}
+                />
+                <IntegrationProviderCard
+                  provider="rubrica"
+                  title="Rubrica Assinatura"
+                  badge="RB"
+                  badgeClass="bg-amber-50 text-amber-600"
+                  defaultBaseUrl="https://app.rubrica.com.br"
+                  keyPlaceholder="dm_live_..."
+                  credential={integrations?.rubrica}
+                  suiteEnabled={integrations?.suiteEnabled ?? false}
+                  canSaveManual={integrations?.canSaveManual ?? false}
+                  loading={integrationsLoading}
+                  provisioning={provisioning === 'rubrica'}
+                  onProvision={() => void handleProvision('rubrica')}
+                  onRefresh={loadIntegrations}
+                />
               </div>
             </motion.div>
 

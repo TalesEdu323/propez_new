@@ -11,6 +11,15 @@ import type { MailClient } from '../mail/client.js'
 import { notifyProposalEventAsync } from '../services/notificationService.js'
 import { proposalFlowConfigSchema } from '../validation/proposalFlow.js'
 import { acceptContractByOrg } from '../services/proposalJourney.js'
+import {
+  loadProposalNotificationContext,
+} from '../services/proposalNotificationContext.js'
+import {
+  PROPOSAL_SENT_SUBJECT,
+  renderProposalSentClient,
+} from '../mail/templates/business/index.js'
+import { isMailConfigured } from '../env.js'
+import { normalizeEmailBranding } from '../mail/layout.js'
 
 const builderElement = z.object({}).passthrough()
 
@@ -53,6 +62,15 @@ const bodySchema = z.object({
 })
 
 const patchSchema = bodySchema.partial()
+
+const sendEmailSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email()
+    .optional()
+    .refine((v) => v == null || v.length <= 200, { message: 'E-mail muito longo' }),
+})
 
 const PROPOSTA_SELECT = `
   id, cliente_id, cliente_nome, cliente_email, modelo_id, servicos,
@@ -400,6 +418,80 @@ export function createPropostasRouter(deps: {
       [req.auth.orgId, req.params.id],
     )
     return res.json({ ok: true })
+  })
+
+  router.post('/:id/send-email', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    if (!isMailConfigured(config.mail)) {
+      return res.status(503).json({
+        sent: false,
+        reason: 'email_not_configured',
+        error: 'Serviço de e-mail não configurado.',
+      })
+    }
+
+    const parsed = sendEmailSchema.safeParse(req.body ?? {})
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'E-mail inválido', details: parsed.error.flatten() })
+    }
+
+    try {
+      const existing = await pool.query<{ public_token: string | null; cliente_email: string }>(
+        `SELECT public_token, cliente_email FROM propostas WHERE organization_id = $1 AND id = $2`,
+        [req.auth.orgId, req.params.id],
+      )
+      if (!existing.rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
+
+      let token = existing.rows[0].public_token
+      if (!token) {
+        token = createOpaqueToken(24)
+        await pool.query(
+          `UPDATE propostas SET public_token = $3 WHERE organization_id = $1 AND id = $2`,
+          [req.auth.orgId, req.params.id, token],
+        )
+      }
+
+      const overrideEmail = parsed.data.email?.trim().toLowerCase()
+      const storedEmail = existing.rows[0].cliente_email?.trim().toLowerCase() ?? ''
+      const to = overrideEmail || storedEmail
+      if (!to) {
+        return res.status(400).json({ error: 'Informe o e-mail do cliente para enviar a proposta.' })
+      }
+
+      if (overrideEmail && overrideEmail !== storedEmail) {
+        await pool.query(
+          `UPDATE propostas SET cliente_email = $3 WHERE organization_id = $1 AND id = $2`,
+          [req.auth.orgId, req.params.id, overrideEmail],
+        )
+      }
+
+      const ctx = await loadProposalNotificationContext(pool, req.params.id, config.appUrl)
+      if (!ctx) return res.status(404).json({ error: 'Proposta não encontrada' })
+
+      await mail.sendBusinessEmail({
+        to,
+        subject: `${PROPOSAL_SENT_SUBJECT} — ${ctx.orgName}`,
+        html: renderProposalSentClient(
+          normalizeEmailBranding(config.appUrl, config.taggoSiteUrl),
+          ctx,
+        ),
+        tag: 'proposal_sent:client',
+      })
+
+      await pool.query(
+        `UPDATE propostas SET data_envio = COALESCE(data_envio, NOW()) WHERE organization_id = $1 AND id = $2`,
+        [req.auth.orgId, req.params.id],
+      )
+
+      return res.json({ sent: true, to })
+    } catch (err) {
+      console.error('[propostas/send-email] erro:', err)
+      return res.status(502).json({
+        sent: false,
+        reason: 'send_failed',
+        error: 'Não foi possível enviar o e-mail. Tente novamente.',
+      })
+    }
   })
 
   router.post('/:id/accept-contract', async (req: Request, res: Response) => {

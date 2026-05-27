@@ -1,4 +1,6 @@
 import type { ProposalNotificationContext } from '../../../services/proposalNotificationContext.js'
+import type { EmailBranding } from '../../layout.js'
+import { renderLead } from '../../layout.js'
 import {
   baseSummaryRows,
   clientPublicCta,
@@ -11,9 +13,45 @@ import {
 } from './shared.js'
 import { renderCtaButton, renderSecondaryLink } from '../../layout.js'
 
-export function renderProposalApprovedOrg(appUrl: string, ctx: ProposalNotificationContext): string {
+export function renderProposalCreatedOrg(branding: EmailBranding, ctx: ProposalNotificationContext): string {
   return wrapBusinessEmail(
-    appUrl,
+    branding,
+    `Nova proposta — ${ctx.clienteNome}`,
+    'Nova proposta criada',
+    [
+      renderHeading('Nova proposta criada'),
+      statusBadge('Pendente', 'warning'),
+      renderParagraph(
+        `Uma nova proposta para <strong>${ctx.clienteNome}</strong> foi criada em <strong>${ctx.orgName}</strong>.`,
+      ),
+      renderSummaryTable(baseSummaryRows(ctx)),
+      orgCtas(ctx),
+    ],
+  )
+}
+
+export function renderProposalSentClient(branding: EmailBranding, ctx: ProposalNotificationContext): string {
+  return wrapBusinessEmail(
+    branding,
+    `Sua proposta — ${ctx.orgName}`,
+    'Proposta disponível para visualização',
+    [
+      renderHeading('Sua proposta está pronta'),
+      renderLead(
+        `Olá <strong>${ctx.clienteNome}</strong>, <strong>${ctx.orgName}</strong> preparou uma proposta comercial para você via PropEZ.`,
+      ),
+      renderSummaryTable(baseSummaryRows(ctx)),
+      clientPublicCta(ctx),
+      renderParagraph(
+        '<span style="font-size:12px;color:#a1a1aa;">Este link é exclusivo para você. Não compartilhe com terceiros.</span>',
+      ),
+    ],
+  )
+}
+
+export function renderProposalApprovedOrg(branding: EmailBranding, ctx: ProposalNotificationContext): string {
+  return wrapBusinessEmail(
+    branding,
     `Proposta aprovada — ${ctx.clienteNome}`,
     'Proposta aprovada',
     [
@@ -28,9 +66,9 @@ export function renderProposalApprovedOrg(appUrl: string, ctx: ProposalNotificat
   )
 }
 
-export function renderProposalApprovedClient(appUrl: string, ctx: ProposalNotificationContext): string {
+export function renderProposalApprovedClient(branding: EmailBranding, ctx: ProposalNotificationContext): string {
   return wrapBusinessEmail(
-    appUrl,
+    branding,
     `Confirmação — proposta aprovada`,
     'Sua proposta foi aprovada',
     [
@@ -47,9 +85,9 @@ export function renderProposalApprovedClient(appUrl: string, ctx: ProposalNotifi
   )
 }
 
-export function renderProposalRejectedOrg(appUrl: string, ctx: ProposalNotificationContext): string {
+export function renderProposalRejectedOrg(branding: EmailBranding, ctx: ProposalNotificationContext): string {
   return wrapBusinessEmail(
-    appUrl,
+    branding,
     `Proposta recusada — ${ctx.clienteNome}`,
     'Proposta recusada',
     [
@@ -62,9 +100,9 @@ export function renderProposalRejectedOrg(appUrl: string, ctx: ProposalNotificat
   )
 }
 
-export function renderProposalRejectedClient(appUrl: string, ctx: ProposalNotificationContext): string {
+export function renderProposalRejectedClient(branding: EmailBranding, ctx: ProposalNotificationContext): string {
   return wrapBusinessEmail(
-    appUrl,
+    branding,
     `Atualização da sua proposta`,
     'Proposta recusada',
     [
@@ -80,9 +118,9 @@ export function renderProposalRejectedClient(appUrl: string, ctx: ProposalNotifi
   )
 }
 
-export function renderContractSentOrg(appUrl: string, ctx: ProposalNotificationContext): string {
+export function renderContractSentOrg(branding: EmailBranding, ctx: ProposalNotificationContext): string {
   return wrapBusinessEmail(
-    appUrl,
+    branding,
     `Contrato enviado — ${ctx.clienteNome}`,
     'Contrato enviado para assinatura',
     [
@@ -100,12 +138,12 @@ export function renderContractSentOrg(appUrl: string, ctx: ProposalNotificationC
   )
 }
 
-export function renderContractSentClient(appUrl: string, ctx: ProposalNotificationContext): string {
+export function renderContractSentClient(branding: EmailBranding, ctx: ProposalNotificationContext): string {
   const signCta = ctx.rubricaSigningUrl
     ? renderCtaButton('Assinar contrato agora', ctx.rubricaSigningUrl)
     : clientPublicCta(ctx)
   return wrapBusinessEmail(
-    appUrl,
+    branding,
     `Assine seu contrato — ${ctx.orgName}`,
     'Contrato aguardando assinatura',
     [
@@ -122,13 +160,13 @@ export function renderContractSentClient(appUrl: string, ctx: ProposalNotificati
   )
 }
 
-export function renderContractSignedOrg(appUrl: string, ctx: ProposalNotificationContext): string {
+export function renderContractSignedOrg(branding: EmailBranding, ctx: ProposalNotificationContext): string {
   const download =
     ctx.rubricaSignedPdfUrl
       ? renderCtaButton('Baixar contrato assinado', ctx.rubricaSignedPdfUrl)
       : ''
   return wrapBusinessEmail(
-    appUrl,
+    branding,
     `Contrato assinado — ${ctx.clienteNome}`,
     'Contrato assinado',
     [
@@ -144,13 +182,13 @@ export function renderContractSignedOrg(appUrl: string, ctx: ProposalNotificatio
   )
 }
 
-export function renderContractSignedClient(appUrl: string, ctx: ProposalNotificationContext): string {
+export function renderContractSignedClient(branding: EmailBranding, ctx: ProposalNotificationContext): string {
   const download =
     ctx.rubricaSignedPdfUrl
       ? renderCtaButton('Baixar cópia assinada', ctx.rubricaSignedPdfUrl)
       : clientPublicCta(ctx)
   return wrapBusinessEmail(
-    appUrl,
+    branding,
     `Contrato assinado — ${ctx.orgName}`,
     'Contrato assinado com sucesso',
     [
@@ -164,9 +202,9 @@ export function renderContractSignedClient(appUrl: string, ctx: ProposalNotifica
   )
 }
 
-export function renderProposalPaidOrg(appUrl: string, ctx: ProposalNotificationContext): string {
+export function renderProposalPaidOrg(branding: EmailBranding, ctx: ProposalNotificationContext): string {
   return wrapBusinessEmail(
-    appUrl,
+    branding,
     `Pagamento recebido — ${ctx.clienteNome}`,
     'Pagamento registrado',
     [
@@ -181,9 +219,9 @@ export function renderProposalPaidOrg(appUrl: string, ctx: ProposalNotificationC
   )
 }
 
-export function renderProposalPaidClient(appUrl: string, ctx: ProposalNotificationContext): string {
+export function renderProposalPaidClient(branding: EmailBranding, ctx: ProposalNotificationContext): string {
   return wrapBusinessEmail(
-    appUrl,
+    branding,
     `Confirmação de pagamento`,
     'Pagamento confirmado',
     [
@@ -197,12 +235,25 @@ export function renderProposalPaidClient(appUrl: string, ctx: ProposalNotificati
   )
 }
 
-export type BusinessEmailRenderer = (appUrl: string, ctx: ProposalNotificationContext) => string
+export type BusinessEmailRenderer = (branding: EmailBranding, ctx: ProposalNotificationContext) => string
+
+export type BusinessEmailRendererSet = {
+  org: BusinessEmailRenderer
+  client?: BusinessEmailRenderer
+}
 
 export const BUSINESS_EMAIL_RENDERERS: Record<
-  'proposal_approved' | 'proposal_rejected' | 'contract_sent' | 'contract_signed' | 'proposal_paid',
-  { org: BusinessEmailRenderer; client: BusinessEmailRenderer }
+  | 'proposal_created'
+  | 'proposal_approved'
+  | 'proposal_rejected'
+  | 'contract_sent'
+  | 'contract_signed'
+  | 'proposal_paid',
+  BusinessEmailRendererSet
 > = {
+  proposal_created: {
+    org: renderProposalCreatedOrg,
+  },
   proposal_approved: {
     org: renderProposalApprovedOrg,
     client: renderProposalApprovedClient,
@@ -227,8 +278,11 @@ export const BUSINESS_EMAIL_RENDERERS: Record<
 
 export const BUSINESS_EMAIL_SUBJECTS: Record<
   keyof typeof BUSINESS_EMAIL_RENDERERS,
-  { org: string; client: string }
+  { org: string; client?: string }
 > = {
+  proposal_created: {
+    org: 'Nova proposta criada',
+  },
   proposal_approved: {
     org: 'Proposta aprovada',
     client: 'Sua proposta foi aprovada',
@@ -250,3 +304,5 @@ export const BUSINESS_EMAIL_SUBJECTS: Record<
     client: 'Pagamento confirmado',
   },
 }
+
+export const PROPOSAL_SENT_SUBJECT = 'Sua proposta comercial'

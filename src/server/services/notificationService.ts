@@ -1,6 +1,7 @@
 import type { Pool } from 'pg'
 import type { MailClient } from '../mail/client.js'
 import type { EnvironmentConfig } from '../env.js'
+import { normalizeEmailBranding } from '../mail/layout.js'
 import {
   BUSINESS_EMAIL_RENDERERS,
   BUSINESS_EMAIL_SUBJECTS,
@@ -103,6 +104,22 @@ async function insertInAppNotifications(
   }
 }
 
+async function hasProposalNotification(
+  pool: Pool,
+  organizationId: string,
+  proposalId: string,
+  type: ProposalNotificationType,
+): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM notifications
+     WHERE organization_id = $1 AND type = $2
+       AND metadata->>'proposalId' = $3
+     LIMIT 1`,
+    [organizationId, type, proposalId],
+  )
+  return rows.length > 0
+}
+
 function sendEmailsFireAndForget(
   mail: MailClient,
   emails: Array<{ to: string; subject: string; html: string; tag: string }>,
@@ -129,6 +146,14 @@ export async function notifyProposalEvent(deps: {
     return
   }
 
+  if (type === 'contract_signed') {
+    const already = await hasProposalNotification(pool, ctx.organizationId, proposalId, type)
+    if (already) {
+      console.info('[notifications] contract_signed já notificado, ignorando duplicata:', proposalId)
+      return
+    }
+  }
+
   const copy = IN_APP_COPY[type]
   const members = await listOrgMemberEmails(pool, ctx.organizationId)
   const memberIds = members.map((m) => m.userId)
@@ -148,9 +173,10 @@ export async function notifyProposalEvent(deps: {
 
   const businessKey = type as keyof typeof BUSINESS_EMAIL_RENDERERS
   if (businessKey in BUSINESS_EMAIL_RENDERERS) {
+    const branding = normalizeEmailBranding(config.appUrl, config.taggoSiteUrl)
     const renderers = BUSINESS_EMAIL_RENDERERS[businessKey]
     const subjects = BUSINESS_EMAIL_SUBJECTS[businessKey]
-    const orgHtml = renderers.org(config.appUrl, ctx)
+    const orgHtml = renderers.org(branding, ctx)
     const seen = new Set<string>()
     for (const m of members) {
       if (!m.email || seen.has(m.email)) continue
@@ -163,11 +189,12 @@ export async function notifyProposalEvent(deps: {
       })
     }
     const clientEmail = resolveClientEmail(ctx)
-    if (clientEmail && !seen.has(clientEmail.toLowerCase())) {
+    if (clientEmail && renderers.client && !seen.has(clientEmail.toLowerCase())) {
+      const clientSubject = subjects.client ?? subjects.org
       emailJobs.push({
         to: clientEmail,
-        subject: `${subjects.client} — ${ctx.orgName}`,
-        html: renderers.client(config.appUrl, ctx),
+        subject: `${clientSubject} — ${ctx.orgName}`,
+        html: renderers.client!(branding, ctx),
         tag: `${type}:client`,
       })
     }

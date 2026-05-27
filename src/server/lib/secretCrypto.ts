@@ -3,9 +3,10 @@
  * Taggo). Usada para armazenar API Keys do ProSync/Rubrica cifradas em
  * `org_integration_credentials.encrypted_api_key`.
  *
- * Chave de cifra:
- *   1. `CREDENTIALS_KEY` (se definida; recomendado em produção).
- *   2. Derivada de `TAGGO_SUITE_SECRET` via SHA-256 (fallback automático).
+ * Chave de cifra (ordem):
+ *   1. `CREDENTIALS_KEY` (recomendado em produção)
+ *   2. `TAGGO_SUITE_SECRET` (suíte Taggo)
+ *   3. `JWT_SECRET` (Vercel — já obrigatório para auth)
  *
  * Formato do payload: base64( IV(12) | TAG(16) | CIPHERTEXT ).
  */
@@ -24,13 +25,17 @@ function loadKey(): Buffer | null {
   if (suite && suite.length >= 32) {
     return crypto.createHash('sha256').update(`creds:${suite}`).digest()
   }
+  const jwt = process.env.JWT_SECRET
+  if (jwt && jwt.length >= 32) {
+    return crypto.createHash('sha256').update(`creds:jwt:${jwt}`).digest()
+  }
   return null
 }
 
 export class SecretCryptoUnavailableError extends Error {
   constructor() {
     super(
-      'Cifra de credenciais indisponível: defina CREDENTIALS_KEY ou TAGGO_SUITE_SECRET (>= 32 chars)',
+      'Cifra de credenciais indisponível: defina CREDENTIALS_KEY, TAGGO_SUITE_SECRET ou JWT_SECRET (>= 32 chars).',
     )
     this.name = 'SecretCryptoUnavailableError'
   }

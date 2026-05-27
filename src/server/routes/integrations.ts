@@ -19,6 +19,14 @@ import type { SuiteApp } from '../clients/suiteLookup.js'
 import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.js'
 import type { MailClient } from '../mail/client.js'
 import { notifyProposalEventAsync } from '../services/notificationService.js'
+import { isSecretCryptoAvailable } from '../lib/secretCrypto.js'
+import { resolveIntegrationForOrg } from '../integrations/resolveIntegrationCredential.js'
+import {
+  keyPrefixFrom,
+  normalizeBaseUrl,
+  validateApiKeyFormat,
+  verifyUpstreamCredential,
+} from '../integrations/credentialValidation.js'
 
 /**
  * Router de `/api/integrations/*`. Todas as rotas requerem auth e fazem proxy
@@ -51,6 +59,20 @@ export function buildIntegrationsRouter(deps: {
 
   router.use(buildRequireAuth(envConfig.auth))
 
+  function parseProvider(param: string): SuiteApp | null {
+    const p = param.toLowerCase()
+    if (p === 'prosync' || p === 'rubrica') return p
+    return null
+  }
+
+  function displayBaseUrl(
+    provider: SuiteApp,
+    cred: Awaited<ReturnType<OrgIntegrationCredentialsRepo['getCredential']>>,
+  ): string {
+    if (cred?.apiBaseUrl) return cred.apiBaseUrl.replace(/\/+$/, '')
+    return provider === 'prosync' ? config.prosync.baseUrl : config.rubrica.baseUrl
+  }
+
   // --------------------------------------------------------------------------
   // GET /api/integrations/credentials
   // Lista credenciais (sem segredos) para a organização atual.
@@ -58,7 +80,11 @@ export function buildIntegrationsRouter(deps: {
   router.get('/credentials', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
     if (!orgCredentialsRepo) {
-      return res.json({ providers: [], suiteEnabled: false })
+      return res.json({
+        providers: [],
+        suiteEnabled: false,
+        canSaveManual: false,
+      })
     }
     const orgId = req.auth.orgId
     try {
@@ -66,12 +92,16 @@ export function buildIntegrationsRouter(deps: {
         orgCredentialsRepo.getCredential(orgId, 'prosync'),
         orgCredentialsRepo.getCredential(orgId, 'rubrica'),
       ])
-      const summarize = (c: Awaited<ReturnType<typeof orgCredentialsRepo.getCredential>>) =>
+      const summarize = (
+        provider: SuiteApp,
+        c: Awaited<ReturnType<typeof orgCredentialsRepo.getCredential>>,
+      ) =>
         c
           ? {
               configured: true,
               source: c.source,
               keyPrefix: c.keyPrefix,
+              apiBaseUrl: displayBaseUrl(provider, c),
               externalUserId: c.externalUserId,
               externalOrgId: c.externalOrgId,
               scopes: c.scopes,
@@ -80,12 +110,148 @@ export function buildIntegrationsRouter(deps: {
           : { configured: false }
       return res.json({
         suiteEnabled: Boolean(config.suiteSecret),
-        prosync: summarize(prosync),
-        rubrica: summarize(rubrica),
+        canSaveManual: isSecretCryptoAvailable(),
+        prosync: summarize('prosync', prosync),
+        rubrica: summarize('rubrica', rubrica),
       })
     } catch (err) {
       console.error('[integrations/credentials] list erro:', err)
       return res.status(500).json({ error: 'Erro ao listar credenciais' })
+    }
+  })
+
+  // --------------------------------------------------------------------------
+  // PUT /api/integrations/credentials/:provider — salvar chave manual (por org)
+  // --------------------------------------------------------------------------
+  router.put('/credentials/:provider', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
+    if (!orgCredentialsRepo) {
+      return res.status(503).json({ error: 'Credenciais por organização indisponíveis' })
+    }
+    if (!isSecretCryptoAvailable()) {
+      return res.status(503).json({
+        error:
+          'Cifra indisponível: defina JWT_SECRET (>= 32 chars), CREDENTIALS_KEY ou TAGGO_SUITE_SECRET no servidor.',
+      })
+    }
+
+    const provider = parseProvider(String(req.params.provider || ''))
+    if (!provider) {
+      return res.status(400).json({ error: 'provider deve ser prosync ou rubrica' })
+    }
+
+    const apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : ''
+    const formatErr = validateApiKeyFormat(provider, apiKey)
+    if (formatErr) return res.status(400).json({ error: formatErr })
+
+    const defaultUrl = provider === 'prosync' ? config.prosync.baseUrl : config.rubrica.baseUrl
+    let baseUrl: string
+    try {
+      baseUrl = normalizeBaseUrl(
+        typeof req.body?.apiBaseUrl === 'string' ? req.body.apiBaseUrl : null,
+        defaultUrl,
+      )
+    } catch (err) {
+      return res.status(400).json({
+        error: err instanceof Error ? err.message : 'URL inválida',
+      })
+    }
+
+    const verify = await verifyUpstreamCredential(provider, apiKey, baseUrl)
+    if (verify.ok !== true) {
+      return res.status(400).json({ error: verify.error })
+    }
+
+    try {
+      await orgCredentialsRepo.saveCredential({
+        organizationId: req.auth.orgId,
+        provider,
+        apiKey,
+        apiBaseUrl: baseUrl,
+        keyPrefix: keyPrefixFrom(apiKey),
+        source: 'manual',
+      })
+      return res.json({
+        configured: true,
+        provider,
+        source: 'manual',
+        keyPrefix: keyPrefixFrom(apiKey),
+        apiBaseUrl: baseUrl,
+      })
+    } catch (err) {
+      console.error(`[integrations/credentials/${provider}] PUT erro:`, err)
+      return res.status(500).json({ error: 'Erro ao salvar credencial' })
+    }
+  })
+
+  // --------------------------------------------------------------------------
+  // POST /api/integrations/credentials/:provider/verify
+  // --------------------------------------------------------------------------
+  router.post('/credentials/:provider/verify', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
+    const provider = parseProvider(String(req.params.provider || ''))
+    if (!provider) {
+      return res.status(400).json({ error: 'provider deve ser prosync ou rubrica' })
+    }
+
+    const defaultUrl = provider === 'prosync' ? config.prosync.baseUrl : config.rubrica.baseUrl
+    let apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : ''
+    let baseUrl: string
+
+    if (!apiKey && orgCredentialsRepo) {
+      const resolved = await resolveIntegrationForOrg({
+        provider,
+        organizationId: req.auth.orgId,
+        ownerEmail: req.auth.email,
+        config,
+        orgCredentialsRepo,
+        ensureSuiteCredential,
+      })
+      if (!resolved) {
+        return res.status(404).json({ error: 'Nenhuma credencial configurada para testar' })
+      }
+      apiKey = resolved.apiKey
+      baseUrl = resolved.baseUrl
+    } else {
+      const formatErr = validateApiKeyFormat(provider, apiKey)
+      if (formatErr) return res.status(400).json({ error: formatErr })
+      try {
+        baseUrl = normalizeBaseUrl(
+          typeof req.body?.apiBaseUrl === 'string' ? req.body.apiBaseUrl : null,
+          defaultUrl,
+        )
+      } catch (err) {
+        return res.status(400).json({
+          error: err instanceof Error ? err.message : 'URL inválida',
+        })
+      }
+    }
+
+    const verify = await verifyUpstreamCredential(provider, apiKey, baseUrl)
+    if (verify.ok !== true) {
+      return res.status(400).json({ ok: false, error: verify.error })
+    }
+    return res.json({ ok: true, provider, apiBaseUrl: baseUrl })
+  })
+
+  // --------------------------------------------------------------------------
+  // DELETE /api/integrations/credentials/:provider
+  // --------------------------------------------------------------------------
+  router.delete('/credentials/:provider', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
+    if (!orgCredentialsRepo) {
+      return res.status(503).json({ error: 'Credenciais por organização indisponíveis' })
+    }
+    const provider = parseProvider(String(req.params.provider || ''))
+    if (!provider) {
+      return res.status(400).json({ error: 'provider deve ser prosync ou rubrica' })
+    }
+    try {
+      await orgCredentialsRepo.deleteCredential(req.auth.orgId, provider)
+      return res.json({ ok: true, provider })
+    } catch (err) {
+      console.error(`[integrations/credentials/${provider}] DELETE erro:`, err)
+      return res.status(500).json({ error: 'Erro ao remover credencial' })
     }
   })
 
@@ -147,57 +313,36 @@ export function buildIntegrationsRouter(deps: {
     }
   })
 
-  /**
-   * Resolve a chave de integração da organização autenticada para o provider
-   * indicado. Ordem de busca:
-   *   1. `org_integration_credentials` (cifrada).
-   *   2. Provisionamento automático via suíte Taggo (vincula sem criar).
-   *   3. Fallback para `PROSYNC_API_KEY`/`RUBRICA_API_KEY` global do `.env`.
-   * Lança erro se nada funcionar.
-   */
-  async function resolveProviderApiKey(
-    req: Request,
-    provider: SuiteApp,
-  ): Promise<string> {
+  async function integrationFor(req: Request, provider: SuiteApp) {
     const orgId = req.auth?.orgId
     const email = req.auth?.email
     if (!orgId) throw new Error('Sem organização autenticada')
 
-    if (orgCredentialsRepo) {
-      const cred = await orgCredentialsRepo
-        .getCredential(orgId, provider)
-        .catch(() => null)
-      if (cred) return cred.apiKey
+    const resolved = await resolveIntegrationForOrg({
+      provider,
+      organizationId: orgId,
+      ownerEmail: email,
+      config,
+      orgCredentialsRepo,
+      ensureSuiteCredential,
+    })
+    if (!resolved) {
+      const label = provider === 'prosync' ? 'ProSync' : 'Rubrica'
+      throw new Error(
+        `${label} não configurado: conecte em Configurações → Integrações ou use a suíte Taggo.`,
+      )
     }
-
-    if (ensureSuiteCredential && email) {
-      const result = await ensureSuiteCredential(provider, {
-        organizationId: orgId,
-        ownerEmail: email,
-        createIfMissing: false,
-      })
-      if (result.ok) return result.credential.apiKey
-    }
-
-    const fallback =
-      provider === 'prosync' ? config.prosync.apiKey : config.rubrica.apiKey
-    if (fallback) return fallback
-
-    const envName = provider === 'prosync' ? 'PROSYNC_API_KEY' : 'RUBRICA_API_KEY'
-    throw new Error(
-      `${provider} sem credencial para esta organização: rode ` +
-        `POST /api/integrations/credentials/${provider}/provision ou defina ${envName}.`,
-    )
+    return resolved
   }
 
   async function prosyncFor(req: Request) {
-    const apiKey = await resolveProviderApiKey(req, 'prosync')
-    return createProsyncClient({ baseUrl: config.prosync.baseUrl, apiKey })
+    const { apiKey, baseUrl } = await integrationFor(req, 'prosync')
+    return createProsyncClient({ baseUrl, apiKey })
   }
 
   async function rubricaFor(req: Request) {
-    const apiKey = await resolveProviderApiKey(req, 'rubrica')
-    return createRubricaClient({ baseUrl: config.rubrica.baseUrl, apiKey })
+    const { apiKey, baseUrl } = await integrationFor(req, 'rubrica')
+    return createRubricaClient({ baseUrl, apiKey })
   }
 
   function handleUpstreamError(res: Response, err: unknown, label: string) {

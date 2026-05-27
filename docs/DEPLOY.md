@@ -39,8 +39,10 @@ Marque cada item antes de promover para produção:
 - [ ] `MAIL_FROM` + (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` **ou** `RESEND_API_KEY`) — auth + alertas de proposta/contrato
 - [ ] `APP_URL` público e acessível (logo em e-mails: `{APP_URL}/logo.svg`)
 - [ ] Migração `sql/007_notifications.sql` aplicada no boot (tabela `notifications`, colunas `propostas.cliente_email` / `viewed_at`)
-- [ ] `PROSYNC_API_URL` + `PROSYNC_API_KEY` (`ps_live_...`) + `PROSYNC_WEBHOOK_SECRET` (mesmo secret cadastrado no outbound webhook do ProSync)
-- [ ] `RUBRICA_API_URL` + `RUBRICA_API_KEY` (`dm_live_...`) + `RUBRICA_WEBHOOK_SECRET`
+- [ ] `PROSYNC_API_URL` (default global) + `PROSYNC_WEBHOOK_SECRET` (webhook inbound Propez)
+- [ ] `RUBRICA_API_URL` (default global) — chaves `ps_live_` / `dm_live_` por organização em **Configurações → Integrações** (não é obrigatório `PROSYNC_API_KEY` / `RUBRICA_API_KEY` na Vercel)
+- [ ] `JWT_SECRET` (>= 32 chars) — também habilita cifra das chaves por org no banco
+- [ ] Opcional legado single-tenant: `PROSYNC_API_KEY` / `RUBRICA_API_KEY` no `.env`
 - [ ] `CORS_ORIGINS` com domínios alternativos (www, apex, staging) separados por vírgula
 
 Webhooks externos a registrar nas plataformas parceiras:
@@ -214,10 +216,9 @@ Tipos: `proposal_approved`, `proposal_rejected`, `contract_sent`, `contract_sign
 
 ## Segurança de segredos
 
-- Nunca commitar `.env`. O `.gitignore` já bloqueia `.env*` exceto
-  `.env.example`.
-- `.env.example` só pode conter placeholders (`<PREENCHER>`) e defaults
-  públicos. Auditar a cada PR que mexer em variáveis.
+- Nunca commitar `.env` nem `.env.example`. O `.gitignore` ignora ambos.
+- O template versionado é [`env.example`](../env.example) (só placeholders
+  `<PREENCHER>`). Auditar a cada PR que mexer em variáveis.
 - Em produção, preferir o gerenciador de segredos nativo (Secret Manager no
   GCP, AWS Secrets Manager, Vercel Encrypted, Render Secret Files).
 - Rotacionar `JWT_SECRET` invalida todas as sessões ativas — fazer em janela

@@ -13,6 +13,7 @@ import {
   triggerRubricaAfterApproval,
 } from '../services/proposalJourney.js';
 import type { IntegrationsConfig } from '../config.js';
+import type { EnsureSuiteCredential } from '../integrations/ensureSuiteCredential.js';
 import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js';
 
 const PROPOSTA_SELECT = `
@@ -44,8 +45,17 @@ export function createPublicPropostasRouter(deps: {
   config?: EnvironmentConfig;
   integrationsConfig?: IntegrationsConfig;
   orgCredentialsRepo?: OrgIntegrationCredentialsRepo;
+  ensureSuiteCredential?: EnsureSuiteCredential;
 }): Router {
-  const { pool, mail, suiteProposalEvents, config, integrationsConfig, orgCredentialsRepo } = deps;
+  const {
+    pool,
+    mail,
+    suiteProposalEvents,
+    config,
+    integrationsConfig,
+    orgCredentialsRepo,
+    ensureSuiteCredential,
+  } = deps;
   const router = express.Router();
 
   router.get('/:token/journey', async (req: Request, res: Response) => {
@@ -157,6 +167,7 @@ export function createPublicPropostasRouter(deps: {
           integrationsConfig,
           envConfig: config,
           orgCredentialsRepo,
+          ensureSuiteCredential,
           mail,
           proposalId: String(updated.id),
           organizationId: String(updated.organization_id),

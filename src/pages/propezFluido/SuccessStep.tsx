@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { CheckCircle, Eye, Mail } from 'lucide-react';
-import { generatePublicLink } from '../../lib/store';
+import { generatePublicLink, sendProposalEmail } from '../../lib/store';
 import { ApiError } from '../../lib/apiClient';
 
 export interface SuccessStepProps {
@@ -60,13 +60,21 @@ export function SuccessStep({
     }
     setIsSending(true);
     try {
-      // Simulação do envio: no futuro substituir por chamada real.
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      alert(`Proposta enviada com sucesso para ${clienteEmail}! (Simulação)`);
+      const result = await sendProposalEmail(propostaId, clienteEmail);
+      if (!result.sent) {
+        alert('Não foi possível enviar o e-mail. Verifique a configuração de e-mail ou tente novamente.');
+        return;
+      }
+      alert(`Proposta enviada com sucesso para ${result.to ?? clienteEmail}!`);
       onNavigateToPropostas();
     } catch (error) {
       console.error('Erro:', error);
-      alert('Erro de conexão ao tentar enviar o e-mail.');
+      if (error instanceof ApiError) {
+        const body = error.body as { error?: string } | undefined;
+        alert(body?.error ?? 'Erro ao enviar o e-mail.');
+      } else {
+        alert('Erro de conexão ao tentar enviar o e-mail.');
+      }
     } finally {
       setIsSending(false);
     }

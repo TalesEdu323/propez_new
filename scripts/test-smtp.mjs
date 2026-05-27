@@ -43,10 +43,14 @@ if (!to) {
   process.exit(0)
 }
 
+const smtpUser = user?.trim()
 const info = await transport.sendMail({
   from,
   to,
+  replyTo: smtpUser,
   subject: 'PropEZ — teste SMTP',
   text: 'Se recebeu isto, o SMTP Hostinger está configurado.',
+  html: '<p>Se recebeu isto, o SMTP Hostinger está configurado.</p>',
+  envelope: smtpUser ? { from: smtpUser, to: [to] } : undefined,
 })
 console.log('[test-smtp] enviado:', info.messageId)

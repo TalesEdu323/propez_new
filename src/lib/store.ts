@@ -952,3 +952,12 @@ export async function generatePublicLink(
 ): Promise<{ token: string; url: string }> {
   return api.post<{ token: string; url: string }>(`/api/propostas/${propostaId}/public-link`);
 }
+
+export async function sendProposalEmail(
+  propostaId: string,
+  email?: string,
+): Promise<{ sent: boolean; to?: string }> {
+  return api.post<{ sent: boolean; to?: string }>(`/api/propostas/${propostaId}/send-email`, {
+    ...(email ? { email } : {}),
+  });
+}

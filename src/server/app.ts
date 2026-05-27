@@ -11,6 +11,7 @@ import { createCorsOptions } from './cors.js';
 import { createPool, runStartupMigrations } from './db.js';
 import { loadIntegrationsConfig } from './config.js';
 import { createMailClient } from './mail/client.js';
+import { normalizeEmailBranding } from './mail/layout.js';
 import { createRateLimit } from './middleware/rateLimit.js';
 import { buildIntegrationsRouter } from './routes/integrations.js';
 import { buildWebhooksRouter } from './routes/webhooks.js';
@@ -58,7 +59,10 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   const integrationsConfig = loadIntegrationsConfig(config.appUrl);
   const stripe = new Stripe(config.stripeSecretKey);
   const pool = createPool(config);
-  const mail = createMailClient(config.mail, config.appUrl);
+  const mail = createMailClient(
+    config.mail,
+    normalizeEmailBranding(config.appUrl, config.taggoSiteUrl),
+  );
   const suiteLookup = createSuiteLookup(integrationsConfig);
   const suiteServiceToken = createSuiteServiceTokenClient(integrationsConfig);
   const suiteProposalEvents = createSuiteProposalEvents(integrationsConfig);
@@ -161,6 +165,7 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
       config,
       integrationsConfig,
       orgCredentialsRepo,
+      ensureSuiteCredential,
     }),
   );
 
@@ -170,7 +175,7 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   app.use('/api/admin', createAdminMarketplaceRouter({ pool, config }));
 
   // 9) Utilitárias
-  app.use('/api', createHealthRouter({ pool, integrationsConfig }));
+  app.use('/api', createHealthRouter({ pool, integrationsConfig, config }));
   app.use('/api', createCheckoutRouter({ stripe, config }));
   app.use('/api', createNotificationsRouter({ pool, config }));
 

@@ -1,4 +1,5 @@
 import type { EnvironmentConfig } from './env.js';
+import { isMailConfigured } from './env.js';
 import type { IntegrationsConfig } from './config.js';
 
 /**
@@ -73,5 +74,24 @@ export function logStartupIntegrationDiagnostics(
       '[startup] Stripe price IDs ausentes (checkout pode falhar):',
       missingPrices.join(', '),
     );
+  }
+
+  const { mail } = config;
+  if (!isMailConfigured(mail)) {
+    if (config.nodeEnv === 'production') {
+      console.error(
+        '[startup] E-mail: DESATIVADO (provider=none). Configure SMTP_HOST + credenciais ou RESEND_API_KEY.',
+      );
+    } else {
+      console.warn(
+        '[startup] E-mail: modo simulação (provider=none). Defina SMTP_* ou RESEND_API_KEY para envio real.',
+      );
+    }
+  } else if (mail.provider === 'smtp') {
+    console.info(
+      `[startup] E-mail: SMTP ${mail.smtp?.host}:${mail.smtp?.port} (from=${mail.from})`,
+    );
+  } else if (mail.provider === 'resend') {
+    console.info(`[startup] E-mail: Resend (from=${mail.from})`);
   }
 }

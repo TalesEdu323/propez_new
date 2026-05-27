@@ -20,6 +20,7 @@ import {
 } from '../auth/cookies.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import type { MailClient } from '../mail/resend.js'
+import { isAuthMailFailure, respondAuthMailFailure, sendAuthEmail } from '../mail/authMail.js'
 import type { SuiteLookupClient } from '../clients/suiteLookup.js'
 
 const EMAIL_CODE_TTL_MINUTES = 15
@@ -185,10 +186,16 @@ export function createAuthRouter(deps: {
         client.release()
       }
 
-      try {
-        await mail.sendVerificationEmail({ to: email, name, code })
-      } catch (err) {
-        console.error('[auth/register] send verification email failed:', err)
+      const mailResult = await sendAuthEmail(
+        config,
+        'register',
+        () => mail.sendVerificationEmail({ to: email, name, code }),
+        `código de verificação para ${email}: ${code}`,
+      )
+      if (isAuthMailFailure(mailResult)) {
+        if (config.mail.required) {
+          return respondAuthMailFailure(res, config, mailResult)
+        }
       }
 
       // Descoberta cross-app na suíte Taggo: pergunta ao ProSync/Rubrica se
@@ -212,7 +219,15 @@ export function createAuthRouter(deps: {
           .catch((err) => console.error('[auth/register] suite-lookup falhou:', err))
       }
 
-      return res.status(201).json({ userId, email, requiresVerification: true })
+      return res.status(201).json({
+        userId,
+        email,
+        requiresVerification: true,
+        emailSent: mailResult.ok,
+        ...(mailResult.ok || config.nodeEnv === 'production'
+          ? {}
+          : { devVerificationCode: code }),
+      })
     } catch (err) {
       console.error('[auth/register] erro:', err)
       return res.status(500).json({ error: 'Erro ao criar conta' })
@@ -313,10 +328,21 @@ export function createAuthRouter(deps: {
         `INSERT INTO email_verifications (user_id, code_hash, expires_at) VALUES ($1, $2, $3)`,
         [u.id, codeHash, expiresAt],
       )
-      try {
-        await mail.sendVerificationEmail({ to: u.email, name: u.name, code })
-      } catch (err) {
-        console.error('[auth/resend-verification] email falhou:', err)
+      const mailResult = await sendAuthEmail(
+        config,
+        'resend-verification',
+        () => mail.sendVerificationEmail({ to: u.email, name: u.name, code }),
+        `código de verificação para ${u.email}: ${code}`,
+      )
+      if (isAuthMailFailure(mailResult)) {
+        if (config.mail.required) {
+          return respondAuthMailFailure(res, config, mailResult)
+        }
+        return res.json({
+          sent: false,
+          reason: mailResult.reason,
+          ...(config.nodeEnv !== 'production' ? { devVerificationCode: code } : {}),
+        })
       }
       return res.json({ sent: true })
     } catch (err) {
@@ -501,10 +527,17 @@ export function createAuthRouter(deps: {
       )
 
       const resetUrl = `${config.appUrl.replace(/\/+$/, '')}/?route=reset-password&token=${encodeURIComponent(token)}`
-      try {
-        await mail.sendPasswordResetEmail({ to: u.email, name: u.name, resetUrl })
-      } catch (err) {
-        console.error('[auth/forgot-password] email falhou:', err)
+      const mailResult = await sendAuthEmail(
+        config,
+        'forgot-password',
+        () => mail.sendPasswordResetEmail({ to: u.email, name: u.name, resetUrl }),
+        config.nodeEnv !== 'production' ? `link de reset: ${resetUrl}` : undefined,
+      )
+      if (isAuthMailFailure(mailResult)) {
+        if (config.mail.required) {
+          return respondAuthMailFailure(res, config, mailResult)
+        }
+        return res.json({ sent: false, reason: mailResult.reason })
       }
       return res.json({ sent: true })
     } catch (err) {

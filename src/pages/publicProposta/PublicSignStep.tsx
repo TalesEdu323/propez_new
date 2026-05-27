@@ -1,4 +1,4 @@
-import { ExternalLink, FileCheck, Loader2 } from 'lucide-react';
+import { ExternalLink, FileCheck, Loader2, AlertCircle } from 'lucide-react';
 import { getContractSignPhase } from '../../types/proposalFlow';
 import type { ProposalFlowConfig } from '../../types/proposalFlow';
 
@@ -57,6 +57,18 @@ export function PublicSignStep({ proposta, orgName, onConfirmReceipt, confirming
         <button type="button" onClick={onConfirmReceipt} disabled={confirming} className="btn-primary">
           {confirming ? 'Confirmando...' : 'Confirmar recebimento'}
         </button>
+      </div>
+    );
+  }
+
+  if (proposta.rubricaStatus === 'failed' || proposta.rubricaStatus === 'cancelled') {
+    return (
+      <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-red-50 border border-red-100 text-center">
+        <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
+        <h3 className="text-xl font-bold text-red-900">Assinatura indisponível</h3>
+        <p className="text-red-700 mt-2 text-sm">
+          Não foi possível preparar o contrato para assinatura. Entre em contato com {orgName} para receber o link manualmente.
+        </p>
       </div>
     );
   }

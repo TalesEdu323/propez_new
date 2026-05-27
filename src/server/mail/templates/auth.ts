@@ -1,39 +1,54 @@
+import type { EmailBranding } from '../layout.js'
 import {
   escapeHtml,
+  renderCodeBlock,
   renderCtaButton,
   renderEmailLayout,
   renderHeading,
+  renderLead,
   renderParagraph,
 } from '../layout.js'
 
-export function renderVerificationHtml(appUrl: string, name: string, code: string): string {
+export function renderVerificationHtml(
+  branding: EmailBranding,
+  name: string,
+  code: string,
+): string {
   const safeName = escapeHtml(name || 'utilizador')
   const body = [
     renderHeading('Confirme o seu email'),
-    renderParagraph(`Olá ${safeName}, use o código abaixo para ativar a sua conta PropEZ. O código expira em <strong>15 minutos</strong>.`),
-    `<div style="margin:24px 0;padding:20px;background:#f4f4f5;border-radius:12px;text-align:center;letter-spacing:8px;font-size:28px;font-weight:700;color:#080804;">${escapeHtml(code)}</div>`,
-    renderParagraph('<span style="font-size:12px;color:#a1a1aa;">Se não foi você, ignore este email.</span>'),
+    renderLead(`Olá <strong>${safeName}</strong>, bem-vindo ao PropEZ. Use o código abaixo para ativar a sua conta.`),
+    renderCodeBlock(code),
+    renderParagraph(
+      'O código expira em <strong>15 minutos</strong>. Se não criou uma conta, ignore este e-mail.',
+    ),
   ].join('')
 
   return renderEmailLayout({
-    appUrl,
+    branding,
     preheader: `Seu código PropEZ: ${code}`,
     title: 'Ative a sua conta PropEZ',
     bodyHtml: body,
   })
 }
 
-export function renderResetHtml(appUrl: string, name: string, resetUrl: string): string {
+export function renderResetHtml(
+  branding: EmailBranding,
+  name: string,
+  resetUrl: string,
+): string {
   const safeName = escapeHtml(name || 'utilizador')
   const body = [
     renderHeading('Redefinir senha'),
-    renderParagraph(`Olá ${safeName}, recebemos um pedido para redefinir a sua senha. O link expira em <strong>30 minutos</strong>.`),
-    renderCtaButton('Redefinir senha', resetUrl),
-    renderParagraph('<span style="font-size:12px;color:#a1a1aa;">Se não foi você, ignore este email.</span>'),
+    renderLead(`Olá <strong>${safeName}</strong>, recebemos um pedido para redefinir a senha da sua conta PropEZ.`),
+    renderCtaButton('Redefinir minha senha', resetUrl),
+    renderParagraph(
+      'O link expira em <strong>30 minutos</strong>. Se não foi você, ignore este e-mail — sua senha permanece a mesma.',
+    ),
   ].join('')
 
   return renderEmailLayout({
-    appUrl,
+    branding,
     preheader: 'Link para redefinir sua senha PropEZ',
     title: 'Redefinir senha PropEZ',
     bodyHtml: body,

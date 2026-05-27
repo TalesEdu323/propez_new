@@ -3,15 +3,7 @@
  *
  * Cada linha em `org_integration_credentials` guarda a API key cifrada que o
  * Propez usa para conversar com ProSync/Rubrica em nome de uma organização
- * específica. A cifra é AES-256-GCM com chave derivada de `CREDENTIALS_KEY`
- * ou `TAGGO_SUITE_SECRET` (ver `lib/secretCrypto.ts`).
- *
- * Política de leitura:
- *   1. Tenta carregar a credencial cifrada da organização.
- *   2. Se faltar e houver `PROSYNC_API_KEY`/`RUBRICA_API_KEY` global no .env,
- *      devolve isso como fallback (compatibilidade com o setup atual).
- *   3. Caso contrário, devolve `null` — o orquestrador decide se provisiona
- *      uma nova chave via service-token.
+ * específica.
  */
 import type { Pool } from 'pg'
 import type { IntegrationsConfig } from '../config.js'
@@ -24,6 +16,7 @@ export interface OrgIntegrationCredential {
   organizationId: string
   provider: SuiteApp
   apiKey: string
+  apiBaseUrl: string | null
   keyPrefix: string | null
   externalUserId: string | null
   externalOrgId: string | null
@@ -36,6 +29,7 @@ export interface SaveCredentialInput {
   organizationId: string
   provider: SuiteApp
   apiKey: string
+  apiBaseUrl?: string | null
   keyPrefix?: string | null
   externalUserId?: string | null
   externalOrgId?: string | null
@@ -47,6 +41,7 @@ interface Row {
   organization_id: string
   provider: string
   encrypted_api_key: string
+  api_base_url: string | null
   key_prefix: string | null
   external_user_id: string | null
   external_org_id: string | null
@@ -55,11 +50,15 @@ interface Row {
   last_verified_at: string | null
 }
 
+const SELECT_COLS = `organization_id, provider, encrypted_api_key, api_base_url, key_prefix,
+  external_user_id, external_org_id, scopes, source, last_verified_at`
+
 function rowToCredential(row: Row): OrgIntegrationCredential {
   return {
     organizationId: row.organization_id,
     provider: row.provider as SuiteApp,
     apiKey: decryptSecret(row.encrypted_api_key),
+    apiBaseUrl: row.api_base_url,
     keyPrefix: row.key_prefix,
     externalUserId: row.external_user_id,
     externalOrgId: row.external_org_id,
@@ -69,43 +68,54 @@ function rowToCredential(row: Row): OrgIntegrationCredential {
   }
 }
 
+function isPlaceholderKey(value: string): boolean {
+  return value.includes('<PREENCHER>') || value.endsWith('_PREENCHER')
+}
+
 export function createOrgIntegrationCredentialsRepo(
   pool: Pool,
   integrations: IntegrationsConfig,
 ) {
+  /** Apenas credencial persistida no banco (sem fallback `.env`). */
+  async function getStoredCredential(
+    organizationId: string,
+    provider: SuiteApp,
+  ): Promise<OrgIntegrationCredential | null> {
+    if (!isSecretCryptoAvailable()) return null
+    const { rows } = await pool.query<Row>(
+      `SELECT ${SELECT_COLS}
+       FROM org_integration_credentials
+       WHERE organization_id = $1 AND provider = $2
+       LIMIT 1`,
+      [organizationId, provider],
+    )
+    if (!rows[0]) return null
+    try {
+      return rowToCredential(rows[0])
+    } catch (err) {
+      console.error(
+        `[org-credentials] falha ao decifrar credential ${provider} org=${organizationId}:`,
+        err,
+      )
+      return null
+    }
+  }
+
   async function getCredential(
     organizationId: string,
     provider: SuiteApp,
   ): Promise<OrgIntegrationCredential | null> {
-    if (isSecretCryptoAvailable()) {
-      const { rows } = await pool.query<Row>(
-        `SELECT organization_id, provider, encrypted_api_key, key_prefix,
-                external_user_id, external_org_id, scopes, source, last_verified_at
-         FROM org_integration_credentials
-         WHERE organization_id = $1 AND provider = $2
-         LIMIT 1`,
-        [organizationId, provider],
-      )
-      if (rows[0]) {
-        try {
-          return rowToCredential(rows[0])
-        } catch (err) {
-          console.error(
-            `[org-credentials] falha ao decifrar credential ${provider} org=${organizationId}:`,
-            err,
-          )
-        }
-      }
-    }
+    const stored = await getStoredCredential(organizationId, provider)
+    if (stored) return stored
 
-    // Fallback: chave global do .env (setup atual, single-tenant).
     const fallback =
       provider === 'prosync' ? integrations.prosync.apiKey : integrations.rubrica.apiKey
-    if (fallback) {
+    if (fallback && !isPlaceholderKey(fallback)) {
       return {
         organizationId,
         provider,
         apiKey: fallback,
+        apiBaseUrl: null,
         keyPrefix: null,
         externalUserId: null,
         externalOrgId: null,
@@ -120,29 +130,31 @@ export function createOrgIntegrationCredentialsRepo(
   async function saveCredential(input: SaveCredentialInput): Promise<void> {
     if (!isSecretCryptoAvailable()) {
       throw new Error(
-        'Não é possível persistir credencial: defina CREDENTIALS_KEY ou TAGGO_SUITE_SECRET.',
+        'Não é possível persistir credencial: defina CREDENTIALS_KEY, TAGGO_SUITE_SECRET ou JWT_SECRET.',
       )
     }
     const encrypted = encryptSecret(input.apiKey)
     await pool.query(
       `INSERT INTO org_integration_credentials
-         (organization_id, provider, encrypted_api_key, key_prefix,
+         (organization_id, provider, encrypted_api_key, api_base_url, key_prefix,
           external_user_id, external_org_id, scopes, source,
           last_verified_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW(), NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), NOW())
        ON CONFLICT (organization_id, provider) DO UPDATE
          SET encrypted_api_key = EXCLUDED.encrypted_api_key,
-             key_prefix         = EXCLUDED.key_prefix,
-             external_user_id   = EXCLUDED.external_user_id,
-             external_org_id    = EXCLUDED.external_org_id,
-             scopes             = EXCLUDED.scopes,
-             source             = EXCLUDED.source,
-             last_verified_at   = NOW(),
-             updated_at         = NOW()`,
+             api_base_url      = EXCLUDED.api_base_url,
+             key_prefix          = EXCLUDED.key_prefix,
+             external_user_id    = EXCLUDED.external_user_id,
+             external_org_id     = EXCLUDED.external_org_id,
+             scopes              = EXCLUDED.scopes,
+             source              = EXCLUDED.source,
+             last_verified_at    = NOW(),
+             updated_at          = NOW()`,
       [
         input.organizationId,
         input.provider,
         encrypted,
+        input.apiBaseUrl ?? null,
         input.keyPrefix ?? null,
         input.externalUserId ?? null,
         input.externalOrgId ?? null,
@@ -165,8 +177,7 @@ export function createOrgIntegrationCredentialsRepo(
   async function listForProvider(provider: SuiteApp): Promise<OrgIntegrationCredential[]> {
     if (!isSecretCryptoAvailable()) return []
     const { rows } = await pool.query<Row>(
-      `SELECT organization_id, provider, encrypted_api_key, key_prefix,
-              external_user_id, external_org_id, scopes, source, last_verified_at
+      `SELECT ${SELECT_COLS}
        FROM org_integration_credentials
        WHERE provider = $1
        ORDER BY created_at DESC`,
@@ -186,7 +197,13 @@ export function createOrgIntegrationCredentialsRepo(
     return out
   }
 
-  return { getCredential, saveCredential, deleteCredential, listForProvider }
+  return {
+    getCredential,
+    getStoredCredential,
+    saveCredential,
+    deleteCredential,
+    listForProvider,
+  }
 }
 
 export type OrgIntegrationCredentialsRepo = ReturnType<

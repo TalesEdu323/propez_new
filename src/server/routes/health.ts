@@ -2,11 +2,14 @@ import express from 'express';
 import type { Request, Response, Router } from 'express';
 import type pg from 'pg';
 import type { IntegrationsConfig } from '../config.js';
+import type { EnvironmentConfig } from '../env.js';
+import { isMailConfigured } from '../env.js';
 import { isSecretCryptoAvailable } from '../lib/secretCrypto.js';
 
 export interface HealthRouterOptions {
   pool: pg.Pool;
   integrationsConfig: IntegrationsConfig;
+  config: EnvironmentConfig;
 }
 
 type IntegrationState = 'configured' | 'placeholder' | 'missing';
@@ -23,7 +26,7 @@ function isLocalUrl(url: string): boolean {
   return /localhost|127\.0\.0\.1|0\.0\.0\.0|::1/i.test(u) || u.startsWith('http://');
 }
 
-export function createHealthRouter({ pool, integrationsConfig }: HealthRouterOptions): Router {
+export function createHealthRouter({ pool, integrationsConfig, config }: HealthRouterOptions): Router {
   const router = express.Router();
 
   router.get('/health', async (_req: Request, res: Response) => {
@@ -65,12 +68,24 @@ export function createHealthRouter({ pool, integrationsConfig }: HealthRouterOpt
     if (suiteEnabled && !credsCryptoAvailable) {
       warnings.push('Cifra de credenciais indisponível — defina CREDENTIALS_KEY ou TAGGO_SUITE_SECRET com ao menos 32 chars.');
     }
+    if (!isMailConfigured(config.mail)) {
+      warnings.push(
+        config.nodeEnv === 'production'
+          ? 'Provedor de e-mail não configurado — auth e notificações por e-mail estão desativados.'
+          : 'Provedor de e-mail não configurado — e-mails serão simulados no console (provider=none).',
+      );
+    }
 
     res.status(dbStatus ? 200 : 503).json({
       status: dbStatus ? 'ok' : 'degraded',
       database: dbStatus,
       appUrl: integrationsConfig.appUrl,
       appUrlPublic,
+      mail: {
+        provider: config.mail.provider,
+        configured: isMailConfigured(config.mail),
+        from: config.mail.from,
+      },
       integrations: {
         prosync: prosyncState === 'configured',
         rubrica: rubricaState === 'configured',

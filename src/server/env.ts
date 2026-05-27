@@ -58,6 +58,27 @@ function normalizeResendApiKey(raw: string | undefined): string | null {
   return key;
 }
 
+/** Ignora hosts placeholder do .env.example e valores inválidos para auto-detect. */
+function normalizeSmtpHost(raw: string | undefined): string | null {
+  const host = raw?.trim() || '';
+  if (!host) return null;
+  const lower = host.toLowerCase();
+  if (
+    lower.includes('example.com') ||
+    lower.includes('example.org') ||
+    lower.includes('preencher') ||
+    lower === 'localhost' ||
+    lower === '127.0.0.1'
+  ) {
+    return null;
+  }
+  return host;
+}
+
+export function isMailConfigured(mail: MailConfig): boolean {
+  return mail.provider !== 'none';
+}
+
 function resolveMailProvider(input: {
   mailProvider: string;
   emailProvider: string;
@@ -65,21 +86,30 @@ function resolveMailProvider(input: {
   resendApiKey: string | null;
 }): MailConfig['provider'] {
   const forced = input.mailProvider.trim().toLowerCase();
-  if (forced === 'smtp') return 'smtp';
-  if (forced === 'resend') return input.resendApiKey ? 'resend' : 'none';
+  const hasSmtp = Boolean(input.smtpHost);
+  const hasResend = Boolean(input.resendApiKey);
+
+  if (forced === 'smtp') {
+    if (hasSmtp) return 'smtp';
+    if (hasResend) return 'resend';
+    return 'none';
+  }
+  if (forced === 'resend') return hasResend ? 'resend' : 'none';
 
   const emailProv = input.emailProvider.trim().toLowerCase();
   if (emailProv === 'nodemailer' || emailProv === 'smtp') {
-    if (input.smtpHost) return 'smtp';
+    if (hasSmtp) return 'smtp';
   }
 
-  if (input.smtpHost) return 'smtp';
-  if (input.resendApiKey) return 'resend';
+  if (hasSmtp) return 'smtp';
+  if (hasResend) return 'resend';
   return 'none';
 }
 
 export interface EnvironmentConfig {
   appUrl: string;
+  /** Site institucional Taggo (rodapé e branding nos e-mails). */
+  taggoSiteUrl: string;
   databaseUrl: string;
   stripeSecretKey: string;
   stripeWebhookSecret: string;
@@ -147,7 +177,7 @@ export function loadConfig(): EnvironmentConfig {
 
   const resendApiKey = normalizeResendApiKey(process.env.RESEND_API_KEY);
   const mailFrom = process.env.MAIL_FROM?.trim() || 'Propez <no-reply@propez.local>';
-  const smtpHost = (process.env.SMTP_HOST || process.env.EMAIL_HOST)?.trim() || null;
+  const smtpHost = normalizeSmtpHost(process.env.SMTP_HOST || process.env.EMAIL_HOST);
   const smtpPort = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || '587');
   const smtpSecure = parseBoolEnv(
     process.env.SMTP_SECURE ?? process.env.EMAIL_SECURE,
@@ -184,9 +214,20 @@ export function loadConfig(): EnvironmentConfig {
       }
     : null;
 
-  if (isProd && mailProvider === 'none') {
+  const forcedMailProvider = (process.env.MAIL_PROVIDER || '').trim().toLowerCase();
+  if (forcedMailProvider === 'smtp' && !smtpHost && resendApiKey) {
     console.warn(
-      '[env] Nenhum provedor de email em produção (SMTP_HOST ou RESEND_API_KEY) — verificação de email não funcionará.',
+      '[env] MAIL_PROVIDER=smtp mas SMTP_HOST é inválido/placeholder — usando Resend.',
+    );
+  } else if (forcedMailProvider === 'smtp' && !smtpHost && !resendApiKey) {
+    console.warn(
+      '[env] MAIL_PROVIDER=smtp mas SMTP_HOST é inválido/placeholder e RESEND_API_KEY ausente — e-mails desativados.',
+    );
+  }
+
+  if (isProd && mailProvider === 'none') {
+    console.error(
+      '[env] CRÍTICO: nenhum provedor de e-mail em produção (SMTP_HOST válido ou RESEND_API_KEY) — auth e notificações por e-mail não funcionarão.',
     );
   } else if (mailProvider === 'smtp') {
     console.info(`[env] Email via SMTP (${smtpHost}:${smtpPort}, secure=${smtpSecure})`);
@@ -199,8 +240,13 @@ export function loadConfig(): EnvironmentConfig {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 
+  const taggoSiteUrl =
+    (process.env.TAGGO_SITE_URL || 'https://taggo.com.br').trim().replace(/\/+$/, '') ||
+    'https://taggo.com.br';
+
   return {
     appUrl,
+    taggoSiteUrl,
     databaseUrl: getRequiredEnv('DATABASE_URL'),
     stripeSecretKey: getRequiredEnv('STRIPE_SECRET_KEY'),
     stripeWebhookSecret: getRequiredEnv('STRIPE_WEBHOOK_SECRET'),

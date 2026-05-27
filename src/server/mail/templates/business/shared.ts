@@ -4,10 +4,12 @@ import {
   renderCtaButton,
   renderEmailLayout,
   renderHeading,
+  renderLead,
   renderParagraph,
   renderSecondaryLink,
   renderSummaryTable,
   statusBadge,
+  type EmailBranding,
   type SummaryRow,
 } from '../../layout.js'
 import type { ProposalNotificationContext } from '../../../services/proposalNotificationContext.js'
@@ -46,13 +48,13 @@ export function rubricaLabel(status: string | null): string {
 }
 
 export function wrapBusinessEmail(
-  appUrl: string,
+  branding: EmailBranding,
   preheader: string,
   title: string,
   parts: string[],
 ): string {
   return renderEmailLayout({
-    appUrl,
+    branding,
     preheader,
     title,
     bodyHtml: parts.join(''),

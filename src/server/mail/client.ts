@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
 import { Resend } from 'resend'
 import type { MailConfig } from '../env.js'
+import type { EmailBranding } from './layout.js'
 import { renderResetHtml, renderVerificationHtml } from './templates/auth.js'
 
 export interface MailClient {
@@ -27,7 +28,7 @@ function createSmtpTransporter(config: MailConfig): Transporter | null {
   })
 }
 
-export function createMailClient(config: MailConfig, appUrl: string): MailClient {
+export function createMailClient(config: MailConfig, branding: EmailBranding): MailClient {
   const smtpTransporter =
     config.provider === 'smtp' ? createSmtpTransporter(config) : null
   const resend =
@@ -47,7 +48,14 @@ export function createMailClient(config: MailConfig, appUrl: string): MailClient
           `[mail:${tag}] MAIL_PROVIDER=smtp mas SMTP_HOST/usuário/senha não estão configurados`,
         )
       }
-      await smtpTransporter.sendMail({ from: config.from, to, subject, html })
+      const envelopeFrom = config.smtp?.user?.trim() || config.from
+      await smtpTransporter.sendMail({
+        from: config.from,
+        to,
+        subject,
+        html,
+        envelope: { from: envelopeFrom, to: [to] },
+      })
       return
     }
 
@@ -72,7 +80,7 @@ export function createMailClient(config: MailConfig, appUrl: string): MailClient
       await dispatch(
         'Ative a sua conta PropEZ',
         to,
-        renderVerificationHtml(appUrl, name, code),
+        renderVerificationHtml(branding, name, code),
         'verification',
       )
     },
@@ -80,7 +88,7 @@ export function createMailClient(config: MailConfig, appUrl: string): MailClient
       await dispatch(
         'Redefinir a sua senha PropEZ',
         to,
-        renderResetHtml(appUrl, name, resetUrl),
+        renderResetHtml(branding, name, resetUrl),
         'reset',
       )
     },

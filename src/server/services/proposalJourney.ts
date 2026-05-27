@@ -4,6 +4,8 @@ import { createRubricaClient } from '../clients/rubricaClient.js';
 import type { IntegrationsConfig } from '../config.js';
 import type { EnvironmentConfig } from '../env.js';
 import { logIntegrationEvent, upsertMapping } from '../db/mappings.js';
+import type { EnsureSuiteCredential } from '../integrations/ensureSuiteCredential.js';
+import { resolveIntegrationForOrg } from '../integrations/resolveIntegrationCredential.js';
 import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js';
 import { generateContractPdf } from './contractPdf.js';
 import { flowHasStep, parseProposalFlow, getContractSignPhase } from '../../types/proposalFlow.js';
@@ -14,16 +16,29 @@ function sanitizeFileName(name: string): string {
   return name.replace(/[^\w\s-]/g, '').trim().slice(0, 80) || 'contrato';
 }
 
-async function loadRubricaApiKey(
+async function persistRubricaFailure(
   pool: Pool,
-  orgId: string,
-  repo?: OrgIntegrationCredentialsRepo,
-): Promise<string | null> {
-  if (repo) {
-    const cred = await repo.getCredential(orgId, 'rubrica');
-    if (cred?.apiKey) return cred.apiKey;
-  }
-  return process.env.RUBRICA_API_KEY?.trim() || null;
+  proposalId: string,
+  organizationId: string,
+  error: string,
+): Promise<void> {
+  await pool
+    .query(
+      `UPDATE propostas SET
+         rubrica_status = 'failed',
+         rubrica_last_sync_at = NOW()
+       WHERE id::text = $1 AND organization_id = $2`,
+      [proposalId, organizationId],
+    )
+    .catch((err) => console.error('[proposalJourney] persistRubricaFailure:', err));
+
+  await logIntegrationEvent(pool, {
+    source: 'internal',
+    event: 'rubrica.send_failed',
+    proposalId,
+    organizationId,
+    payload: { error },
+  }).catch(() => {});
 }
 
 export interface SendRubricaInput {
@@ -47,18 +62,38 @@ export async function sendContractToRubrica(deps: {
   integrationsConfig: IntegrationsConfig;
   envConfig: EnvironmentConfig;
   orgCredentialsRepo?: OrgIntegrationCredentialsRepo;
+  ensureSuiteCredential?: EnsureSuiteCredential;
+  ownerEmail?: string;
   mail?: MailClient;
   input: SendRubricaInput;
 }): Promise<{ documentId?: string; signingUrl?: string; error?: string }> {
-  const { pool, integrationsConfig, envConfig, orgCredentialsRepo, mail, input } = deps;
-  const apiKey = await loadRubricaApiKey(pool, input.organizationId, orgCredentialsRepo);
-  if (!apiKey) {
-    return { error: 'Integração Rubrica não configurada para esta organização' };
+  const {
+    pool,
+    integrationsConfig,
+    envConfig,
+    orgCredentialsRepo,
+    ensureSuiteCredential,
+    ownerEmail,
+    mail,
+    input,
+  } = deps;
+  const resolved = await resolveIntegrationForOrg({
+    provider: 'rubrica',
+    organizationId: input.organizationId,
+    ownerEmail,
+    config: integrationsConfig,
+    orgCredentialsRepo,
+    ensureSuiteCredential,
+  });
+  if (!resolved) {
+    const error = 'Integração Rubrica não configurada para esta organização';
+    await persistRubricaFailure(pool, input.proposalId, input.organizationId, error);
+    return { error };
   }
 
   const rb = createRubricaClient({
-    baseUrl: integrationsConfig.rubrica.baseUrl,
-    apiKey,
+    baseUrl: resolved.baseUrl,
+    apiKey: resolved.apiKey,
   });
 
   const title = (input.contractTitle || `Contrato - ${input.proposalId}`).slice(0, 200);
@@ -163,13 +198,15 @@ export async function sendContractToRubrica(deps: {
 
     return { documentId, signingUrl: signingUrl ?? undefined };
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Falha ao enviar contrato';
     await upsertMapping(pool, {
       propez_proposal_id: input.proposalId,
       organization_id: input.organizationId,
       status: 'failed',
-      last_error: err instanceof Error ? err.message : String(err),
+      last_error: message,
     }).catch(() => {});
-    return { error: err instanceof Error ? err.message : 'Falha ao enviar contrato' };
+    await persistRubricaFailure(pool, input.proposalId, input.organizationId, message);
+    return { error: message };
   }
 }
 
@@ -178,6 +215,7 @@ export async function triggerRubricaAfterApproval(deps: {
   integrationsConfig: IntegrationsConfig;
   envConfig: EnvironmentConfig;
   orgCredentialsRepo?: OrgIntegrationCredentialsRepo;
+  ensureSuiteCredential?: EnsureSuiteCredential;
   mail?: MailClient;
   proposalId: string;
   organizationId: string;
@@ -193,25 +231,43 @@ export async function triggerRubricaAfterApproval(deps: {
     prosync_lead_id: string | null;
     org_name: string;
     org_cnpj: string | null;
+    owner_email: string | null;
   }>(
     `SELECT p.contrato_texto, p.cliente_nome, p.cliente_email, p.fluxo, p.public_token,
             p.valor_cents, p.desconto_cents, p.prosync_lead_id,
-            o.name AS org_name, o.cnpj AS org_cnpj
+            o.name AS org_name, o.cnpj AS org_cnpj,
+            (
+              SELECT u.email FROM memberships m
+              JOIN users u ON u.id = m.user_id
+              WHERE m.organization_id = p.organization_id AND m.role = 'owner'
+              ORDER BY m.created_at ASC
+              LIMIT 1
+            ) AS owner_email
      FROM propostas p
      JOIN organizations o ON o.id = p.organization_id
      WHERE p.id::text = $1`,
     [deps.proposalId],
   );
   const row = rows[0];
-  if (!row?.contrato_texto?.trim()) return;
+  if (!row?.contrato_texto?.trim()) {
+    console.info('[proposalJourney] Rubrica skip: proposta sem contrato_texto', deps.proposalId);
+    return;
+  }
   const fluxo = parseProposalFlow(row.fluxo);
-  if (!flowHasStep(fluxo, 'sign')) return;
+  if (!flowHasStep(fluxo, 'sign')) {
+    console.info('[proposalJourney] Rubrica skip: fluxo sem passo sign', deps.proposalId);
+    return;
+  }
 
   const email = row.cliente_email?.trim();
-  if (!email) return;
+  if (!email) {
+    console.info('[proposalJourney] Rubrica skip: cliente sem e-mail', deps.proposalId);
+    return;
+  }
 
-  await sendContractToRubrica({
+  const result = await sendContractToRubrica({
     ...deps,
+    ownerEmail: row.owner_email ?? undefined,
     input: {
       proposalId: deps.proposalId,
       organizationId: deps.organizationId,
@@ -225,6 +281,10 @@ export async function triggerRubricaAfterApproval(deps: {
       publicToken: row.public_token,
     },
   });
+
+  if (result.error) {
+    console.error('[proposalJourney] Rubrica send failed:', deps.proposalId, result.error);
+  }
 }
 
 export async function confirmClientReceipt(deps: {

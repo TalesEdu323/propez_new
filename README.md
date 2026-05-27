@@ -38,7 +38,7 @@ propez_new/
 1. Instale dependências:
    - `npm install`
 2. Crie seu arquivo de ambiente:
-   - copie `.env.example` para `.env`
+   - copie `env.example` para `.env`
 3. Preencha as variáveis obrigatórias (ver seção [Variáveis de ambiente](#variáveis-de-ambiente)).
 4. Rode o projeto:
    - `npm run dev`
@@ -60,7 +60,7 @@ No boot, [`src/server/startupDiagnostics.ts`](src/server/startupDiagnostics.ts) 
 
 ### Dev local
 
-1. Copiar `.env.example` para `.env` e preencher os campos marcados com `<PREENCHER>`.
+1. Copiar `env.example` para `.env` e preencher os campos marcados com `<PREENCHER>`.
 2. Para receber webhooks externos (ProSync, Stripe, Rubrica) em dev, expor a porta com um túnel público (`ngrok http 3000`) e ajustar `APP_URL` para a URL pública.
 
 ### Produção

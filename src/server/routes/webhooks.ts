@@ -17,6 +17,7 @@ import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.j
 import type { EnvironmentConfig } from '../env.js'
 import type { MailClient } from '../mail/client.js'
 import { notifyProposalEventAsync } from '../services/notificationService.js'
+import { resolveIntegrationForOrg } from '../integrations/resolveIntegrationCredential.js'
 
 /**
  * Inbound webhooks dos integradores. Rotas públicas (sem auth) — protegidas
@@ -44,17 +45,19 @@ export function buildWebhooksRouter(deps: {
    * `organization_id` que viaja junto do mapping criado quando o Propez
    * disparou o envio.
    */
-  async function loadApiKeyForOrg(
+  async function loadIntegrationForOrg(
     organizationId: string | null,
     provider: SuiteApp,
-  ): Promise<string | null> {
-    if (orgCredentialsRepo && organizationId) {
-      const cred = await orgCredentialsRepo
-        .getCredential(organizationId, provider)
-        .catch(() => null)
-      if (cred) return cred.apiKey
-    }
-    return provider === 'prosync' ? config.prosync.apiKey : config.rubrica.apiKey
+  ): Promise<{ apiKey: string; baseUrl: string } | null> {
+    if (!organizationId) return null
+    const resolved = await resolveIntegrationForOrg({
+      provider,
+      organizationId,
+      config,
+      orgCredentialsRepo,
+    })
+    if (!resolved) return null
+    return { apiKey: resolved.apiKey, baseUrl: resolved.baseUrl }
   }
 
   // --- Rubrica: inbound document.signed -----------------------------------
@@ -105,15 +108,18 @@ export function buildWebhooksRouter(deps: {
       }
 
       let signedUrl: string | null = mapping.rubrica_signed_pdf_url
-      const rubricaKey = await loadApiKeyForOrg(mapping.organization_id, 'rubrica')
-      if (rubricaKey) {
+      const rubricaConn = await loadIntegrationForOrg(mapping.organization_id, 'rubrica')
+      if (rubricaConn) {
         try {
           const rb = createRubricaClient({
-            baseUrl: config.rubrica.baseUrl,
-            apiKey: rubricaKey,
+            baseUrl: rubricaConn.baseUrl,
+            apiKey: rubricaConn.apiKey,
           })
           await rb.downloadDocument(body.documentId, { type: 'signed' })
-          signedUrl = body.downloadUrl || signedUrl || `${config.rubrica.baseUrl.replace(/\/+$/, '')}/api/documents/${body.documentId}/download?type=signed`
+          signedUrl =
+            body.downloadUrl ||
+            signedUrl ||
+            `${rubricaConn.baseUrl.replace(/\/+$/, '')}/api/documents/${body.documentId}/download?type=signed`
         } catch (err) {
           console.error('[webhooks/rubrica] download failed:', err)
         }
@@ -140,12 +146,12 @@ export function buildWebhooksRouter(deps: {
         .catch((err) => console.error('[webhooks/rubrica] propostas update failed:', err))
 
       if (updated.prosync_lead_id) {
-        const prosyncKey = await loadApiKeyForOrg(updated.organization_id, 'prosync')
-        if (prosyncKey) {
+        const prosyncConn = await loadIntegrationForOrg(updated.organization_id, 'prosync')
+        if (prosyncConn) {
           try {
             const ps = createProsyncClient({
-              baseUrl: config.prosync.baseUrl,
-              apiKey: prosyncKey,
+              baseUrl: prosyncConn.baseUrl,
+              apiKey: prosyncConn.apiKey,
             })
             await ps.updateLead(updated.prosync_lead_id, { status: 'converted' })
           } catch (err) {
