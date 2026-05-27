@@ -1,4 +1,5 @@
-import { ExternalLink, FileCheck, Loader2, AlertCircle } from 'lucide-react';
+import { ExternalLink, FileCheck, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { buildPublicSignedContractPdfUrl } from '../../lib/publicProposalUrls';
 import { getContractSignPhase } from '../../types/proposalFlow';
 import type { ProposalFlowConfig } from '../../types/proposalFlow';
 
@@ -14,11 +15,35 @@ interface Props {
   proposta: PropostaSignFields;
   fluxo?: ProposalFlowConfig;
   orgName: string;
+  publicToken: string;
   onConfirmReceipt: () => void;
   confirming?: boolean;
 }
 
-export function PublicSignStep({ proposta, orgName, onConfirmReceipt, confirming }: Props) {
+function SignedContractDownload({ publicToken }: { publicToken: string }) {
+  const pdfUrl = buildPublicSignedContractPdfUrl(publicToken);
+  return (
+    <div className="flex flex-col sm:flex-row gap-3 justify-center mb-6">
+      <a
+        href={pdfUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border border-zinc-200 text-zinc-900 font-semibold text-sm hover:bg-zinc-50"
+      >
+        <FileText className="w-4 h-4" /> Ver contrato assinado
+      </a>
+      <a
+        href={pdfUrl}
+        download
+        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-zinc-900 text-white font-semibold text-sm hover:bg-zinc-800"
+      >
+        <FileText className="w-4 h-4" /> Baixar PDF
+      </a>
+    </div>
+  );
+}
+
+export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceipt, confirming }: Props) {
   const phase = getContractSignPhase({
     rubricaStatus: proposta.rubricaStatus,
     clienteContratoRecebidoAt: proposta.clienteContratoRecebidoAt,
@@ -31,7 +56,8 @@ export function PublicSignStep({ proposta, orgName, onConfirmReceipt, confirming
       <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-emerald-50 border border-emerald-100 text-center">
         <FileCheck className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
         <h3 className="text-xl font-bold text-emerald-900">Contrato concluído</h3>
-        <p className="text-emerald-700 mt-2 text-sm">Todas as etapas do contrato foram finalizadas.</p>
+        <p className="text-emerald-700 mt-2 text-sm mb-4">Todas as etapas do contrato foram finalizadas.</p>
+        {proposta.rubricaStatus === 'signed' && <SignedContractDownload publicToken={publicToken} />}
       </div>
     );
   }
@@ -53,7 +79,10 @@ export function PublicSignStep({ proposta, orgName, onConfirmReceipt, confirming
       <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-white border border-black/5 shadow-lg text-center">
         <FileCheck className="w-12 h-12 text-zinc-900 mx-auto mb-4" />
         <h3 className="text-xl font-bold text-zinc-900">Assinatura registrada</h3>
-        <p className="text-zinc-500 mt-2 text-sm mb-6">Confirme que recebeu o contrato assinado para dar sequência.</p>
+        <p className="text-zinc-500 mt-2 text-sm mb-2">
+          Você pode ver ou baixar o contrato assinado antes de confirmar o recebimento.
+        </p>
+        <SignedContractDownload publicToken={publicToken} />
         <button type="button" onClick={onConfirmReceipt} disabled={confirming} className="btn-primary">
           {confirming ? 'Confirmando...' : 'Confirmar recebimento'}
         </button>

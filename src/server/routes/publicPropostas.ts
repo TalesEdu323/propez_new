@@ -12,6 +12,7 @@ import {
   confirmClientReceipt,
   triggerRubricaAfterApproval,
 } from '../services/proposalJourney.js';
+import { streamSignedContractByPublicToken } from '../services/rubricaSignedPdf.js';
 import type { IntegrationsConfig } from '../config.js';
 import type { EnsureSuiteCredential } from '../integrations/ensureSuiteCredential.js';
 import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js';
@@ -57,6 +58,29 @@ export function createPublicPropostasRouter(deps: {
     ensureSuiteCredential,
   } = deps;
   const router = express.Router();
+
+  router.get('/:token/contract-signed.pdf', async (req: Request, res: Response) => {
+    const token = String(req.params.token || '').trim();
+    if (!token) return res.status(400).json({ error: 'Token obrigatório' });
+    if (!integrationsConfig) {
+      return res.status(503).json({ error: 'Integrações não configuradas' });
+    }
+    try {
+      const result = await streamSignedContractByPublicToken(
+        { pool, integrationsConfig, orgCredentialsRepo, ensureSuiteCredential },
+        token,
+      );
+      if (!result.ok) {
+        return res.status(result.status).json({ error: result.error });
+      }
+      res.setHeader('Content-Type', result.contentType);
+      res.setHeader('Content-Disposition', `inline; filename="${result.fileName}"`);
+      return res.send(result.buffer);
+    } catch (err) {
+      console.error('[public/contract-signed.pdf] erro:', err);
+      return res.status(500).json({ error: 'Erro ao carregar contrato assinado' });
+    }
+  });
 
   router.get('/:token/journey', async (req: Request, res: Response) => {
     const token = String(req.params.token || '').trim();

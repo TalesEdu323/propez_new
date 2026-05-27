@@ -83,6 +83,13 @@ export default function PublicProposta({ token }: Props) {
   }, [token]);
 
   useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('rubrica') === 'done') {
+      void load();
+    }
+  }, [load]);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
@@ -240,6 +247,7 @@ export default function PublicProposta({ token }: Props) {
                 proposta={proposta}
                 fluxo={fluxo}
                 orgName={org.name}
+                publicToken={token}
                 onConfirmReceipt={confirmReceipt}
                 confirming={isSubmitting}
               />

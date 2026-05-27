@@ -18,6 +18,7 @@ import type { EnvironmentConfig } from '../env.js'
 import type { MailClient } from '../mail/client.js'
 import { notifyProposalEventAsync } from '../services/notificationService.js'
 import { resolveIntegrationForOrg } from '../integrations/resolveIntegrationCredential.js'
+import { buildPublicSignedContractPdfUrl } from '../services/rubricaSignedPdf.js'
 
 /**
  * Inbound webhooks dos integradores. Rotas públicas (sem auth) — protegidas
@@ -116,13 +117,23 @@ export function buildWebhooksRouter(deps: {
             apiKey: rubricaConn.apiKey,
           })
           await rb.downloadDocument(body.documentId, { type: 'signed' })
-          signedUrl =
-            body.downloadUrl ||
-            signedUrl ||
-            `${rubricaConn.baseUrl.replace(/\/+$/, '')}/api/documents/${body.documentId}/download?type=signed`
         } catch (err) {
           console.error('[webhooks/rubrica] download failed:', err)
         }
+      }
+
+      const { rows: tokenRows } = await pool.query<{ public_token: string | null }>(
+        `SELECT public_token FROM propostas WHERE id::text = $1 LIMIT 1`,
+        [mapping.propez_proposal_id],
+      )
+      const publicToken = tokenRows[0]?.public_token
+      if (publicToken && envConfig?.appUrl) {
+        signedUrl = buildPublicSignedContractPdfUrl(envConfig.appUrl, publicToken)
+      } else if (rubricaConn) {
+        signedUrl =
+          body.downloadUrl ||
+          signedUrl ||
+          `${rubricaConn.baseUrl.replace(/\/+$/, '')}/api/documents/${body.documentId}/download?type=signed`
       }
 
       const updated = await upsertMapping(pool, {

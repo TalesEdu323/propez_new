@@ -5,6 +5,7 @@ import {
   BUSINESS_EMAIL_SUBJECTS,
 } from '../src/server/mail/templates/business/index.js'
 import type { ProposalNotificationContext } from '../src/server/services/proposalNotificationContext.js'
+import { normalizeEmailBranding } from '../src/server/mail/layout.js'
 
 const to = process.argv[2]
 const templateType = (process.argv[3] || 'proposal_approved') as keyof typeof BUSINESS_EMAIL_RENDERERS
@@ -23,6 +24,7 @@ const user = process.env.SMTP_USER || process.env.EMAIL_USER
 const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS
 const from = process.env.MAIL_FROM || 'PropEZ <noreply@example.com>'
 const appUrl = (process.env.APP_URL || 'http://localhost:3001').replace(/\/+$/, '')
+const branding = normalizeEmailBranding(appUrl, process.env.TAGGO_SITE_URL)
 
 if (!host || !user || !pass) {
   console.error('[test-business-email] Configure SMTP no .env')
@@ -59,7 +61,7 @@ const mockCtx: ProposalNotificationContext = {
   publicUrl: `${appUrl}/p/demo-token-123`,
 }
 
-const html = renderers.org(appUrl, mockCtx)
+const html = renderers.org(branding, mockCtx)
 const subject = `${BUSINESS_EMAIL_SUBJECTS[templateType].org} — ${mockCtx.clienteNome} [teste]`
 
 const transport = nodemailer.createTransport({

@@ -70,8 +70,10 @@ RUBRICA_WEBHOOK_SECRET=<usado internamente; o Rubrica não assina, é só docstr
 2. Em `/dashboard/integracoes`, gere uma API Key (`dm_live_...`) e cole em
    `RUBRICA_API_KEY` do Propez.
 3. Não é preciso configurar webhook manualmente — o Propez envia a
-   `webhookUrl` dinamicamente em cada `/api/signature/send`, já com o secret
-   em query string.
+   `webhookUrl` dinamicamente em cada `POST /api/documents/:id/send`, com
+   `externalId`, `redirectUrl` (`/p/:token?rubrica=done`) e secret na query.
+4. No Rubrica, aplicar migration `20260527120000_document_redirect_url` se o
+   campo `redirectUrl` ainda não existir no Postgres.
 
 ## 3. Subir o Propez e aplicar migrations
 

@@ -1,4 +1,5 @@
 import type { Pool } from 'pg'
+import { resolveSignedPdfUrlForNotification } from './rubricaSignedPdf.js'
 
 export type ProposalNotificationType =
   | 'proposal_created'
@@ -108,7 +109,12 @@ export async function loadProposalNotificationContext(
     publicToken: r.public_token,
     rubricaStatus: r.rubrica_status,
     rubricaSigningUrl: r.rubrica_signing_url,
-    rubricaSignedPdfUrl: r.rubrica_signed_pdf_url,
+    rubricaSignedPdfUrl: resolveSignedPdfUrlForNotification(
+      appUrl,
+      r.public_token,
+      r.rubrica_status,
+      r.rubrica_signed_pdf_url,
+    ),
     contratoTitulo: r.contrato_titulo,
     dataValidade: r.data_validade,
     pago: !!r.pago,

@@ -4,7 +4,6 @@ import {
   renderCtaButton,
   renderEmailLayout,
   renderHeading,
-  renderLead,
   renderParagraph,
   renderSecondaryLink,
   renderSummaryTable,
