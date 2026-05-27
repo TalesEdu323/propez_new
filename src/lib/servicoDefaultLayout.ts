@@ -36,8 +36,7 @@ export function buildDefaultServicoLayout(servico: Pick<Servico, 'nome' | 'descr
       id: createId(),
       type: 'feature_grid',
       props: {
-        title: 'O que está incluso',
-        items: [
+        features: [
           { title: 'Entrega 1', desc: 'Detalhe a primeira entrega' },
           { title: 'Entrega 2', desc: 'Detalhe a segunda entrega' },
           { title: 'Entrega 3', desc: 'Detalhe a terceira entrega' },

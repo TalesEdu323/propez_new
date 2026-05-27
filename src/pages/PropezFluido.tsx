@@ -349,7 +349,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
                   onSelectModelo={handleModeloSelect}
                   onNext={() => setStep(2)}
                   onOpenModelos={() => navigate('modelos')}
-                  onOpenLoja={() => navigate('loja-templates')}
+                  onOpenLoja={() => navigate('modelos', { tab: 'loja' })}
                 />
               )}
               {step === 2 && (

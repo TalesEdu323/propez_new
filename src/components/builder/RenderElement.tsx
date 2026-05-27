@@ -517,15 +517,16 @@ export function RenderElement({
         </motion.div>
       );
 
-    case 'feature_grid':
+    case 'feature_grid': {
       const gridCols = props.columns === '1' ? 'grid-cols-1' : props.columns === '2' ? 'grid-cols-1 md:grid-cols-2' : props.columns === '4' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-3';
+      const features = props.features ?? props.items ?? [];
       return (
         <motion.div 
           {...getAnimationProps('fade-up')}
           className={`grid ${gridCols} gap-8 py-12`} 
           style={{ backgroundColor: props.bgColor }}
         >
-          {props.features.map((feature: any, idx: number) => (
+          {features.map((feature: any, idx: number) => (
             <motion.div 
               key={idx} 
               whileHover={{ y: -10 }}
@@ -540,6 +541,7 @@ export function RenderElement({
           ))}
         </motion.div>
       );
+    }
 
     case 'gallery':
       const galCols = props.columns === '1' ? 'grid-cols-1' : props.columns === '2' ? 'grid-cols-2' : props.columns === '4' ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2 md:grid-cols-3';
@@ -676,14 +678,15 @@ export function RenderElement({
         </motion.div>
       );
 
-    case 'timeline':
+    case 'timeline': {
+      const timelineSteps = props.steps ?? props.items ?? [];
       return (
         <motion.div 
           {...getAnimationProps('fade-up')}
           className="relative border-l-4 ml-4 md:ml-10 py-6 space-y-12" 
           style={{ borderColor: props.color }}
         >
-          {props.steps.map((step: any, idx: number) => (
+          {timelineSteps.map((step: any, idx: number) => (
             <motion.div 
               key={idx} 
               initial={{ opacity: 0, x: -30 }}
@@ -703,6 +706,7 @@ export function RenderElement({
           ))}
         </motion.div>
       );
+    }
 
     case 'countdown':
       return (

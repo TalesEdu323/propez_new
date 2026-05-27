@@ -63,10 +63,13 @@ function elementsToTabContent(elements: BuilderElement[]): string {
     .map((el) => {
       if (el.type === 'heading') return `## ${el.props.text ?? ''}`;
       if (el.type === 'paragraph') return String(el.props.text ?? '');
-      if (el.type === 'feature_grid' && Array.isArray(el.props.items)) {
-        return (el.props.items as { title?: string; desc?: string }[])
-          .map((i) => `• ${i.title ?? ''}: ${i.desc ?? ''}`)
-          .join('\n');
+      if (el.type === 'feature_grid') {
+        const gridItems = (el.props.features ?? el.props.items) as
+          | { title?: string; desc?: string }[]
+          | undefined;
+        if (Array.isArray(gridItems)) {
+          return gridItems.map((i) => `• ${i.title ?? ''}: ${i.desc ?? ''}`).join('\n');
+        }
       }
       if (el.type === 'icon_list' && Array.isArray(el.props.items)) {
         return (el.props.items as string[]).map((i) => `• ${i}`).join('\n');

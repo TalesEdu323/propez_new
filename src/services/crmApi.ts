@@ -6,6 +6,8 @@
  * Nenhuma chave de API fica exposta no bundle do frontend.
  */
 
+import { api, ApiError } from '../lib/apiClient';
+
 export interface ExternalClient {
   id: string
   name: string
@@ -38,22 +40,18 @@ interface ProsyncLead {
   status: string
 }
 
-async function parseErrorResponse(res: Response): Promise<string> {
-  const fallback = `Erro de integração ProSync (HTTP ${res.status})`;
-  try {
-    const body = await res.json() as {
-      error?: string
-      upstream?: string
-      body?: { error?: string }
-    }
+function prosyncErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    const body = err.body as { error?: string; body?: { error?: string }; upstream?: string } | undefined;
+    const fallback = `Erro de integração ProSync (HTTP ${err.status})`;
     return (
-      body.error
-      || body.body?.error
-      || (body.upstream ? `${fallback} em ${body.upstream}` : fallback)
+      body?.error
+      || body?.body?.error
+      || (body?.upstream ? `${fallback} em ${body.upstream}` : err.message || fallback)
     );
-  } catch {
-    return fallback;
   }
+  if (err instanceof Error) return err.message;
+  return 'Falha ao consultar ProSync. Verifique rede e configuração da integração.';
 }
 
 function mapPropezStatusToProsyncLeadStatus(
@@ -85,12 +83,7 @@ export async function fetchClientsFromCRM(params?: {
     if (params?.limit != null) qs.set('limit', String(params.limit))
     const q = qs.toString() ? `?${qs.toString()}` : ''
 
-    const res = await fetch(`/api/integrations/prosync/leads${q}`, { method: 'GET' })
-    if (!res.ok) {
-      const message = await parseErrorResponse(res);
-      throw new Error(message);
-    }
-    const data = (await res.json()) as { leads: ProsyncLead[] }
+    const data = await api.get<{ leads: ProsyncLead[] }>(`/api/integrations/prosync/leads${q}`)
     return (data.leads || []).map((lead) => ({
       id: lead.id,
       name: lead.name,
@@ -102,9 +95,7 @@ export async function fetchClientsFromCRM(params?: {
     }))
   } catch (error) {
     console.error('[ProSync] Erro ao buscar leads:', error)
-    throw error instanceof Error
-      ? error
-      : new Error('Falha ao consultar ProSync. Verifique rede e configuração da integração.');
+    throw new Error(prosyncErrorMessage(error))
   }
 }
 
@@ -114,27 +105,18 @@ export async function fetchClientsFromCRM(params?: {
 export async function updateProposalStatusInCRM(update: ProposalStatusUpdate): Promise<boolean> {
   try {
     const leadStatus = mapPropezStatusToProsyncLeadStatus(update.status)
-    const res = await fetch(
+    await api.patch(
       `/api/integrations/prosync/leads/${encodeURIComponent(update.crmClientId)}`,
       {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: leadStatus,
-          notes: `Proposta ${update.proposalId} — R$ ${update.value.toFixed(2)} — ${update.status}${
-            update.proposalUrl ? ` — ${update.proposalUrl}` : ''
-          }`,
-        }),
+        status: leadStatus,
+        notes: `Proposta ${update.proposalId} — R$ ${update.value.toFixed(2)} — ${update.status}${
+          update.proposalUrl ? ` — ${update.proposalUrl}` : ''
+        }`,
       },
     )
-    if (!res.ok) {
-      const message = await parseErrorResponse(res);
-      console.error('[ProSync] Falha ao atualizar lead:', message);
-      return false;
-    }
-    return res.ok
+    return true
   } catch (error) {
-    console.error('[ProSync] Erro ao atualizar lead:', error)
+    console.error('[ProSync] Falha ao atualizar lead:', prosyncErrorMessage(error))
     return false
   }
 }
@@ -160,21 +142,17 @@ export async function syncProductWithCRM(product: {
     return false
   }
   try {
-    const res = await fetch(
+    await api.post(
       `/api/integrations/prosync/leads/${encodeURIComponent(product.prosyncLeadId)}/sale`,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product_id: product.prosyncProductId,
-          quantity: product.quantity ?? 1,
-          unit_price: product.valor,
-          status: product.status ?? 'confirmed',
-          notes: `Proposta Propez ${product.id}`,
-        }),
+        product_id: product.prosyncProductId,
+        quantity: product.quantity ?? 1,
+        unit_price: product.valor,
+        status: product.status ?? 'confirmed',
+        notes: `Proposta Propez ${product.id}`,
       },
     )
-    return res.ok
+    return true
   } catch (error) {
     console.error('[ProSync] Erro ao sync de produto:', error)
     return false

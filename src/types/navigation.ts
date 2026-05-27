@@ -30,9 +30,12 @@ export type AppRoute =
   | 'admin-operations'
   | 'admin-marketplace';
 
+export type ModelosTab = 'meus' | 'loja';
+
 export interface RouteParams {
   id?: string;
   editId?: string;
+  tab?: ModelosTab;
   [key: string]: unknown;
 }
 

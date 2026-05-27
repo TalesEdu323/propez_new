@@ -62,8 +62,7 @@ const consultoriaElements: BuilderElement[] = [
     id: 'c5',
     type: 'feature_grid',
     props: {
-      title: 'Metodologia em 3 fases',
-      items: [
+      features: [
         { title: 'Diagnóstico', desc: 'Mapeamento de processos, funil e gargalos com entrevistas e dados.' },
         { title: 'Plano de ação', desc: 'Roadmap de 90 dias com metas, responsáveis e indicadores.' },
         { title: 'Execução assistida', desc: 'Rituais quinzenais, revisão de KPIs e ajustes de rota.' },
@@ -79,8 +78,7 @@ const consultoriaElements: BuilderElement[] = [
     id: 'c7',
     type: 'timeline',
     props: {
-      title: 'Cronograma sugerido',
-      items: [
+      steps: [
         { title: 'Semanas 1–2', desc: 'Kick-off, coleta de dados e diagnóstico inicial.' },
         { title: 'Semanas 3–6', desc: 'Desenho do plano e validação com liderança.' },
         { title: 'Semanas 7–12', desc: 'Implementação assistida e relatórios executivos.' },
@@ -264,8 +262,7 @@ const recorrenteElements: BuilderElement[] = [
     id: 'r4',
     type: 'feature_grid',
     props: {
-      title: 'Governança da parceria',
-      items: [
+      features: [
         { title: 'Onboarding', desc: 'Semana 1 com mapeamento e alinhamento de metas.' },
         { title: 'Rituais', desc: 'Check-in quinzenal e relatório mensal executivo.' },
         { title: 'Renovação', desc: 'Revisão de escopo a cada 12 meses ou sob demanda.' },
@@ -276,8 +273,7 @@ const recorrenteElements: BuilderElement[] = [
     id: 'r5',
     type: 'timeline',
     props: {
-      title: 'Primeiros 90 dias',
-      items: [
+      steps: [
         { title: 'Mês 1', desc: 'Setup, integrações e primeiras entregas.' },
         { title: 'Mês 2', desc: 'Otimização com base em métricas acordadas.' },
         { title: 'Mês 3', desc: 'Plano de expansão ou consolidação do escopo.' },

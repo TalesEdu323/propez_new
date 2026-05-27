@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { LayoutDashboard, Users, FileText, Settings, LogOut, Layers, Briefcase, Bell, DollarSign, User, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Settings, LogOut, Layers, Briefcase, Bell, DollarSign, User } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { hydrateStore, store } from './lib/store';
 import { subscribeToPlanosRequest } from './lib/navigationEvents';
@@ -11,6 +11,7 @@ import {
   useSession,
 } from './lib/authSession';
 import { PropezLogo } from './components/PropezLogo';
+import { AppTopBar, AppTopBarMobileButton } from './components/AppTopBar';
 import { useNotifications } from './lib/useNotifications';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -22,7 +23,6 @@ const VisualizarProposta = lazy(() => import('./pages/VisualizarProposta'));
 const PublicProposta = lazy(() => import('./pages/PublicProposta'));
 const Servicos = lazy(() => import('./pages/Servicos'));
 const Modelos = lazy(() => import('./pages/Modelos'));
-const LojaTemplates = lazy(() => import('./pages/LojaTemplates'));
 const CriarModelo = lazy(() => import('./pages/CriarModelo'));
 const Contratos = lazy(() => import('./pages/Contratos'));
 const Configuracoes = lazy(() => import('./pages/Configuracoes'));
@@ -39,6 +39,7 @@ const AdminProduct = lazy(() => import('./pages/admin/AdminProduct'));
 const AdminOperations = lazy(() => import('./pages/admin/AdminOperations'));
 const AdminOrganizationDetail = lazy(() => import('./pages/admin/AdminOrganizationDetail'));
 const AdminMarketplace = lazy(() => import('./pages/admin/AdminMarketplace'));
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
 
 const loadingFallback = (
   <div className="h-full min-h-screen w-full flex items-center justify-center text-zinc-500 bg-[#F5F5F7]">
@@ -97,10 +98,12 @@ export default function App() {
     const directRoute = params.get('route') as AppRoute | null;
     const id = params.get('id');
     const editId = params.get('editId');
+    const tab = params.get('tab');
     if (directRoute) {
       navigate(directRoute, {
         ...(id ? { id } : {}),
         ...(editId ? { editId } : {}),
+        ...(tab === 'loja' || tab === 'meus' ? { tab: tab as 'meus' | 'loja' } : {}),
       });
     }
   }, []);
@@ -149,9 +152,14 @@ export default function App() {
       case 'servicos':
         return <Servicos navigate={navigate} />;
       case 'modelos':
-        return <Modelos navigate={navigate} />;
+        return (
+          <Modelos
+            navigate={navigate}
+            initialTab={(routeParams.tab as 'meus' | 'loja') ?? 'meus'}
+          />
+        );
       case 'loja-templates':
-        return <LojaTemplates navigate={navigate} />;
+        return <Modelos navigate={navigate} initialTab="loja" />;
       case 'contratos':
         return <Contratos />;
       case 'criar-modelo':
@@ -245,6 +253,16 @@ export default function App() {
   const isPlatformAdmin = Boolean(session?.user.isPlatformAdmin);
   const isAdminRoute = route.startsWith('admin-');
 
+  if (isAdminRoute && isPlatformAdmin) {
+    return (
+      <Suspense fallback={loadingFallback}>
+        <AdminLayout navigate={navigate} current={route}>
+          <Suspense fallback={loadingFallback}>{renderContent()}</Suspense>
+        </AdminLayout>
+      </Suspense>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-[#F5F5F7] font-sans overflow-hidden">
       
@@ -275,26 +293,6 @@ export default function App() {
             );
           })}
 
-          {isPlatformAdmin && (
-            <>
-              <div className="px-5 pt-6 pb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-400">
-                Plataforma
-              </div>
-              <button
-                onClick={() => navigate('admin-dashboard')}
-                className={`w-full flex items-center gap-3 px-5 py-3 rounded-2xl text-sm font-semibold transition-all duration-500 ${
-                  isAdminRoute
-                    ? 'bg-zinc-900 text-white shadow-[0_10px_20px_-5px_rgba(0,0,0,0.15)]'
-                    : 'text-zinc-400 hover:bg-zinc-50 hover:text-zinc-900'
-                }`}
-              >
-                <div className={`transition-transform duration-500 ${isAdminRoute ? 'scale-110' : 'scale-100 opacity-50'}`}>
-                  <Shield className="w-5 h-5" />
-                </div>
-                Admin
-              </button>
-            </>
-          )}
         </nav>
 
         <div className="p-4 border-t border-black/[0.02]">
@@ -322,7 +320,8 @@ export default function App() {
       {/* Mobile Top Bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-2xl border-b border-black/[0.05] z-40 flex items-center justify-between px-5">
         <PropezLogo height="md" />
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <AppTopBarMobileButton navigate={navigate} showPlatformButton={isPlatformAdmin} />
           <button 
             onClick={() => navigate('configuracoes')}
             className="w-10 h-10 flex items-center justify-center text-zinc-500 bg-zinc-100 rounded-full active:scale-95 transition-all relative"
@@ -346,8 +345,9 @@ export default function App() {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto w-full relative mobile-safe-top mobile-safe-bottom">
-        <div className="h-full w-full relative">
+      <main className="flex-1 overflow-y-auto w-full relative mobile-safe-top mobile-safe-bottom flex flex-col min-h-0">
+        <AppTopBar navigate={navigate} showPlatformButton={isPlatformAdmin} />
+        <div className="h-full w-full relative flex-1 min-h-0">
           <AnimatePresence mode="wait">
             <motion.div
               key={route}
