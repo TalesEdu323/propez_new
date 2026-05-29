@@ -25,6 +25,13 @@ export async function runStartupMigrations(pool: pg.Pool): Promise<void> {
     await verifyIntegrationSchema(pool);
   } catch (err) {
     console.error('[startup] migrations failed:', err);
+    const isProd =
+      process.env.NODE_ENV === 'production' ||
+      process.env.VERCEL === '1' ||
+      process.env.VERCEL === 'true';
+    if (isProd) {
+      throw err;
+    }
   }
 }
 

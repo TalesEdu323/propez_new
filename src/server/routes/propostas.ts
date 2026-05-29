@@ -101,13 +101,14 @@ export function createPropostasRouter(deps: {
   router.use(buildRequireAuth(config.auth))
 
   function emitEvent(
+    orgId: string,
     event: Parameters<NonNullable<SuiteProposalEventsClient>['fireAndForget']>[0]['event'],
     proposal: Record<string, any>,
     leadId: string | null | undefined,
     extra: Partial<Parameters<NonNullable<SuiteProposalEventsClient>['fireAndForget']>[0]> = {},
   ): void {
     if (!suiteProposalEvents?.isEnabled()) return
-    if (!leadId) return
+    if (!leadId || !orgId) return
     const valorCents =
       typeof proposal.valor_cents === 'number' ? proposal.valor_cents : null
     const desconto =
@@ -117,9 +118,8 @@ export function createPropostasRouter(deps: {
     const publicUrl = proposal.public_token
       ? `${config.appUrl.replace(/\/+$/, '')}/p/${proposal.public_token}`
       : null
-    if (!req.auth?.orgId) return
     suiteProposalEvents.fireAndForget({
-      propezOrganizationId: req.auth.orgId,
+      propezOrganizationId: orgId,
       event,
       externalId: String(proposal.id),
       leadId,
@@ -242,7 +242,7 @@ export function createPropostasRouter(deps: {
         eventName: 'proposal_created',
         metadata: { propostaId: inserted.id },
       })
-      emitEvent('proposal.created', inserted, inserted.prosync_lead_id, {
+      emitEvent(req.auth.orgId, 'proposal.created', inserted, inserted.prosync_lead_id, {
         status: inserted.status ?? 'pendente',
         externalCreatedAt: inserted.created_at ?? new Date(),
       })
@@ -364,12 +364,12 @@ export function createPropostasRouter(deps: {
 
       if (updated.prosync_lead_id) {
         if (status === 'aprovada') {
-          emitEvent('proposal.approved', updated, updated.prosync_lead_id, { status })
+          emitEvent(req.auth.orgId, 'proposal.approved', updated, updated.prosync_lead_id, { status })
         } else if (status === 'recusada') {
-          emitEvent('proposal.rejected', updated, updated.prosync_lead_id, { status })
+          emitEvent(req.auth.orgId, 'proposal.rejected', updated, updated.prosync_lead_id, { status })
         }
         if (!hadDataEnvio && nowHasDataEnvio) {
-          emitEvent('proposal.sent', updated, updated.prosync_lead_id, { status: 'sent' })
+          emitEvent(req.auth.orgId, 'proposal.sent', updated, updated.prosync_lead_id, { status: 'sent' })
         }
       }
 
@@ -505,7 +505,7 @@ export function createPropostasRouter(deps: {
       )
       const sentRow = afterSend[0]
       if (sentRow?.prosync_lead_id) {
-        emitEvent('proposal.sent', sentRow, sentRow.prosync_lead_id, { status: 'sent' })
+        emitEvent(req.auth.orgId, 'proposal.sent', sentRow, sentRow.prosync_lead_id, { status: 'sent' })
       }
 
       return res.json({ sent: true, to })

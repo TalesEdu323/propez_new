@@ -9,7 +9,13 @@ let appPromise: Promise<Application> | null = null;
  */
 export function getExpressApp(): Promise<Application> {
   if (!appPromise) {
-    appPromise = createApp().then(({ app }) => app);
+    appPromise = createApp()
+      .then(({ app }) => app)
+      .catch((err) => {
+        console.error('[vercel] createApp falhou — verifique env vars e logs da função:', err);
+        appPromise = null;
+        throw err;
+      });
   }
   return appPromise;
 }

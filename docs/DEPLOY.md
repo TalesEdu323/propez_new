@@ -138,6 +138,12 @@ Usa as rewrites do `vercel.json` (API + SPA). Para dev com HMR, continue com
   Desative a proteção no preview ou use o domínio de produção para testar.
 - Erros **500** em `/api/auth/login`: ver **Deployments → Functions → Logs** (falta env,
   DB inacessível ou tabela `sessions` ausente). O deploy inclui `sql/**` para migrations no boot.
+- Se **todas** as rotas `/api/*` retornam 500 ou 503, o boot do Express falhou (env ausente,
+  migrations ou bug de import no código). Rode localmente `npm run check:server-imports` e
+  `npm run check:deploy-env -- --production` antes do redeploy.
+- Após a migração `.env.example` → [`env.example`](../env.example): o `.env` local **não**
+  vai para o Git. Copie cada variável para **Vercel → Environment Variables** (Production **e**
+  Preview). Use `cp env.example .env` só na máquina local.
 
 ### Render / Railway / Fly.io
 
@@ -169,6 +175,15 @@ Em qualquer dos três, o arquivo de envs deve ficar **fora** do repositório git
 com permissão restrita (`chmod 600`).
 
 ## Validação pós-deploy
+
+Antes de promover, na máquina local (com `.env` preenchido ou exportando vars):
+
+```bash
+npm run check:deploy-env -- --production
+npm run check:server-imports
+```
+
+Depois do deploy:
 
 ```bash
 curl https://<APP_URL>/api/health

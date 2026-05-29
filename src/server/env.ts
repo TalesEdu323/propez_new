@@ -156,6 +156,24 @@ function getAllowedOrigins(appUrl: string): string[] {
   );
 }
 
+/** Diagnóstico de boot sem expor valores — útil quando createApp falha na Vercel. */
+export function getConfigBootErrors(): string[] {
+  const errors: string[] = [];
+  const required = ['APP_URL', 'DATABASE_URL', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'] as const;
+  for (const name of required) {
+    if (!process.env[name]?.trim()) errors.push(`Missing required env var: ${name}`);
+  }
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd && !process.env.JWT_SECRET?.trim()) {
+    errors.push('JWT_SECRET obrigatório em produção');
+  }
+  const port = Number(process.env.PORT || '3000');
+  if (process.env.PORT && (!Number.isFinite(port) || port <= 0)) {
+    errors.push('PORT must be a valid positive number');
+  }
+  return errors;
+}
+
 export function loadConfig(): EnvironmentConfig {
   const appUrl = getRequiredEnv('APP_URL');
   const port = Number(process.env.PORT || '3000');
