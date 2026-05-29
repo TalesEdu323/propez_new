@@ -1,4 +1,4 @@
-import type { BuilderPageLayout } from '../types/builder';
+import type { BuilderPageLayout } from '../types/builder.js';
 
 export const DEFAULT_PAGE_LAYOUT: BuilderPageLayout = {
   widthMode: 'boxed',

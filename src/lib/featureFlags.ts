@@ -9,7 +9,7 @@
  * quanto pelo servidor (valida limites no checkout).
  */
 
-import type { BuilderElementType } from '../types/builder';
+import type { BuilderElementType } from '../types/builder.js';
 import { resolvePlan, type PlanTier, type UserConfig } from './planConfig.js';
 
 export type { PlanTier };

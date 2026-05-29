@@ -6,8 +6,8 @@ import type { EnvironmentConfig } from '../env.js';
 import { buildRequireAuth } from '../auth/middleware.js';
 import { createRateLimit } from '../middleware/rateLimit.js';
 import { getAllowedWidgets } from '../../lib/featureFlags.js';
-import { validateGeneratedLayout, LayoutValidationError } from '../../lib/validateGeneratedLayout.js';
-import { validateGeneratedContract, ContractValidationError } from '../../lib/validateGeneratedContract.js';
+import { validateGeneratedLayout, LayoutValidationError } from '../validation/generatedLayout.js';
+import { validateGeneratedContract, ContractValidationError } from '../validation/generatedContract.js';
 import {
   assertIaAllowed,
   incrementIaUsage,

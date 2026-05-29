@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import type { BuilderElement, BuilderElementType } from '../types/builder';
-import { isKnownBuilderElementType } from '../types/builder';
-import { createId } from './ids.js';
+import type { BuilderElement, BuilderElementType } from '../../types/builder.js';
+import { isKnownBuilderElementType } from '../../types/builder.js';
+import { createId } from '../../lib/ids.js';
 
 type RawElement = {
   id?: string;
