@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import type { BuilderElement, BuilderElementType } from '../types/builder';
-import { DEFAULT_PROPS } from '../components/builder/defaultProps';
-import { createId } from './ids';
-
-const ALL_TYPES = Object.keys(DEFAULT_PROPS) as BuilderElementType[];
+import { isKnownBuilderElementType } from '../types/builder';
+import { createId } from './ids.js';
 
 type RawElement = {
   id?: string;
@@ -25,20 +23,15 @@ const layoutResponseSchema = z.object({
   elementos: z.array(elementSchema).min(1).max(20),
 });
 
-function mergeProps(type: BuilderElementType, props: Record<string, unknown>): Record<string, unknown> {
-  const defaults = DEFAULT_PROPS[type] ?? {};
-  return { ...defaults, ...props };
-}
-
 function cloneElement(
   el: RawElement,
   allowed: ReadonlySet<BuilderElementType>,
 ): BuilderElement | null {
-  if (!ALL_TYPES.includes(el.type as BuilderElementType)) return null;
-  const type = el.type as BuilderElementType;
+  if (!isKnownBuilderElementType(el.type)) return null;
+  const type = el.type;
   if (!allowed.has(type)) return null;
 
-  const props = mergeProps(type, (el.props ?? {}) as Record<string, unknown>);
+  const props = { ...(el.props ?? {}) };
 
   const children = el.children
     ?.map((c) => cloneElement(c, allowed))

@@ -43,6 +43,24 @@ export type BuilderElementType =
   | 'service_stack'
   | 'projection_calculator' | 'metrics_table';
 
+/** Lista canônica de tipos — usada no servidor sem importar defaultProps (React). */
+export const BUILDER_ELEMENT_TYPES: readonly BuilderElementType[] = [
+  'heading', 'paragraph', 'button', 'image', 'logo',
+  'divider', 'spacer', 'video', 'card',
+  'stats', 'accordion', 'animated_text',
+  'funnel', 'icon_list', 'pricing', 'testimonial', 'timeline',
+  'navbar', 'slider', 'feature_grid', 'gallery', 'grid', 'container', 'column',
+  'countdown', 'whatsapp_button', 'tabs', 'progress_bar', 'star_rating',
+  'google_map', 'comparison_table', 'image_carousel', 'toast_notification',
+  'marketing_hero', 'marketing_context', 'marketing_strategy', 'marketing_services', 'marketing_pricing', 'marketing_cta',
+  'service_stack',
+  'projection_calculator', 'metrics_table',
+];
+
+export function isKnownBuilderElementType(type: string): type is BuilderElementType {
+  return (BUILDER_ELEMENT_TYPES as readonly string[]).includes(type);
+}
+
 /**
  * Mapa de props por tipo. Hoje quase todas usam `Record<string, unknown>` para manter
  * compatibilidade com o DEFAULT_PROPS e o RenderElement atuais. Próximos passos:
