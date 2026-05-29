@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
+import type { UserConfig } from '../../../lib/planConfig.js';
 import { canUseIa } from '../../../lib/featureFlags.js';
-import type { PlanTier } from '../../../lib/featureFlags.js';
-import type { UserConfig } from '../../../lib/store.js';
+import type { PlanTier } from '../../../lib/planConfig.js';
 
 export class IaGateError extends Error {
   readonly status: number;

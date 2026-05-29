@@ -10,7 +10,7 @@
  */
 
 import type { BuilderElementType } from '../types/builder';
-import { resolvePlan, type PlanTier, type UserConfig } from './store';
+import { resolvePlan, type PlanTier, type UserConfig } from './planConfig.js';
 
 export type { PlanTier };
 
