@@ -1,16 +1,7 @@
 /**
  * Geração server-side do PDF do contrato a partir do texto da proposta.
  *
- * Usa `pdfmake` (v0.3.x) em modo Node. A API recomendada nessa versão é
- * o singleton exportado pelo pacote:
- *
- *   import pdfMake from 'pdfmake'
- *   pdfMake.fonts = { Roboto: { ... paths ... } }
- *   const pdf = pdfMake.createPdf(docDefinition)
- *   const buffer = await pdf.getBuffer()
- *
- * Nota: O PDF aqui é do **contrato** (texto). A proposta visual (builder) não
- * é renderizada 1:1; se for requisito futuramente, trocar para puppeteer.
+ * pdfmake é carregado sob demanda (lazy) para não derrubar o cold start na Vercel.
  */
 
 import path from 'node:path'
@@ -18,45 +9,48 @@ import { createRequire } from 'node:module'
 import type { TDocumentDefinitions, Content } from 'pdfmake/interfaces'
 import { getPropezLogoDataUri } from './propezLogoAsset.js'
 
-const require = createRequire(import.meta.url)
-// Import dinâmico via CJS: `pdfmake` v0.3 expõe o singleton como
-// `module.exports`, não como ES default export, então precisamos do require.
-const pdfMake: {
+type PdfMakeInstance = {
   fonts?: Record<string, Record<string, string>>
   createPdf: (doc: TDocumentDefinitions) => { getBuffer: () => Promise<Buffer> }
   setUrlAccessPolicy?: (cb: (url: string) => boolean) => void
-} = require('pdfmake')
-
-// No pdfmake v0.3, os arquivos .ttf ficam em `fonts/Roboto/*.ttf`.
-const fontsDir = path.join(path.dirname(require.resolve('pdfmake/fonts/Roboto.js')), 'Roboto')
-
-pdfMake.fonts = {
-  Roboto: {
-    normal: path.join(fontsDir, 'Roboto-Regular.ttf'),
-    bold: path.join(fontsDir, 'Roboto-Medium.ttf'),
-    italics: path.join(fontsDir, 'Roboto-Italic.ttf'),
-    bolditalics: path.join(fontsDir, 'Roboto-MediumItalic.ttf'),
-  },
 }
 
-// Por padrão, nega qualquer download externo (imagens de URL). Assinamos só o
-// conteúdo textual do contrato; imagens remotas ficam bloqueadas por segurança.
-pdfMake.setUrlAccessPolicy?.(() => false)
+let pdfMakeInstance: PdfMakeInstance | null = null
+
+function getPdfMake(): PdfMakeInstance {
+  if (pdfMakeInstance) return pdfMakeInstance
+
+  const require = createRequire(import.meta.url)
+  const pdfMake = require('pdfmake') as PdfMakeInstance
+
+  const fontsDir = path.join(
+    path.dirname(require.resolve('pdfmake/fonts/Roboto.js')),
+    'Roboto',
+  )
+
+  pdfMake.fonts = {
+    Roboto: {
+      normal: path.join(fontsDir, 'Roboto-Regular.ttf'),
+      bold: path.join(fontsDir, 'Roboto-Medium.ttf'),
+      italics: path.join(fontsDir, 'Roboto-Italic.ttf'),
+      bolditalics: path.join(fontsDir, 'Roboto-MediumItalic.ttf'),
+    },
+  }
+
+  pdfMake.setUrlAccessPolicy?.(() => false)
+  pdfMakeInstance = pdfMake
+  return pdfMake
+}
 
 export interface ContractPdfInput {
-  /** Título do contrato (vai como cabeçalho e título do PDF). */
   title: string
-  /** Corpo do contrato — texto corrido, aceita `\n` para quebras de parágrafo. */
   body: string
   clientName: string
   clientDocument?: string
   companyName?: string
   companyCnpj?: string
-  /** Valor em reais (opcional). */
   value?: number
-  /** Data de emissão; default = hoje. */
   issuedAt?: Date
-  /** Nome da cidade/local de assinatura (ex.: "São Paulo"). */
   location?: string
 }
 
@@ -69,6 +63,7 @@ function fmtDate(d: Date): string {
 }
 
 export async function generateContractPdf(input: ContractPdfInput): Promise<Buffer> {
+  const pdfMake = getPdfMake()
   const issuedAt = input.issuedAt ?? new Date()
 
   const logoUri = getPropezLogoDataUri()

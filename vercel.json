@@ -7,7 +7,7 @@
   "functions": {
     "api/index.ts": {
       "maxDuration": 60,
-      "includeFiles": "sql/**"
+      "includeFiles": "sql/**,node_modules/pdfmake/**"
     }
   },
   "rewrites": [
