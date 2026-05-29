@@ -589,36 +589,8 @@ export function buildIntegrationsRouter(deps: {
             console.error('[integrations:rubrica/send] updateLead contacted failed:', err),
           )
 
-        // Notifica a suíte ProSync via partner endpoint (Fase 4).
-        if (suiteProposalEvents?.isEnabled()) {
-          const publicTokenRow = await pool
-            .query<{ public_token: string | null; valor_cents: number | null; desconto_cents: number | null }>(
-              `SELECT public_token, valor_cents, desconto_cents FROM propostas WHERE id::text = $1`,
-              [proposalId],
-            )
-            .catch(() => null)
-          const meta = publicTokenRow?.rows?.[0] ?? null
-          const baseUrl = config.appUrl.replace(/\/+$/, '')
-          const publicUrl = meta?.public_token
-            ? `${baseUrl}/p/${meta.public_token}`
-            : null
-          const valueCents =
-            meta?.valor_cents != null
-              ? Math.max(0, meta.valor_cents - (meta.desconto_cents || 0))
-              : null
-          suiteProposalEvents.fireAndForget({
-            event: 'proposal.sent',
-            externalId: proposalId,
-            leadId: String(mapping.prosync_lead_id),
-            title,
-            publicUrl,
-            status: 'sent',
-            valueCents,
-            currency: 'BRL',
-            externalUpdatedAt: new Date(),
-            metadata: { documentId, signingUrl },
-          })
-        }
+        // CRM: proposal.sent é emitido ao enviar a proposta ao cliente (e-mail / data_envio).
+        // Contrato Rubrica → proposal.signed no webhook document.signed.
       }
 
       if (mail) {

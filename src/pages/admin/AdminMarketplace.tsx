@@ -65,7 +65,7 @@ export default function AdminMarketplace({ navigate }: { navigate: NavigateFn })
     >
       <div className="mb-6 flex gap-3">
         <button type="button" onClick={seedStarters} className="btn-secondary text-sm">
-          Publicar 3 templates iniciais
+          Publicar {STARTER_TEMPLATES.length} templates iniciais
         </button>
       </div>
 

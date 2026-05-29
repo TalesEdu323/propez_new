@@ -1,7 +1,10 @@
-import type { BuilderElement } from '../types/builder';
+import type { BuilderElement, BuilderPageLayout } from '../types/builder';
 import type { ProposalFlowConfig } from '../types/proposalFlow';
 import { DEFAULT_FLOW } from '../types/proposalFlow';
 import { createId } from '../lib/ids';
+import { DEFAULT_PROPS } from '../components/builder/defaultProps';
+import { DEFAULT_PAGE_LAYOUT, normalizePageLayout } from '../lib/pageLayout';
+import { applyThemeToPageLayout } from '../lib/proposalTheme';
 
 export interface StarterTemplate {
   id: string;
@@ -10,6 +13,7 @@ export interface StarterTemplate {
   categoria: string;
   elementos: BuilderElement[];
   fluxo: ProposalFlowConfig;
+  pageLayout?: BuilderPageLayout;
 }
 
 function cloneElements(elements: BuilderElement[]): BuilderElement[] {
@@ -317,6 +321,389 @@ const recorrenteElements: BuilderElement[] = [
   },
 ];
 
+const trafegoPagoElements: BuilderElement[] = [
+  {
+    id: 'tp1',
+    type: 'marketing_hero',
+    props: {
+      title: 'Plano de Tráfego Pago & Funil de Vendas',
+      subtitle: 'Estrutura completa de captação digital — da mídia paga ao contrato assinado.',
+      badge: 'Plano Estratégico de Aquisição',
+      description: 'Proposta com escopo de campanhas, landing pages, criativos e projeção de retorno sobre investimento em mídia.',
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+    },
+  },
+  { id: 'tp2', type: 'spacer', props: { height: '32' } },
+  {
+    id: 'tp3',
+    type: 'heading',
+    props: { text: 'O Que Vamos Construir', color: '#18181b', align: 'left', size: 'text-3xl', weight: 'font-bold' },
+  },
+  {
+    id: 'tp4',
+    type: 'feature_grid',
+    props: {
+      features: [
+        { title: 'Landing Page de Alta Conversão', desc: 'Página otimizada com formulário de pré-qualificação (CEP, valor da conta, CPF).' },
+        { title: 'Campanhas de Tráfego Pago', desc: 'Meta Ads segmentado por região, faixa etária e interesses com testes A/B contínuos.' },
+        { title: 'Criativos & Copies', desc: 'Pacote mensal de criativos estáticos e em vídeo com variações para teste.' },
+        { title: 'Funil de Qualificação', desc: 'Lead scoring: formulário → WhatsApp/CRM → equipe comercial.' },
+      ],
+    },
+  },
+  { id: 'tp5', type: 'spacer', props: { height: '48' } },
+  {
+    id: 'tp6',
+    type: 'heading',
+    props: { text: 'Estrutura do Funil', color: '#18181b', align: 'center', size: 'text-2xl', weight: 'font-bold' },
+  },
+  {
+    id: 'tp7',
+    type: 'funnel',
+    props: {
+      color: '#1a1a2e',
+      stages: [
+        { name: 'Impressão do Anúncio (Meta Ads)', value: '1' },
+        { name: 'Clique → Landing Page', value: '2' },
+        { name: 'Lead Captado', value: '3' },
+        { name: 'Qualificação Interna', value: '4' },
+        { name: 'Contrato Fechado', value: '5' },
+      ],
+    },
+  },
+  { id: 'tp8', type: 'spacer', props: { height: '48' } },
+  {
+    id: 'tp9',
+    type: 'heading',
+    props: { text: 'Calculadora de Projeção', color: '#18181b', align: 'left', size: 'text-3xl', weight: 'font-bold' },
+  },
+  {
+    id: 'tp10',
+    type: 'paragraph',
+    props: {
+      text: 'Simule cenários reais com base no investimento em mídia e nas taxas de conversão do funil.',
+      color: '#636e72',
+      align: 'left',
+      size: 'text-base',
+    },
+  },
+  {
+    id: 'tp11',
+    type: 'projection_calculator',
+    props: { ...DEFAULT_PROPS.projection_calculator },
+  },
+  { id: 'tp12', type: 'spacer', props: { height: '48' } },
+  {
+    id: 'tp13',
+    type: 'heading',
+    props: { text: 'Cenários de Investimento', color: '#18181b', align: 'left', size: 'text-2xl', weight: 'font-bold' },
+  },
+  {
+    id: 'tp14',
+    type: 'metrics_table',
+    props: { ...DEFAULT_PROPS.metrics_table },
+  },
+  {
+    id: 'tp15',
+    type: 'timeline',
+    props: {
+      steps: [
+        { title: 'Semana 1 — SETUP', desc: 'Briefing, landing page, Pixel Meta, CRM/WhatsApp e conta de anúncios.' },
+        { title: 'Semana 2 — CRIATIVOS', desc: 'Pacote de criativos, copies A/B e estrutura de campanhas.' },
+        { title: 'Semana 3 — LANÇAMENTO', desc: 'Ativação, monitoramento de CPL/CTR/CPC e primeiros leads.' },
+        { title: 'Semana 4–8 — OTIMIZAÇÃO', desc: 'Ajustes por criativo, região e copy; escala gradual do budget.' },
+        { title: 'Mês 3+ — ESCALA', desc: 'Funil validado; aumento de investimento e expansão geográfica.' },
+      ],
+    },
+  },
+  {
+    id: 'tp16',
+    type: 'marketing_cta',
+    props: {
+      title: 'Próximos Passos',
+      description: 'Definir regiões, aprovar investimento inicial em mídia e briefing comercial.',
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+    },
+  },
+];
+
+const designElements: BuilderElement[] = [
+  { id: 'd1', type: 'logo', props: { logoText: 'Studio Criativo', mode: 'text', align: 'center', height: '56', textColor: '#7c3aed' } },
+  {
+    id: 'd2',
+    type: 'marketing_hero',
+    props: {
+      title: 'Identidade visual que converte',
+      badge: 'Proposta criativa',
+      subtitle: 'Branding, UI/UX e peças digitais alinhadas ao seu posicionamento e objetivos de negócio.',
+      description: 'Apresentamos escopo, processo criativo, entregáveis e investimento para elevar a presença da sua marca.',
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+      primaryColor: '#7c3aed',
+      secondaryColor: '#a78bfa',
+    },
+  },
+  {
+    id: 'd3',
+    type: 'gallery',
+    props: {
+      columns: '3',
+      images: [
+        'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1561070791-2526d30994b5?q=80&w=600&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1558655146-9f40138edfeb?q=80&w=600&auto=format&fit=crop',
+      ],
+      gap: '16',
+      radius: 'rounded-2xl',
+    },
+  },
+  {
+    id: 'd4',
+    type: 'feature_grid',
+    props: {
+      features: [
+        { title: 'Discovery', desc: 'Imersão na marca, concorrência e público-alvo.', icon: 'Search' },
+        { title: 'Design System', desc: 'Tipografia, cores e componentes reutilizáveis.', icon: 'Palette' },
+        { title: 'Entrega Final', desc: 'Arquivos editáveis e guia de uso da marca.', icon: 'Package' },
+      ],
+    },
+  },
+  {
+    id: 'd5',
+    type: 'timeline',
+    props: {
+      steps: [
+        { title: 'Semana 1', desc: 'Briefing e moodboard.' },
+        { title: 'Semanas 2–3', desc: 'Conceitos e refinamento.' },
+        { title: 'Semana 4', desc: 'Entrega e handoff.' },
+      ],
+      color: '#7c3aed',
+    },
+  },
+  {
+    id: 'd6',
+    type: 'pricing',
+    props: {
+      title: 'Investimento',
+      price: 'R$ 12.800',
+      period: '',
+      items: ['Identidade visual completa', '3 rodadas de revisão', 'Manual de marca PDF'],
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+      buttonColor: '#7c3aed',
+      bgColor: '#faf5ff',
+    },
+  },
+  {
+    id: 'd7',
+    type: 'marketing_cta',
+    props: {
+      title: 'Vamos criar algo memorável?',
+      description: 'Aprove abaixo para reservar agenda de kick-off criativo.',
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+    },
+  },
+];
+
+const juridicoElements: BuilderElement[] = [
+  {
+    id: 'j1',
+    type: 'heading',
+    props: { text: 'Proposta de Serviços Jurídicos', color: '#0f172a', align: 'left', size: 'text-4xl', weight: 'font-bold' },
+  },
+  {
+    id: 'j2',
+    type: 'paragraph',
+    props: {
+      text: 'Escopo detalhado de assessoria jurídica com prazos, entregáveis e honorários transparentes.',
+      color: '#475569',
+      align: 'left',
+      size: 'text-lg',
+    },
+  },
+  {
+    id: 'j3',
+    type: 'icon_list',
+    props: {
+      items: ['Atendimento dedicado', 'Relatórios mensais de andamento', 'Confidencialidade garantida'],
+      iconColor: '#2563eb',
+      textColor: '#334155',
+    },
+  },
+  {
+    id: 'j4',
+    type: 'service_stack',
+    props: { mode: 'stack', title: 'Serviços contratados' },
+  },
+  {
+    id: 'j5',
+    type: 'accordion',
+    props: {
+      title: 'FAQ',
+      items: [
+        { title: 'Como são calculados os honorários?', content: 'Valor fixo mensal ou por demanda, conforme escopo acordado.' },
+        { title: 'Prazo de resposta?', content: 'SLA de 24h úteis para demandas urgentes.' },
+      ],
+      bgColor: '#f8fafc',
+    },
+  },
+  {
+    id: 'j6',
+    type: 'pricing',
+    props: {
+      title: 'Honorários mensais',
+      price: 'R$ 6.500',
+      period: '/mês',
+      items: ['Consultoria contínua', 'Até 20h/mês de demandas', 'Reunião mensal de alinhamento'],
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+      buttonColor: '#2563eb',
+      bgColor: '#f8fafc',
+    },
+  },
+  {
+    id: 'j7',
+    type: 'marketing_cta',
+    props: {
+      title: 'Pronto para formalizar a parceria?',
+      description: 'Ao aprovar, enviamos o contrato de prestação de serviços.',
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+    },
+  },
+];
+
+const imobiliarioElements: BuilderElement[] = [
+  {
+    id: 'i1',
+    type: 'marketing_hero',
+    props: {
+      title: 'Seu próximo imóvel está aqui',
+      badge: 'Exclusividade',
+      subtitle: 'Apresentamos condições especiais de aquisição com documentação completa e suporte em todas as etapas.',
+      description: 'Proposta comercial personalizada com valores, condições de pagamento e cronograma de entrega.',
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+      primaryColor: '#059669',
+      secondaryColor: '#10b981',
+    },
+  },
+  {
+    id: 'i2',
+    type: 'slider',
+    props: {
+      height: '420',
+      slides: [
+        { title: 'Ambientes integrados', desc: 'Plantas funcionais com acabamento premium.', image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=1200&auto=format&fit=crop' },
+        { title: 'Localização privilegiada', desc: 'Próximo a comércio, escolas e vias principais.', image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1200&auto=format&fit=crop' },
+      ],
+    },
+  },
+  {
+    id: 'i3',
+    type: 'stats',
+    props: {
+      items: [
+        { value: '120', label: 'm² privativos', suffix: '', color: '#059669' },
+        { value: '3', label: 'Suítes', suffix: '', color: '#059669' },
+        { value: '2', label: 'Vagas', suffix: '', color: '#059669' },
+      ],
+      bgColor: '#f0fdf4',
+    },
+  },
+  {
+    id: 'i4',
+    type: 'pricing',
+    props: {
+      title: 'Condições comerciais',
+      price: 'R$ 890.000',
+      period: '',
+      items: ['Entrada facilitada', 'Financiamento assistido', 'Documentação regularizada'],
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+      buttonColor: '#059669',
+      bgColor: '#f0fdf4',
+    },
+  },
+  {
+    id: 'i5',
+    type: 'marketing_cta',
+    props: {
+      title: 'Agende sua visita',
+      description: 'Aprove para confirmar interesse e receber o roteiro de visita.',
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+    },
+  },
+];
+
+const eventoElements: BuilderElement[] = [
+  {
+    id: 'e1',
+    type: 'marketing_hero',
+    props: {
+      title: 'Lançamento — Reserve sua vaga',
+      badge: 'Vagas limitadas',
+      subtitle: 'Evento exclusivo com condições especiais para os primeiros confirmados.',
+      description: 'Garanta sua participação antes do encerramento das inscrições.',
+      buttonText: 'Garantir minha vaga',
+      proposalAction: 'approve',
+      primaryColor: '#dc2626',
+      secondaryColor: '#ef4444',
+    },
+  },
+  {
+    id: 'e2',
+    type: 'countdown',
+    props: {
+      targetDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      targetTime: '23:59',
+      color: '#dc2626',
+      bgColor: '#fef2f2',
+      labelColor: '#52525b',
+      expiredText: 'Inscrições encerradas',
+    },
+  },
+  {
+    id: 'e3',
+    type: 'feature_grid',
+    props: {
+      features: [
+        { title: 'Conteúdo ao vivo', desc: 'Apresentação exclusiva do produto/serviço.', icon: 'Zap' },
+        { title: 'Networking', desc: 'Conexão com outros participantes qualificados.', icon: 'Users' },
+        { title: 'Oferta especial', desc: 'Condições válidas apenas durante o evento.', icon: 'Gift' },
+      ],
+    },
+  },
+  {
+    id: 'e4',
+    type: 'pricing',
+    props: {
+      title: 'Investimento',
+      price: 'R$ 497',
+      period: '',
+      items: ['Acesso ao evento completo', 'Material de apoio', 'Gravação por 30 dias'],
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+      buttonColor: '#dc2626',
+      bgColor: '#fef2f2',
+    },
+  },
+  {
+    id: 'e5',
+    type: 'marketing_cta',
+    props: {
+      title: 'Não perca esta oportunidade',
+      description: 'As vagas são limitadas. Confirme agora.',
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+    },
+  },
+];
+
 export const STARTER_TEMPLATES: StarterTemplate[] = [
   {
     id: 'starter-consultoria',
@@ -325,6 +712,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     categoria: 'Serviços',
     elementos: consultoriaElements,
     fluxo: DEFAULT_FLOW,
+    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'clean-corporate'),
   },
   {
     id: 'starter-agencia',
@@ -333,6 +721,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     categoria: 'Marketing',
     elementos: agenciaElements,
     fluxo: DEFAULT_FLOW,
+    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'dark-premium'),
   },
   {
     id: 'starter-recorrente',
@@ -341,6 +730,52 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     categoria: 'Recorrente',
     elementos: recorrenteElements,
     fluxo: DEFAULT_FLOW,
+    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'ocean-pro'),
+  },
+  {
+    id: 'starter-trafego-pago',
+    nome: 'Plano de Tráfego Pago',
+    descricao: 'Hero, escopo, funil, calculadora interativa de ROI, tabela de cenários e cronograma.',
+    categoria: 'Marketing',
+    elementos: trafegoPagoElements,
+    fluxo: DEFAULT_FLOW,
+    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'navy-performance'),
+  },
+  {
+    id: 'starter-design',
+    nome: 'Design / Criativo',
+    descricao: 'Portfolio visual, processo criativo e investimento em branding.',
+    categoria: 'Criativo',
+    elementos: designElements,
+    fluxo: DEFAULT_FLOW,
+    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'purple-creative'),
+  },
+  {
+    id: 'starter-juridico',
+    nome: 'Jurídico / Serviços',
+    descricao: 'Escopo formal, FAQ e honorários mensais.',
+    categoria: 'Serviços',
+    elementos: juridicoElements,
+    fluxo: DEFAULT_FLOW,
+    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'clean-corporate'),
+  },
+  {
+    id: 'starter-imobiliario',
+    nome: 'Imobiliário',
+    descricao: 'Galeria, métricas do imóvel e condições comerciais.',
+    categoria: 'Imobiliário',
+    elementos: imobiliarioElements,
+    fluxo: DEFAULT_FLOW,
+    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'forest-growth'),
+  },
+  {
+    id: 'starter-evento',
+    nome: 'Evento / Lançamento',
+    descricao: 'Urgência com countdown, benefícios e pricing.',
+    categoria: 'Eventos',
+    elementos: eventoElements,
+    fluxo: DEFAULT_FLOW,
+    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'bold-red'),
   },
 ];
 
@@ -348,6 +783,7 @@ export function applyStarterTemplate(templateId: string): {
   elementos: BuilderElement[];
   fluxo: ProposalFlowConfig;
   nome: string;
+  pageLayout: BuilderPageLayout;
 } | null {
   const t = STARTER_TEMPLATES.find((x) => x.id === templateId);
   if (!t) return null;
@@ -355,5 +791,6 @@ export function applyStarterTemplate(templateId: string): {
     elementos: cloneElements(t.elementos),
     fluxo: t.fluxo,
     nome: t.nome,
+    pageLayout: normalizePageLayout(t.pageLayout ?? DEFAULT_PAGE_LAYOUT),
   };
 }

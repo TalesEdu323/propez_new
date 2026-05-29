@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { hydrateStore, isStoreHydrated, store, Proposta } from '../lib/store';
 import { RenderElement } from '../components/builder/RenderElement';
+import { PageShell } from '../components/builder/PageShell';
+import { normalizePageLayout } from '../lib/pageLayout';
 import { motion, AnimatePresence } from 'motion/react';
 import { updateProposalStatusInCRM } from '../services/crmApi';
 import {
@@ -283,10 +285,22 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
               transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
               className="pb-24"
             >
-              <div className="max-w-5xl mx-auto bg-white rounded-[2.5rem] overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] border border-black/[0.03]">
-                {proposta.elementos.map((el) => (
-                  <RenderElement key={el.id} element={el} previewMode={true} />
-                ))}
+              <div className="w-full bg-white">
+                <PageShell layout={normalizePageLayout(proposta.pageLayout)}>
+                  {proposta.elementos.map((el) => (
+                    <RenderElement
+                      key={el.id}
+                      element={el}
+                      previewMode
+                      pageLayout={normalizePageLayout(proposta.pageLayout)}
+                      onProposalAction={
+                        proposta.status === 'pendente'
+                          ? () => { void handleApprove(); }
+                          : undefined
+                      }
+                    />
+                  ))}
+                </PageShell>
               </div>
 
               <ProposalActions

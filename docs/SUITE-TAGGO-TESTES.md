@@ -396,7 +396,8 @@ curl -X POST http://localhost:3001/api/partner/proposal-events `
 | Ação | Evento emitido |
 |------|----------------|
 | Criar proposta com `prosyncLeadId` | `proposal.created` |
-| Enviar para Rubrica (`POST /api/integrations/rubrica/send`) | `proposal.sent` |
+| Enviar proposta por e-mail (`POST /api/propostas/:id/send-email`) | `proposal.sent` |
+| Enviar para Rubrica (`POST /api/integrations/rubrica/send`) | (não emite `proposal.sent`; ver webhook `proposal.signed`) |
 | Cliente aprova/recusa link público | `proposal.approved` / `proposal.rejected` |
 | Webhook Rubrica `document.signed` | `proposal.signed` |
 

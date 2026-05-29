@@ -9,12 +9,19 @@ import { proposalFlowConfigSchema } from '../validation/proposalFlow.js'
 
 const builderElement = z.object({}).passthrough()
 
-const MODEL_SELECT = `id, nome, elementos, servicos, contrato_id, contrato_texto,
+const MODEL_SELECT = `id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
               chave_pix, link_pagamento, tier, fluxo, created_at`
+
+const pageLayoutSchema = z.object({
+  widthMode: z.enum(['boxed', 'full']),
+  horizontalPadding: z.number().min(0).max(120),
+  maxContentWidth: z.number().positive().optional(),
+}).passthrough()
 
 const bodySchema = z.object({
   nome: z.string().trim().min(1).max(200),
   elementos: z.array(builderElement).default([]),
+  pageLayout: pageLayoutSchema.optional(),
   servicos: z.array(z.string().uuid()).default([]),
   contratoId: z.string().uuid().optional().nullable(),
   contratoTexto: z.string().max(200_000).optional().nullable(),
@@ -64,14 +71,15 @@ export function createModelosRouter(deps: {
     const d = parsed.data
     const { rows } = await pool.query(
       `INSERT INTO modelos_propostas
-         (organization_id, nome, elementos, servicos, contrato_id, contrato_texto,
+         (organization_id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
           chave_pix, link_pagamento, tier, fluxo)
-       VALUES ($1, $2, $3::jsonb, $4::uuid[], $5, $6, $7, $8, $9, $10::jsonb)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::uuid[], $6, $7, $8, $9, $10, $11::jsonb)
        RETURNING ${MODEL_SELECT}`,
       [
         req.auth.orgId,
         d.nome,
         JSON.stringify(d.elementos),
+        JSON.stringify(d.pageLayout ?? { widthMode: 'boxed', horizontalPadding: 60 }),
         d.servicos,
         d.contratoId ?? null,
         d.contratoTexto ?? null,
@@ -93,13 +101,14 @@ export function createModelosRouter(deps: {
       `UPDATE modelos_propostas SET
          nome = COALESCE($3, nome),
          elementos = CASE WHEN $4::boolean THEN $5::jsonb ELSE elementos END,
-         servicos = CASE WHEN $6::boolean THEN $7::uuid[] ELSE servicos END,
-         contrato_id = CASE WHEN $8::boolean THEN $9 ELSE contrato_id END,
-         contrato_texto = CASE WHEN $10::boolean THEN $11 ELSE contrato_texto END,
-         chave_pix = CASE WHEN $12::boolean THEN $13 ELSE chave_pix END,
-         link_pagamento = CASE WHEN $14::boolean THEN $15 ELSE link_pagamento END,
-         tier = COALESCE($16, tier),
-         fluxo = CASE WHEN $17::boolean THEN $18::jsonb ELSE fluxo END
+         page_layout = CASE WHEN $6::boolean THEN $7::jsonb ELSE page_layout END,
+         servicos = CASE WHEN $8::boolean THEN $9::uuid[] ELSE servicos END,
+         contrato_id = CASE WHEN $10::boolean THEN $11 ELSE contrato_id END,
+         contrato_texto = CASE WHEN $12::boolean THEN $13 ELSE contrato_texto END,
+         chave_pix = CASE WHEN $14::boolean THEN $15 ELSE chave_pix END,
+         link_pagamento = CASE WHEN $16::boolean THEN $17 ELSE link_pagamento END,
+         tier = COALESCE($18, tier),
+         fluxo = CASE WHEN $19::boolean THEN $20::jsonb ELSE fluxo END
        WHERE organization_id = $1 AND id = $2
        RETURNING ${MODEL_SELECT}`,
       [
@@ -108,6 +117,8 @@ export function createModelosRouter(deps: {
         d.nome ?? null,
         d.elementos !== undefined,
         d.elementos !== undefined ? JSON.stringify(d.elementos) : null,
+        d.pageLayout !== undefined,
+        d.pageLayout !== undefined ? JSON.stringify(d.pageLayout) : null,
         d.servicos !== undefined,
         d.servicos ?? null,
         'contratoId' in d,

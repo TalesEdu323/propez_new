@@ -6,7 +6,7 @@ import {
   MessageSquareQuote, GitCommit,
   Navigation, GalleryHorizontal, Grid3X3, Columns,
   Box, Lock,
-  Timer, MessageCircle, FolderOpen, Activity, Star, MapPin, Table, Images, Bell,
+  Timer, MessageCircle, FolderOpen, Activity, Star, MapPin, Table, Images, Bell, Calculator,
   LayoutTemplate,
   Layers,
 } from 'lucide-react';
@@ -139,6 +139,7 @@ export function BuilderWidgetPalette({
         </WidgetCategory>
 
         <WidgetCategory title="Básicos">
+          <DraggableWidget type="logo" icon={<Sparkles />} label="Logo / Marca" {...widgetProps('logo')} />
           <DraggableWidget type="heading" icon={<Type />} label="Título" {...widgetProps('heading')} />
           <DraggableWidget type="paragraph" icon={<AlignLeft />} label="Texto" {...widgetProps('paragraph')} />
           <DraggableWidget type="button" icon={<MousePointerClick />} label="Botão" {...widgetProps('button')} />
@@ -175,6 +176,8 @@ export function BuilderWidgetPalette({
           <DraggableWidget type="comparison_table" icon={<Table />} label="Comparação" {...widgetProps('comparison_table')} />
           <DraggableWidget type="image_carousel" icon={<Images />} label="Carrossel" {...widgetProps('image_carousel')} />
           <DraggableWidget type="animated_text" icon={<Sparkles className="text-yellow-400" />} label="Texto Animado" {...widgetProps('animated_text')} />
+          <DraggableWidget type="projection_calculator" icon={<Calculator />} label="Calculadora de Projeção" {...widgetProps('projection_calculator')} />
+          <DraggableWidget type="metrics_table" icon={<Table />} label="Tabela de Métricas" {...widgetProps('metrics_table')} />
         </WidgetCategory>
 
         <p className="text-xs text-zinc-500 mt-8 text-center px-4">

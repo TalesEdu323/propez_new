@@ -29,6 +29,7 @@ import { createContratosRouter } from './routes/contratos.js';
 import { createModelosRouter } from './routes/modelos.js';
 import { createPropostasRouter } from './routes/propostas.js';
 import { createUsageRouter } from './routes/usage.js';
+import { createIaRouter } from './routes/ia.js';
 import { createPublicPropostasRouter } from './routes/publicPropostas.js';
 import {
   createCheckoutRouter,
@@ -65,8 +66,11 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   );
   const suiteLookup = createSuiteLookup(integrationsConfig);
   const suiteServiceToken = createSuiteServiceTokenClient(integrationsConfig);
-  const suiteProposalEvents = createSuiteProposalEvents(integrationsConfig);
   const orgCredentialsRepo = createOrgIntegrationCredentialsRepo(pool, integrationsConfig);
+  const suiteProposalEvents = createSuiteProposalEvents({
+    config: integrationsConfig,
+    orgCredentialsRepo,
+  });
   const ensureSuiteCredential = createEnsureSuiteCredential({
     pool,
     config: integrationsConfig,
@@ -138,6 +142,7 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   app.use('/api/modelos', createModelosRouter({ pool, config }));
   app.use('/api/propostas', createPropostasRouter({ pool, config, mail, suiteProposalEvents }));
   app.use('/api/usage', createUsageRouter({ pool, config }));
+  app.use('/api/ia', createIaRouter({ pool, config }));
 
   // 6) Integrations proxy (autenticado)
   const integrationsLimiter = createRateLimit({ windowMs: 60_000, max: 120 });

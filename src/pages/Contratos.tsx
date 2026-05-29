@@ -1,17 +1,27 @@
 import { useState } from 'react';
-import { Plus, Search, FileText, Trash2, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Plus, Search, FileText, Trash2, ChevronRight, ArrowLeft, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { store, ContratoTemplate } from '../lib/store';
 import ContractEditor from '../components/ContractEditor';
 import { useContratos } from '../hooks/useStoreEntity';
 import { createId } from '../lib/ids';
 import { formatDateBR } from '../lib/format';
+import { AiBriefPromptModal } from '../components/ia/AiBriefPromptModal';
 
 export default function Contratos() {
   const contratos = useContratos();
   const [searchTerm, setSearchTerm] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [currentContrato, setCurrentContrato] = useState<Partial<ContratoTemplate> | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
+
+  const handleAiContract = (result: { titulo: string; texto: string }) => {
+    setCurrentContrato({
+      titulo: result.titulo,
+      texto: result.texto,
+    });
+    setIsEditing(true);
+  };
 
   const handleSave = () => {
     if (!currentContrato?.titulo || !currentContrato?.texto) {
@@ -102,15 +112,24 @@ export default function Contratos() {
             <h1 className="page-title">Contratos.</h1>
             <p className="text-zinc-400 mt-4 font-medium">Gerencie seus modelos de contrato e termos legais.</p>
           </div>
-          <button 
-            onClick={() => {
-              setCurrentContrato({ titulo: '', texto: '' });
-              setIsEditing(true);
-            }}
-            className="btn-primary w-full sm:w-fit"
-          >
-            <Plus className="w-5 h-5" /> Novo Contrato
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setAiOpen(true)}
+              className="btn-secondary w-full sm:w-fit flex items-center justify-center gap-2 border-amber-200 text-amber-800 hover:bg-amber-50"
+            >
+              <Sparkles className="w-5 h-5" /> Gerar com IA
+            </button>
+            <button 
+              onClick={() => {
+                setCurrentContrato({ titulo: '', texto: '' });
+                setIsEditing(true);
+              }}
+              className="btn-primary w-full sm:w-fit"
+            >
+              <Plus className="w-5 h-5" /> Novo Contrato
+            </button>
+          </div>
         </div>
 
         <div className="apple-card overflow-hidden mx-0 !p-0">
@@ -134,6 +153,13 @@ export default function Contratos() {
               </div>
               <h3 className="text-xl sm:text-2xl font-semibold text-zinc-900 tracking-tight mb-2 sm:mb-3">Nenhum contrato encontrado</h3>
               <p className="text-zinc-400 text-xs sm:text-sm font-medium mb-10 sm:mb-12 max-w-xs mx-auto">Crie modelos de contrato para anexar às suas propostas.</p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button 
+                onClick={() => setAiOpen(true)}
+                className="btn-secondary inline-flex scale-90 sm:scale-100 items-center gap-2 border-amber-200 text-amber-800 hover:bg-amber-50"
+              >
+                <Sparkles className="w-5 h-5" /> Gerar com IA
+              </button>
               <button 
                 onClick={() => {
                   setCurrentContrato({ titulo: '', texto: '' });
@@ -143,6 +169,7 @@ export default function Contratos() {
               >
                 Criar Contrato
               </button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 p-6 sm:p-10">
@@ -197,8 +224,15 @@ export default function Contratos() {
             </AnimatePresence>
           </div>
         )}
+        </div>
       </div>
+
+      <AiBriefPromptModal
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        mode="contract"
+        onContractGenerated={handleAiContract}
+      />
     </div>
-  </div>
   );
 }

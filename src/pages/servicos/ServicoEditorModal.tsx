@@ -229,6 +229,7 @@ export function ServicoEditorModal({
                 saveLabel="Salvar serviço"
                 widgetWhitelist={SERVICE_WIDGETS}
                 hideImportExport
+                showPageLayoutPanel={false}
               />
             </div>
           </div>

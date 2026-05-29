@@ -1,4 +1,4 @@
-import type { BuilderElement } from '../../types/builder';
+import type { BuilderElement, BuilderPageLayout } from '../../types/builder';
 import type { ProposalFlowConfig } from '../../types/proposalFlow';
 import { DEFAULT_FLOW } from '../../types/proposalFlow';
 
@@ -22,6 +22,7 @@ export interface PropezFluidoFormData {
   envio: string;
   validade: string;
   elementos: BuilderElement[];
+  pageLayout?: BuilderPageLayout;
   contratoTexto: string;
   contratoId: string;
   chavePix: string;

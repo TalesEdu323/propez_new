@@ -22,8 +22,11 @@ export function AlignField({ element, updateElement }: FieldProps) {
   );
 }
 
+const STRUCTURAL_TYPES = new Set(['grid', 'container', 'column']);
+
 export function LayoutFields({ element, updateElement }: FieldProps) {
   const { type, props, id } = element;
+  const hidePadding = STRUCTURAL_TYPES.has(type);
 
   return (
     <>
@@ -120,7 +123,7 @@ export function LayoutFields({ element, updateElement }: FieldProps) {
         </div>
       )}
 
-      {('padding' in props) && (
+      {('padding' in props) && !hidePadding && (
         <div>
           <label className="block text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Padding Interno (px)</label>
           <input type="number" min="0" max="100" value={props.padding} onChange={(e) => updateElement(id, { padding: e.target.value })} className="glass-input" />

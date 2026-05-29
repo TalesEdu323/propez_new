@@ -6,6 +6,8 @@ import { FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api, ApiError } from '../lib/apiClient';
 import { RenderElement } from '../components/builder/RenderElement';
+import { PageShell } from '../components/builder/PageShell';
+import { normalizePageLayout } from '../lib/pageLayout';
 import { PropezWatermark } from './visualizarProposta/PropezWatermark';
 import { shouldShowWatermark } from '../lib/featureFlags';
 import { flowHasStep, parseProposalFlow } from '../types/proposalFlow';
@@ -23,6 +25,7 @@ interface PublicProposta {
   valor: number;
   status: 'pendente' | 'aprovada' | 'recusada';
   elementos: BuilderElement[];
+  pageLayout?: import('../types/builder').BuilderPageLayout;
   contratoTexto?: string | null;
   creatorPlan?: string | null;
   pago: boolean;
@@ -129,6 +132,40 @@ export default function PublicProposta({ token }: Props) {
   );
   const isDecided = proposta?.status === 'aprovada' || proposta?.status === 'recusada';
   const showSign = isDecided && proposta?.status === 'aprovada' && flowHasStep(fluxo, 'sign');
+
+  const awaitingRubricaLink =
+    showSign &&
+    !proposta?.rubricaSigningUrl &&
+    proposta?.rubricaStatus !== 'failed' &&
+    proposta?.rubricaStatus !== 'cancelled' &&
+    proposta?.rubricaStatus !== 'signed';
+
+  const prepareSignatureRef = useRef(false);
+
+  useEffect(() => {
+    if (!awaitingRubricaLink || prepareSignatureRef.current) return;
+    prepareSignatureRef.current = true;
+    (async () => {
+      try {
+        const res = await api.post<{ proposta: PublicProposta; journey?: JourneyInfo }>(
+          `/api/public/propostas/${encodeURIComponent(token)}/prepare-signature`,
+          {},
+          { skipRefresh: true },
+        );
+        setData((prev) => (prev ? { ...prev, proposta: res.proposta, journey: res.journey } : prev));
+      } catch {
+        prepareSignatureRef.current = false;
+      }
+    })();
+  }, [awaitingRubricaLink, token]);
+
+  useEffect(() => {
+    if (!awaitingRubricaLink) return;
+    const interval = window.setInterval(() => {
+      void load();
+    }, 8000);
+    return () => window.clearInterval(interval);
+  }, [awaitingRubricaLink, load]);
   const showPay =
     isDecided &&
     proposta?.status === 'aprovada' &&
@@ -220,15 +257,18 @@ export default function PublicProposta({ token }: Props) {
             <p className="text-zinc-400 font-bold text-[10px] uppercase tracking-[0.2em]">Esta proposta está vazia.</p>
           </div>
         ) : (
-          <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full">
-            {proposta.elementos.map((el) => (
-              <RenderElement
-                key={el.id}
-                element={el}
-                previewMode
-                onProposalAction={proposta.status === 'pendente' ? handleProposalAction : undefined}
-              />
-            ))}
+          <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full bg-white">
+            <PageShell layout={normalizePageLayout(proposta.pageLayout)}>
+              {proposta.elementos.map((el) => (
+                <RenderElement
+                  key={el.id}
+                  element={el}
+                  previewMode
+                  pageLayout={normalizePageLayout(proposta.pageLayout)}
+                  onProposalAction={proposta.status === 'pendente' ? handleProposalAction : undefined}
+                />
+              ))}
+            </PageShell>
           </motion.div>
         )}
       </AnimatePresence>

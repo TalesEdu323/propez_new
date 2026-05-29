@@ -11,8 +11,28 @@
  * atualize `defaultProps.ts` + `RenderElement.tsx` caso a caso.
  */
 
+export type PageWidthMode = 'boxed' | 'full';
+
+export interface BuilderPageLayout {
+  widthMode: PageWidthMode;
+  horizontalPadding: number;
+  maxContentWidth?: number;
+  /** Preset de tema visual da proposta */
+  themePreset?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  backgroundColor?: string;
+  textColor?: string;
+  backgroundImage?: string;
+  logoUrl?: string;
+}
+
+export type BuilderViewport = 'desktop' | 'tablet' | 'mobile';
+
+export type SpacingPreset = 'compact' | 'normal' | 'spacious';
+
 export type BuilderElementType =
-  | 'heading' | 'paragraph' | 'button' | 'image'
+  | 'heading' | 'paragraph' | 'button' | 'image' | 'logo'
   | 'divider' | 'spacer' | 'video' | 'card'
   | 'stats' | 'accordion' | 'animated_text'
   | 'funnel' | 'icon_list' | 'pricing' | 'testimonial' | 'timeline'
@@ -20,7 +40,8 @@ export type BuilderElementType =
   | 'countdown' | 'whatsapp_button' | 'tabs' | 'progress_bar' | 'star_rating'
   | 'google_map' | 'comparison_table' | 'image_carousel' | 'toast_notification'
   | 'marketing_hero' | 'marketing_context' | 'marketing_strategy' | 'marketing_services' | 'marketing_pricing' | 'marketing_cta'
-  | 'service_stack';
+  | 'service_stack'
+  | 'projection_calculator' | 'metrics_table';
 
 /**
  * Mapa de props por tipo. Hoje quase todas usam `Record<string, unknown>` para manter
@@ -32,6 +53,7 @@ export interface BuilderElementPropsMap {
   paragraph: Record<string, unknown>;
   button: Record<string, unknown>;
   image: Record<string, unknown>;
+  logo: Record<string, unknown>;
   divider: Record<string, unknown>;
   spacer: Record<string, unknown>;
   video: Record<string, unknown>;
@@ -67,6 +89,8 @@ export interface BuilderElementPropsMap {
   marketing_pricing: Record<string, unknown>;
   marketing_cta: Record<string, unknown>;
   service_stack: Record<string, unknown>;
+  projection_calculator: Record<string, unknown>;
+  metrics_table: Record<string, unknown>;
 }
 
 /**

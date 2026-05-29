@@ -6,7 +6,8 @@ import Builder from '../components/Builder';
 import { createId } from '../lib/ids';
 import { useContratos, useServicos } from '../hooks/useStoreEntity';
 import type { NavigateFn, RouteParams } from '../types/navigation';
-import type { BuilderElement } from '../types/builder';
+import type { BuilderElement, BuilderPageLayout } from '../types/builder';
+import { normalizePageLayout } from '../lib/pageLayout';
 import { flowHasStep } from '../types/proposalFlow';
 import { applyStarterTemplate } from '../data/starterTemplates';
 import { mergeServiceLayouts } from '../lib/mergeServiceLayouts';
@@ -33,6 +34,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
 
   const [formData, setFormData] = useState(INITIAL_CRIAR_MODELO_FORM);
   const [elementos, setElementos] = useState<BuilderElement[]>([]);
+  const [pageLayout, setPageLayout] = useState<BuilderPageLayout>(() => normalizePageLayout(null));
   const [importedServicoNames, setImportedServicoNames] = useState<string[]>([]);
 
   useEffect(() => {
@@ -49,11 +51,12 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
           fluxo: modelo.fluxo ?? INITIAL_CRIAR_MODELO_FORM.fluxo,
         });
         setElementos(modelo.elementos);
+        setPageLayout(normalizePageLayout(modelo.pageLayout));
       }
     }
   }, [initialData]);
 
-  const handleSave = (finalElements: BuilderElement[]) => {
+  const handleSave = (finalElements: BuilderElement[], finalPageLayout: BuilderPageLayout) => {
     const newModelo: ModeloProposta = {
       id: initialData?.editId || createId(),
       nome: formData.nome,
@@ -64,6 +67,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
       linkPagamento: formData.linkPagamento,
       fluxo: formData.fluxo,
       elementos: finalElements,
+      pageLayout: finalPageLayout,
       data_criacao: new Date().toISOString(),
     };
 
@@ -86,7 +90,13 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
         fluxo: applied.fluxo,
       }));
       setElementos(applied.elementos);
+      setPageLayout(applied.pageLayout);
     }
+    setPickerDone(true);
+  };
+
+  const handleAiGenerated = (els: BuilderElement[]) => {
+    setElementos(els);
     setPickerDone(true);
   };
 
@@ -95,6 +105,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
       <EscolherPontoDePartida
         onBlank={() => setPickerDone(true)}
         onStarter={handleStarter}
+        onAiGenerated={handleAiGenerated}
       />
     );
   }
@@ -111,6 +122,8 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
         )}
         <Builder
           initialElements={elementos}
+          initialPageLayout={pageLayout}
+          onPageLayoutChange={setPageLayout}
           onSave={handleSave}
           onBack={() => setStep(needsContractStep ? 3 : 2)}
           saveLabel="Salvar Modelo"

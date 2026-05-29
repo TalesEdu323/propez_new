@@ -170,9 +170,10 @@ export function buildWebhooksRouter(deps: {
           }
         }
 
-        if (suiteProposalEvents?.isEnabled()) {
+        if (suiteProposalEvents?.isEnabled() && mapping.organization_id) {
           const meta = await loadProposalMeta(pool, mapping.propez_proposal_id)
           suiteProposalEvents.fireAndForget({
+            propezOrganizationId: String(mapping.organization_id),
             event: 'proposal.signed',
             externalId: String(mapping.propez_proposal_id),
             leadId: String(updated.prosync_lead_id),

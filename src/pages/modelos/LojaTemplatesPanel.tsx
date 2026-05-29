@@ -3,6 +3,8 @@ import { motion } from 'motion/react';
 import { LayoutTemplate, Eye, Download, Store } from 'lucide-react';
 import { api } from '../../lib/apiClient';
 import { RenderElement } from '../../components/builder/RenderElement';
+import { PageShell } from '../../components/builder/PageShell';
+import { normalizePageLayout } from '../../lib/pageLayout';
 import { PLAN_META } from '../../lib/featureFlags';
 import type { BuilderElement } from '../../types/builder';
 import type { NavigateFn } from '../../types/navigation';
@@ -147,10 +149,12 @@ export function LojaTemplatesPanel({ navigate, embedded = false }: LojaTemplates
                 Fechar
               </button>
             </div>
-            <div className="p-0">
-              {preview.elementos.map((el) => (
-                <RenderElement key={el.id} element={el} previewMode />
-              ))}
+            <div className="p-0 bg-white">
+              <PageShell layout={normalizePageLayout((preview as { pageLayout?: unknown }).pageLayout)}>
+                {preview.elementos.map((el) => (
+                  <RenderElement key={el.id} element={el} previewMode />
+                ))}
+              </PageShell>
             </div>
           </div>
         </div>

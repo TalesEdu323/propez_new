@@ -14,7 +14,8 @@
  * A interface pública foi mantida para evitar migração massiva das páginas.
  * Código novo deve preferir os helpers explícitos (`createCliente`, etc.).
  */
-import type { BuilderElement } from '../types/builder';
+import type { BuilderElement, BuilderPageLayout } from '../types/builder';
+import { normalizePageLayout } from './pageLayout';
 import type { ProposalFlowConfig } from '../types/proposalFlow';
 import { api } from './apiClient';
 import {
@@ -64,6 +65,7 @@ export interface ModeloProposta {
   id: string;
   nome: string;
   elementos: BuilderElement[];
+  pageLayout?: BuilderPageLayout;
   servicos: string[];
   contratoTexto?: string;
   contratoId?: string;
@@ -90,6 +92,7 @@ export interface Proposta {
   status: 'pendente' | 'aprovada' | 'recusada';
   data_criacao: string;
   elementos: BuilderElement[];
+  pageLayout?: BuilderPageLayout;
   contratoTexto?: string;
   contratoId?: string;
   chavePix?: string;
@@ -259,6 +262,7 @@ interface ApiModelo {
   id: string;
   nome: string;
   elementos: BuilderElement[];
+  pageLayout?: BuilderPageLayout;
   servicos: string[];
   contratoId?: string | null;
   contratoTexto?: string | null;
@@ -283,6 +287,7 @@ interface ApiProposta {
   data_validade?: string | null;
   status: 'pendente' | 'aprovada' | 'recusada';
   elementos: BuilderElement[];
+  pageLayout?: BuilderPageLayout;
   contratoTexto?: string | null;
   contratoId?: string | null;
   chavePix?: string | null;
@@ -333,6 +338,7 @@ function fromApiModelo(a: ApiModelo): ModeloProposta {
     id: a.id,
     nome: a.nome,
     elementos: Array.isArray(a.elementos) ? a.elementos : [],
+    pageLayout: normalizePageLayout(a.pageLayout),
     servicos: Array.isArray(a.servicos) ? a.servicos : [],
     contratoId: a.contratoId ?? undefined,
     contratoTexto: a.contratoTexto ?? undefined,
@@ -359,6 +365,7 @@ function fromApiProposta(a: ApiProposta): Proposta {
     data_validade: a.data_validade ?? undefined,
     status: a.status,
     elementos: Array.isArray(a.elementos) ? a.elementos : [],
+    pageLayout: normalizePageLayout(a.pageLayout),
     contratoTexto: a.contratoTexto ?? undefined,
     contratoId: a.contratoId ?? undefined,
     chavePix: a.chavePix ?? undefined,
@@ -603,6 +610,7 @@ const contratoApi: EntityApi<ContratoTemplate, ContratoPayload> = {
 interface ModeloPayload {
   nome: string;
   elementos: BuilderElement[];
+  pageLayout?: BuilderPageLayout;
   servicos: string[];
   contratoId?: string | null;
   contratoTexto?: string | null;
@@ -615,6 +623,7 @@ const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
   toPayload: (m) => ({
     nome: m.nome,
     elementos: m.elementos ?? [],
+    pageLayout: m.pageLayout ?? normalizePageLayout(null),
     servicos: m.servicos ?? [],
     contratoId: m.contratoId ?? null,
     contratoTexto: m.contratoTexto ?? null,
@@ -645,6 +654,7 @@ interface PropostaPayload {
   data_validade?: string | null;
   status: 'pendente' | 'aprovada' | 'recusada';
   elementos: BuilderElement[];
+  pageLayout?: BuilderPageLayout;
   contratoTexto?: string | null;
   contratoId?: string | null;
   chavePix?: string | null;
@@ -696,6 +706,7 @@ function toPropostaPayload(p: Proposta): PropostaPayload {
     data_validade: normalizeDateTimeOrNull(p.data_validade),
     status: p.status,
     elementos: p.elementos ?? [],
+    pageLayout: p.pageLayout ?? normalizePageLayout(null),
     contratoTexto: p.contratoTexto ?? null,
     contratoId: normalizeUuidOrNull(p.contratoId),
     chavePix: p.chavePix ?? null,

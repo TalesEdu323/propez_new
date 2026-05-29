@@ -13,7 +13,7 @@ import {
 import { updateProposalStatusInCRM, type ExternalClient } from '../services/crmApi';
 import { createId } from '../lib/ids';
 import { replaceContractString, replaceVariablesInElements, type ContractContext } from '../lib/contractVariables';
-import type { BuilderElement } from '../types/builder';
+import type { BuilderElement, BuilderPageLayout } from '../types/builder';
 import { useClientes, useContratos, useModelos, useServicos, useUserConfig } from '../hooks/useStoreEntity';
 import { canCreateProposal, type PlanTier } from '../lib/featureFlags';
 import { UpgradeGate } from '../components/UpgradeGate';
@@ -23,12 +23,13 @@ import { WizardStepper } from './propezFluido/WizardStepper';
 import { Step1ModeloSelect } from './propezFluido/Step1ModeloSelect';
 import { Step2ClienteForm } from './propezFluido/Step2ClienteForm';
 import { Step3ServicosValores } from './propezFluido/Step3ServicosValores';
+import { Step4VisualBuilder } from './propezFluido/Step4VisualBuilder';
 import type { PropezFluidoFormData, StepDescriptor } from './propezFluido/types';
 import { INITIAL_PROPEZ_FLUIDO_FORM } from './propezFluido/types';
 import type { NavigateFn, RouteParams } from '../types/navigation';
 import { mergeServiceLayouts } from '../lib/mergeServiceLayouts';
 
-const TOTAL_WIZARD_STEPS = 3;
+const TOTAL_WIZARD_STEPS = 4;
 /** Passo após o último do wizard (tela de sucesso). */
 const SUCCESS_STEP = TOTAL_WIZARD_STEPS + 1;
 
@@ -36,6 +37,7 @@ const STEPS: StepDescriptor[] = [
   { id: 1, title: 'Modelo Base', desc: 'Escolha um ponto de partida' },
   { id: 2, title: 'Cliente', desc: 'Para quem é esta proposta?' },
   { id: 3, title: 'Serviços e prazos', desc: 'Valores, datas e cobrança' },
+  { id: 4, title: 'Visual', desc: 'Personalize o layout da proposta' },
 ];
 
 const INITIAL_FORM_DATA: PropezFluidoFormData = {
@@ -87,6 +89,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
           envio: prop.data_envio || prev.envio,
           validade: prop.data_validade || prev.validade,
           elementos: prop.elementos || [],
+          pageLayout: prop.pageLayout,
           contratoTexto: prop.contratoTexto || '',
           contratoId: prop.contratoId || '',
           chavePix: prop.chavePix || '',
@@ -110,6 +113,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
         servicos: modelo.servicos,
         valor: totalValor.toString(),
         elementos: mergeServiceLayouts(modelo.elementos, modelo.servicos, servicosDisponiveis),
+        pageLayout: modelo.pageLayout,
         contratoTexto: modelo.contratoTexto || '',
         contratoId: modelo.contratoId || '',
         chavePix: modelo.chavePix || '',
@@ -161,7 +165,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
   const replaceVariables = (elements: BuilderElement[]) =>
     replaceVariablesInElements(elements, buildContractContext());
 
-  const handleSave = async (finalElements: BuilderElement[]) => {
+  const handleSave = async (finalElements: BuilderElement[], finalPageLayout?: BuilderPageLayout) => {
     const isEditing = !!initialData?.editId;
 
     // Só checamos a cota quando é proposta NOVA — edições não consomem quota.
@@ -200,6 +204,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
       status: 'pendente',
       data_criacao: new Date().toISOString(),
       elementos: finalElements,
+      pageLayout: finalPageLayout ?? formData.pageLayout,
       contratoTexto: finalContractText,
       contratoId: formData.contratoId || undefined,
       chavePix: formData.chavePix,
@@ -301,7 +306,11 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
         alert('Esta proposta está sem layout. Volte ao passo 1 e selecione um modelo para gerar a proposta.');
         return;
       }
-      await handleSave(replaceVariables(formData.elementos));
+      setStep(4);
+      return;
+    }
+    if (step === 4) {
+      await handleSave(replaceVariables(formData.elementos), formData.pageLayout);
       return;
     }
     setStep(step + 1);
@@ -368,6 +377,9 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
                   setFormData={setFormData}
                   onOpenModelos={() => navigate('modelos')}
                 />
+              )}
+              {step === 4 && (
+                <Step4VisualBuilder formData={formData} setFormData={setFormData} />
               )}
             </AnimatePresence>
           </div>

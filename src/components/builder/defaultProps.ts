@@ -1,4 +1,5 @@
 import type { BuilderElementType } from '../../types/builder';
+import { DEFAULT_TRAFFIC_OUTPUTS, DEFAULT_TRAFFIC_SLIDERS } from '../../lib/projectionCalculator';
 
 /**
  * Props padrão para cada tipo de elemento do Builder.
@@ -13,12 +14,35 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
   paragraph: { text: 'Digite seu texto aqui. Você pode editar as propriedades na barra lateral.', color: '#52525b', align: 'left', size: 'text-base' },
   button: { text: 'Aprovar proposta', proposalAction: 'approve', bgColor: '#18181b', textColor: '#ffffff', align: 'center', radius: 'rounded-md', animation: 'none' },
   image: { url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop', alt: 'Imagem', width: '100%', radius: 'rounded-xl', shadow: 'shadow-none' },
+  logo: {
+    logoUrl: '',
+    logoText: 'Minha Marca',
+    mode: 'text',
+    align: 'center',
+    height: '48',
+    textColor: '#18181b',
+  },
   divider: { color: '#e5e7eb', thickness: '2', style: 'solid' },
   spacer: { height: '64' },
   video: { url: 'https://www.youtube.com/embed/dQw4w9WgXcQ', radius: 'rounded-xl', shadow: 'shadow-lg' },
   card: { title: 'Título do Cartão', description: 'Uma breve descrição sobre o benefício ou recurso.', imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2426&auto=format&fit=crop', buttonText: 'Aprovar proposta', proposalAction: 'approve', bgColor: '#ffffff', radius: 'rounded-2xl', shadow: 'shadow-xl' },
-  stats: { value: '100', label: 'Clientes Satisfeitos', suffix: '%', color: '#dc2626' },
-  accordion: { title: 'Como funciona o serviço?', content: 'Nós oferecemos uma solução completa de ponta a ponta para o seu negócio crescer de forma escalável e previsível.', bgColor: '#ffffff' },
+  stats: {
+    items: [
+      { value: '100', label: 'Clientes Satisfeitos', suffix: '%', color: '#dc2626' },
+      { value: '24', label: 'Horas de Suporte', suffix: 'h', color: '#dc2626' },
+      { value: '50', label: 'Projetos Entregues', suffix: '+', color: '#dc2626' },
+    ],
+    columns: '3',
+    bgColor: '#fafafa',
+  },
+  accordion: {
+    title: 'Perguntas frequentes',
+    items: [
+      { title: 'Como funciona o serviço?', content: 'Oferecemos uma solução completa de ponta a ponta para o seu negócio crescer de forma escalável e previsível.' },
+      { title: 'Qual o prazo de entrega?', content: 'O prazo varia conforme o escopo, mas iniciamos em até 5 dias úteis após a aprovação.' },
+    ],
+    bgColor: '#ffffff',
+  },
   animated_text: { text: 'Texto com Animação', animation: 'fade-up', color: '#dc2626', size: 'text-5xl', align: 'center', weight: 'font-extrabold' },
   funnel: {
     stages: [
@@ -31,6 +55,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
   },
   icon_list: {
     items: ['Design Responsivo e Moderno', 'Otimizado para SEO e Conversão', 'Integração com CRM e Automação'],
+    listIcon: 'CheckCircle2',
     iconColor: '#10b981',
     textColor: '#52525b'
   },
@@ -38,6 +63,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     title: 'Plano Profissional',
     price: 'R$ 997',
     period: '/mês',
+    listIcon: 'CheckCircle2',
     items: ['Acesso Completo à Plataforma', 'Suporte Prioritário 24/7', 'Atualizações Gratuitas', 'Consultoria Mensal'],
     buttonText: 'Aprovar proposta',
     proposalAction: 'approve',
@@ -49,6 +75,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     author: 'Maria Silva',
     role: 'Diretora de Marketing',
     avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop',
+    quoteIcon: 'Quote',
     bgColor: '#f8fafc'
   },
   timeline: {
@@ -76,9 +103,9 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
   feature_grid: {
     columns: '3',
     features: [
-      { title: 'Rápido', desc: 'Carregamento otimizado' },
-      { title: 'Responsivo', desc: 'Funciona em qualquer tela' },
-      { title: 'Seguro', desc: 'Proteção de ponta a ponta' }
+      { title: 'Rápido', desc: 'Carregamento otimizado', icon: 'Zap' },
+      { title: 'Responsivo', desc: 'Funciona em qualquer tela', icon: 'Globe' },
+      { title: 'Seguro', desc: 'Proteção de ponta a ponta', icon: 'Shield' }
     ],
     bgColor: '#ffffff'
   },
@@ -96,11 +123,13 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     columns: '2',
     gap: '16',
     padding: '16',
+    margin: '0',
     bgColor: 'transparent',
     radius: 'rounded-none'
   },
   container: {
     padding: '16',
+    margin: '0',
     bgColor: 'transparent',
     radius: 'rounded-none',
     shadow: 'shadow-none',
@@ -108,6 +137,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
   },
   column: {
     padding: '16',
+    margin: '0',
     bgColor: 'transparent',
     radius: 'rounded-none',
     shadow: 'shadow-none',
@@ -125,6 +155,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     link: 'https://wa.me/5511999999999',
     position: 'bottom-right',
     bgColor: '#25D366',
+    icon: 'MessageCircle',
     iconColor: '#ffffff'
   },
   tabs: {
@@ -164,6 +195,8 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
       { feature: 'Atualizações', us: true, them: true },
       { feature: 'Treinamento', us: true, them: false }
     ],
+    yesIcon: 'CheckCircle2',
+    noIcon: 'Minus',
     color: '#10b981',
     bgColor: '#ffffff'
   },
@@ -189,11 +222,14 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
   },
   marketing_hero: {
     title: 'Chegar em quem já quer comprar — todo dia.',
-    subtitle: 'Proposta Exclusiva · Cliente Exemplo',
-    description: 'Você tem produtos incríveis e um posicionamento único. Nós colocamos eles na frente de quem está pronto para comprar.',
+    subtitle: 'Você tem produtos incríveis e um posicionamento único.',
+    badge: 'Proposta Exclusiva',
+    description: 'Esta proposta detalha escopo, entregáveis, cronograma e investimento para uma parceria de alto impacto.',
+    buttonText: 'Aprovar proposta',
+    proposalAction: 'approve',
     primaryColor: '#B45309',
     secondaryColor: '#D97706',
-    logoUrl: 'https://chocolate-wren-935571.hostingersite.com/wp-content/uploads/2026/03/Vortex.png'
+    logoUrl: '',
   },
   marketing_context: {
     title: 'Entendemos o que você construiu.',
@@ -203,8 +239,8 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
       { value: 'Meta', label: 'Instagram + Facebook' }
     ],
     challenges: [
-      { title: 'Alcance limitado', desc: 'O conteúdo excelente não chega a quem nunca te seguiu.' },
-      { title: 'Sem funil estruturado', desc: 'Visitantes chegam e saem sem entender o caminho.' }
+      { title: 'Alcance limitado', desc: 'O conteúdo excelente não chega a quem nunca te seguiu.', icon: 'AlertCircle' },
+      { title: 'Sem funil estruturado', desc: 'Visitantes chegam e saem sem entender o caminho.', icon: 'AlertCircle' }
     ]
   },
   marketing_strategy: {
@@ -225,6 +261,9 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
   marketing_pricing: {
     title: 'O que você recebe',
     price: '2.459,97',
+    listIcon: 'CheckCircle2',
+    buttonText: 'Aprovar proposta',
+    proposalAction: 'approve',
     items: [
       'Gestão completa de Meta Ads',
       'Produção audiovisual mensal',
@@ -241,5 +280,33 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     mode: 'tabs',
     title: 'Serviços da proposta',
     hint: 'O conteúdo desta seção é preenchido automaticamente pelos serviços selecionados no modelo.',
+  },
+  projection_calculator: {
+    preset: 'traffic_roi',
+    title: 'Simulador de Retorno',
+    subtitle: 'Ajuste os valores para projetar os resultados da operação.',
+    sliders: DEFAULT_TRAFFIC_SLIDERS,
+    outputs: DEFAULT_TRAFFIC_OUTPUTS,
+    showProfitBar: true,
+    accentColor: '#e94560',
+    headerBg: '#1a1a2e',
+    profitPositiveColor: '#00b894',
+  },
+  metrics_table: {
+    title: '',
+    headers: ['Métrica', 'R$ 3.000/mês', 'R$ 5.000/mês', 'R$ 8.000/mês'],
+    rows: [
+      { label: 'Cliques', cells: ['1.500', '2.500', '4.000'] },
+      { label: 'Leads Captados', cells: ['270', '450', '720'] },
+      { label: 'Leads Qualificados', cells: ['108', '180', '288'] },
+      { label: 'Contratos Fechados', cells: ['24', '40', '63'] },
+      { label: 'Volume Liberado', cells: ['R$ 48.000', 'R$ 80.000', 'R$ 126.000'] },
+      { label: 'Receita Bruta (12%)', cells: ['R$ 5.760', 'R$ 9.600', 'R$ 15.120'] },
+      { label: 'CAC por Contrato', cells: ['R$ 125', 'R$ 125', 'R$ 127'] },
+      { label: 'Lucro Líquido', cells: ['R$ 2.760', 'R$ 4.600', 'R$ 7.120'], highlight: true },
+    ],
+    headerBg: '#1a1a2e',
+    highlightColor: '#00b894',
+    bgColor: '#ffffff',
   },
 };

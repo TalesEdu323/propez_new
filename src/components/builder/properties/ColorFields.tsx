@@ -1,6 +1,10 @@
 import type { FieldProps } from './TextFields';
 
-const COLOR_KEYS = ['color', 'bgColor', 'textColor', 'iconColor', 'buttonColor', 'labelColor', 'activeColor'] as const;
+const COLOR_KEYS = [
+  'color', 'bgColor', 'textColor', 'iconColor', 'buttonColor', 'labelColor', 'activeColor',
+  'accentColor', 'headerBg', 'profitPositiveColor', 'highlightColor',
+  'primaryColor', 'secondaryColor',
+] as const;
 
 const COLOR_LABELS: Record<string, string> = {
   color: 'Cor Principal',
@@ -10,6 +14,12 @@ const COLOR_LABELS: Record<string, string> = {
   labelColor: 'Cor do Rótulo',
   activeColor: 'Cor Ativa',
   textColor: 'Cor do Texto',
+  accentColor: 'Cor de destaque',
+  headerBg: 'Fundo do cabeçalho',
+  profitPositiveColor: 'Cor lucro positivo',
+  highlightColor: 'Cor de destaque (linha)',
+  primaryColor: 'Cor primária',
+  secondaryColor: 'Cor secundária',
 };
 
 export function ColorFields({ element, updateElement }: FieldProps) {

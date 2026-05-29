@@ -27,7 +27,9 @@ export function Step4VisualBuilder({ formData, setFormData }: Step4Props) {
         <Builder
           embedded
           initialElements={formData.elementos}
+          initialPageLayout={formData.pageLayout}
           onChange={(els: BuilderElement[]) => setFormData(prev => ({ ...prev, elementos: els }))}
+          onPageLayoutChange={(pageLayout) => setFormData(prev => ({ ...prev, pageLayout }))}
           previewMode={false}
         />
       </div>

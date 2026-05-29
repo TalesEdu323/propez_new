@@ -8,7 +8,7 @@ export interface FieldProps {
 const TEXT_INPUT_KEYS = [
   'text', 'title', 'label', 'value', 'suffix', 'buttonText', 'price', 'period',
   'quote', 'author', 'role', 'logoText', 'expiredText', 'percentage', 'rating',
-  'maxStars', 'size', 'address', 'zoom', 'name', 'action', 'timeAgo', 'height',
+  'maxStars', 'size', 'address', 'zoom', 'name', 'action', 'timeAgo', 'height', 'badge',
 ] as const;
 
 const TEXT_LABELS: Record<string, string> = {
@@ -17,7 +17,7 @@ const TEXT_LABELS: Record<string, string> = {
   author: 'Autor', role: 'Cargo', logoText: 'Texto da Logo', expiredText: 'Texto Expirado',
   percentage: 'Porcentagem', rating: 'Avaliação', maxStars: 'Máx. Estrelas',
   size: 'Tamanho', address: 'Endereço', zoom: 'Zoom', name: 'Nome', action: 'Ação',
-  timeAgo: 'Tempo Atrás', height: 'Altura',
+  timeAgo: 'Tempo Atrás', height: 'Altura', badge: 'Badge / Etiqueta',
 };
 
 export function TextFields({ element, updateElement }: FieldProps) {
@@ -84,11 +84,11 @@ export function DescriptionFields({ element, updateElement }: FieldProps) {
   const { props, id } = element;
   return (
     <>
-      {(['description', 'content'] as const).map(propKey => (
+      {(['description', 'content', 'subtitle'] as const).map(propKey => (
         propKey in props && (
           <div key={propKey}>
             <label className="block text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
-              {propKey === 'description' ? 'Descrição' : 'Conteúdo'}
+              {propKey === 'description' ? 'Descrição' : propKey === 'subtitle' ? 'Subtítulo' : 'Conteúdo'}
             </label>
             <textarea
               value={props[propKey]}
@@ -106,11 +106,11 @@ export function UrlFields({ element, updateElement }: FieldProps) {
   const { type, props, id } = element;
   return (
     <>
-      {(['url', 'imageUrl', 'avatarUrl', 'link'] as const).map(propKey => (
+      {(['url', 'imageUrl', 'avatarUrl', 'link', 'logoUrl'] as const).map(propKey => (
         propKey in props && (
           <div key={propKey}>
             <label className="block text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
-              URL da {propKey === 'imageUrl' ? 'Imagem' : propKey === 'avatarUrl' ? 'Avatar' : propKey === 'link' ? 'Link' : type === 'video' ? 'Vídeo (Embed)' : 'Mídia'}
+              {propKey === 'logoUrl' ? 'URL da Logo' : propKey === 'imageUrl' ? 'URL da Imagem' : propKey === 'avatarUrl' ? 'URL do Avatar' : propKey === 'link' ? 'URL do Link' : type === 'video' ? 'URL do Vídeo (Embed)' : 'URL da Mídia'}
             </label>
             <input
               type="text"

@@ -16,7 +16,7 @@ export type { PlanTier };
 
 /** Conjunto de widgets básicos liberados no Free. */
 export const FREE_WIDGETS: readonly BuilderElementType[] = [
-  'heading', 'paragraph', 'button', 'image', 'divider', 'spacer',
+  'heading', 'paragraph', 'button', 'image', 'logo', 'divider', 'spacer',
   'card', 'grid', 'container', 'column', 'pricing', 'feature_grid',
 ];
 
@@ -32,6 +32,7 @@ export const BUSINESS_ONLY_WIDGETS: readonly BuilderElementType[] = [
   'video', 'slider', 'funnel', 'google_map', 'toast_notification',
   'marketing_hero', 'marketing_context', 'marketing_strategy',
   'marketing_services', 'marketing_pricing', 'marketing_cta',
+  'projection_calculator', 'metrics_table',
 ];
 
 export interface PlanLimits {

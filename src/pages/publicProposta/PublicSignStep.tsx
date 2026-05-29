@@ -118,7 +118,13 @@ export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceip
           Abrir assinatura <ExternalLink className="w-4 h-4" />
         </a>
       ) : (
-        <p className="text-amber-300 text-sm">Preparando link de assinatura… atualize a página em instantes.</p>
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-amber-300" />
+          <p className="text-amber-300 text-sm">
+            Preparando link de assinatura… isso pode levar alguns segundos.
+          </p>
+          <p className="text-zinc-500 text-xs">A página atualiza automaticamente.</p>
+        </div>
       )}
     </div>
   );

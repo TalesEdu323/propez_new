@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { BuilderElement, BuilderElementType } from '../types/builder';
+import type { BuilderElement, BuilderElementType, BuilderPageLayout, BuilderViewport } from '../types/builder';
 import { createId } from '../lib/ids';
+import { normalizePageLayout } from '../lib/pageLayout';
 import { DEFAULT_PROPS } from './builder/defaultProps';
 import { RenderElement } from './builder/RenderElement';
 import { BuilderCanvas } from './builder/BuilderCanvas';
@@ -30,37 +31,126 @@ import {
 
 export { RenderElement };
 
-// --- Types ---
 export type ElementType = BuilderElementType;
 export type ElementData = BuilderElement;
 
+export type BuilderSaveHandler = (
+  elements: ElementData[],
+  pageLayout: BuilderPageLayout,
+) => void;
+
+const VIEWPORT_TOOLTIP_KEY = 'propez_builder_viewport_tooltip';
+const MOBILE_CHECK_KEY = 'propez_builder_mobile_checked';
+
 export default function Builder({
   initialElements,
+  initialPageLayout,
   onSave,
   onBack,
   onChange,
+  onPageLayoutChange,
   saveLabel = 'Salvar',
   previewMode: initialPreviewMode = false,
-  /** Dentro do Propez Fluido: não usa viewport inteira; toolbar reduzida. */
   embedded = false,
-  /** Substitui a paleta do plano (ex.: mini-builder de serviço). */
   widgetWhitelist,
   hideImportExport = false,
+  showPageLayoutPanel = true,
 }: {
   initialElements?: ElementData[];
-  onSave?: (elements: ElementData[]) => void;
+  initialPageLayout?: BuilderPageLayout;
+  onSave?: BuilderSaveHandler | ((elements: ElementData[]) => void);
   onBack?: () => void;
   onChange?: (elements: ElementData[]) => void;
+  onPageLayoutChange?: (layout: BuilderPageLayout) => void;
   saveLabel?: string;
   previewMode?: boolean;
   embedded?: boolean;
   widgetWhitelist?: ReadonlySet<BuilderElementType>;
   hideImportExport?: boolean;
+  /** Mini-builder de serviço: sem painel de layout da página */
+  showPageLayoutPanel?: boolean;
 }) {
   const [elements, setElements] = useBuilderPersistence({ initialElements, onChange });
+  const [pageLayout, setPageLayout] = useState<BuilderPageLayout>(
+    () => normalizePageLayout(initialPageLayout),
+  );
+  const historyRef = useRef<{ elements: BuilderElement[]; pageLayout: BuilderPageLayout }[]>([]);
+  const historyIndexRef = useRef(-1);
+  const skipHistoryRef = useRef(false);
+
+  const [historyVersion, setHistoryVersion] = useState(0);
+
+  const pushHistory = useCallback((nextElements: BuilderElement[], nextLayout: BuilderPageLayout) => {
+    if (skipHistoryRef.current) return;
+    const snapshot = { elements: nextElements, pageLayout: nextLayout };
+    const trimmed = historyRef.current.slice(0, historyIndexRef.current + 1);
+    trimmed.push(snapshot);
+    if (trimmed.length > 50) trimmed.shift();
+    historyRef.current = trimmed;
+    historyIndexRef.current = trimmed.length - 1;
+    setHistoryVersion((v) => v + 1);
+  }, []);
+
+  const setElementsWithHistory = useCallback((updater: BuilderElement[] | ((prev: BuilderElement[]) => BuilderElement[])) => {
+    setElements((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      pushHistory(next, pageLayout);
+      return next;
+    });
+  }, [setElements, pushHistory, pageLayout]);
+
+  const updatePageLayout = useCallback((layout: BuilderPageLayout) => {
+    setPageLayout(layout);
+    onPageLayoutChange?.(layout);
+    pushHistory(elements, layout);
+  }, [onPageLayoutChange, pushHistory, elements]);
+
+  const handleUndo = useCallback(() => {
+    if (historyIndexRef.current <= 0) return;
+    historyIndexRef.current -= 1;
+    const snap = historyRef.current[historyIndexRef.current];
+    skipHistoryRef.current = true;
+    setElements(snap.elements);
+    setPageLayout(snap.pageLayout);
+    onPageLayoutChange?.(snap.pageLayout);
+    onChange?.(snap.elements);
+    skipHistoryRef.current = false;
+    setHistoryVersion((v) => v + 1);
+  }, [setElements, onPageLayoutChange, onChange]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return;
+    historyIndexRef.current += 1;
+    const snap = historyRef.current[historyIndexRef.current];
+    skipHistoryRef.current = true;
+    setElements(snap.elements);
+    setPageLayout(snap.pageLayout);
+    onPageLayoutChange?.(snap.pageLayout);
+    onChange?.(snap.elements);
+    skipHistoryRef.current = false;
+    setHistoryVersion((v) => v + 1);
+  }, [setElements, onPageLayoutChange, onChange]);
+
+  useEffect(() => {
+    if (historyIndexRef.current === -1) {
+      pushHistory(elements, pageLayout);
+    }
+  }, []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState(initialPreviewMode);
+  const [viewport, setViewport] = useState<BuilderViewport>(embedded ? 'mobile' : 'desktop');
   const [activeTab, setActiveTab] = useState<BuilderTab>('properties');
+  const [mobileReviewed, setMobileReviewed] = useState(
+    () => typeof sessionStorage !== 'undefined' && sessionStorage.getItem(MOBILE_CHECK_KEY) === '1',
+  );
+
+  useEffect(() => {
+    if (initialPageLayout) setPageLayout(normalizePageLayout(initialPageLayout));
+  }, [initialPageLayout]);
+
+  const canUndo = historyIndexRef.current > 0;
+  const canRedo = historyIndexRef.current < historyRef.current.length - 1;
+  void historyVersion;
 
   const userConfig = useUserConfig();
   const plan = resolvePlan(userConfig);
@@ -84,7 +174,14 @@ export default function Builder({
     });
   };
 
-  // --- Export / Import ---
+  const handleViewportChange = (v: BuilderViewport) => {
+    setViewport(v);
+    if (v === 'mobile') {
+      setMobileReviewed(true);
+      try { sessionStorage.setItem(MOBILE_CHECK_KEY, '1'); } catch { /* ignore */ }
+    }
+  };
+
   const handleExport = () => {
     if (!pdfGate.allowed) {
       setUpgradeGate({
@@ -95,7 +192,9 @@ export default function Builder({
       });
       return;
     }
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(elements));
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(
+      JSON.stringify({ elements, pageLayout }),
+    );
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute('href', dataStr);
     downloadAnchorNode.setAttribute('download', 'taggo_landing_page.json');
@@ -111,7 +210,12 @@ export default function Builder({
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        setElements(json);
+        if (Array.isArray(json)) {
+          setElementsWithHistory(json);
+        } else {
+          if (Array.isArray(json.elements)) setElementsWithHistory(json.elements);
+          if (json.pageLayout) updatePageLayout(normalizePageLayout(json.pageLayout));
+        }
       } catch {
         alert('Arquivo inválido!');
       }
@@ -120,7 +224,6 @@ export default function Builder({
     e.target.value = '';
   };
 
-  // --- Drag & Drop ---
   const handleDragStart = (e: React.DragEvent, type: ElementType) => {
     e.dataTransfer.setData('elementType', type);
   };
@@ -131,8 +234,6 @@ export default function Builder({
     const type = e.dataTransfer.getData('elementType') as ElementType;
     if (!type) return;
 
-    // Segunda barreira: mesmo que alguém consiga iniciar o drag de um widget
-    // bloqueado (ex.: DOM customizado), impedimos a inserção aqui.
     if (usePlanGate && !isWidgetAllowed(plan, type)) {
       openUpgradeForWidget(type);
       return;
@@ -159,9 +260,9 @@ export default function Builder({
     }
 
     if (parentId) {
-      setElements(addElementToParentTree(elements, parentId, newElement));
+      setElementsWithHistory(addElementToParentTree(elements, parentId, newElement));
     } else {
-      setElements([...elements, newElement]);
+      setElementsWithHistory([...elements, newElement]);
     }
     setSelectedId(newElement.id);
   };
@@ -170,9 +271,8 @@ export default function Builder({
     e.preventDefault();
   };
 
-  // --- Element Actions ---
   const updateElement = (id: string, newProps: Record<string, any>) => {
-    setElements(
+    setElementsWithHistory(
       updateElementRecursiveTree(elements, id, newProps, (merged, original, props) => {
         if (original.type === 'grid' && props.columns) {
           const newColCount = parseInt(props.columns as string);
@@ -191,27 +291,38 @@ export default function Builder({
           }
         }
         return merged;
-      })
+      }),
     );
   };
 
   const deleteElement = (id: string) => {
-    setElements(deleteElementRecursiveTree(elements, id));
+    setElementsWithHistory(deleteElementRecursiveTree(elements, id));
     if (selectedId === id) setSelectedId(null);
   };
 
   const moveElement = (id: string, direction: 'up' | 'down') => {
-    setElements(moveElementRecursiveTree(elements, id, direction));
+    setElementsWithHistory(moveElementRecursiveTree(elements, id, direction));
+  };
+
+  const handleSaveClick = () => {
+    if (!onSave) return;
+    if (!mobileReviewed && !embedded) {
+      const goMobile = window.confirm(
+        'Recomendamos revisar a proposta no celular antes de salvar. Abrir visualização mobile agora?',
+      );
+      if (goMobile) {
+        handleViewportChange('mobile');
+        return;
+      }
+    }
+    (onSave as BuilderSaveHandler)(elements, pageLayout);
   };
 
   const selectedElement = selectedId ? findElementRecursiveTree(elements, selectedId) : undefined;
-
-  const rootHeight = embedded ? 'h-full min-h-0 flex-1' : 'h-screen'
+  const rootHeight = embedded ? 'h-full min-h-0 flex-1' : 'h-screen';
 
   return (
     <div className={`${rootHeight} w-full min-w-0 flex bg-transparent font-sans overflow-hidden text-zinc-900`}>
-
-      {/* LEFT SIDEBAR: WIDGETS */}
       {!previewMode && (
         <BuilderWidgetPalette
           embedded={embedded}
@@ -221,10 +332,11 @@ export default function Builder({
         />
       )}
 
-      {/* CENTER: CANVAS (DROP ZONE) */}
       <BuilderCanvas
         embedded={embedded}
         elements={elements}
+        pageLayout={pageLayout}
+        viewport={viewport}
         selectedId={selectedId}
         previewMode={previewMode}
         onSelectElement={setSelectedId}
@@ -238,19 +350,28 @@ export default function Builder({
           <BuilderToolbar
             embedded={embedded}
             previewMode={previewMode}
+            viewport={viewport}
+            onViewportChange={handleViewportChange}
+            showViewportTooltip={typeof localStorage !== 'undefined' && !localStorage.getItem(VIEWPORT_TOOLTIP_KEY)}
+            onDismissViewportTooltip={() => {
+              try { localStorage.setItem(VIEWPORT_TOOLTIP_KEY, '1'); } catch { /* ignore */ }
+            }}
             saveLabel={saveLabel}
             onBack={onBack}
             onTogglePreview={() => { setPreviewMode(!previewMode); setSelectedId(null); }}
             onImport={hideImportExport ? undefined : handleImport}
             onExport={hideImportExport ? undefined : handleExport}
             exportLocked={hideImportExport || !pdfGate.allowed}
-            onClear={() => { if (confirm('Tem certeza que deseja limpar tudo?')) setElements([]); }}
-            onSave={onSave ? () => onSave(elements) : undefined}
+            onClear={() => { if (confirm('Tem certeza que deseja limpar tudo?')) setElementsWithHistory([]); }}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onSave={onSave ? handleSaveClick : undefined}
           />
         }
       />
 
-      {/* RIGHT SIDEBAR: PROPERTIES PANEL */}
       {!previewMode && (
         <PropertiesPanel
           embedded={embedded}
@@ -261,6 +382,9 @@ export default function Builder({
           setActiveTab={setActiveTab}
           setSelectedId={setSelectedId}
           updateElement={updateElement}
+          pageLayout={pageLayout}
+          onPageLayoutChange={updatePageLayout}
+          showPageLayoutPanel={showPageLayoutPanel}
         />
       )}
 

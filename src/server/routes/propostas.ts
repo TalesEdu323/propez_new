@@ -41,6 +41,7 @@ const bodySchema = z.object({
   data_validade: z.string().datetime().optional().nullable(),
   status: statusSchema.default('pendente'),
   elementos: z.array(builderElement).min(1, 'A proposta precisa de ao menos um elemento visual'),
+  pageLayout: pageLayoutSchema.optional(),
   contratoTexto: z.string().max(200_000).optional().nullable(),
   contratoId: z.string().uuid().optional().nullable(),
   chavePix: z.string().max(500).optional().nullable(),
@@ -72,10 +73,16 @@ const sendEmailSchema = z.object({
     .refine((v) => v == null || v.length <= 200, { message: 'E-mail muito longo' }),
 })
 
+const pageLayoutSchema = z.object({
+  widthMode: z.enum(['boxed', 'full']),
+  horizontalPadding: z.number().min(0).max(120),
+  maxContentWidth: z.number().positive().optional(),
+}).passthrough()
+
 const PROPOSTA_SELECT = `
   id, cliente_id, cliente_nome, cliente_email, modelo_id, servicos,
   valor_cents, desconto_cents, recorrente, ciclo_recorrencia, duracao_recorrencia,
-  data_envio, data_validade, status, elementos, contrato_texto, contrato_id,
+  data_envio, data_validade, status, elementos, page_layout, contrato_texto, contrato_id,
   chave_pix, link_pagamento, pago, data_pagamento, creator_plan, public_token,
   prosync_lead_id, rubrica_document_id, rubrica_status, rubrica_signing_url,
   rubrica_signed_pdf_url, rubrica_last_sync_at, viewed_at, created_at,
@@ -110,7 +117,9 @@ export function createPropostasRouter(deps: {
     const publicUrl = proposal.public_token
       ? `${config.appUrl.replace(/\/+$/, '')}/p/${proposal.public_token}`
       : null
+    if (!req.auth?.orgId) return
     suiteProposalEvents.fireAndForget({
+      propezOrganizationId: req.auth.orgId,
       event,
       externalId: String(proposal.id),
       leadId,
@@ -174,13 +183,13 @@ export function createPropostasRouter(deps: {
         `INSERT INTO propostas (
            id, organization_id, cliente_id, cliente_nome, cliente_email, modelo_id, servicos,
            valor_cents, desconto_cents, recorrente, ciclo_recorrencia, duracao_recorrencia,
-           data_envio, data_validade, status, elementos, contrato_texto, contrato_id,
+           data_envio, data_validade, status, elementos, page_layout, contrato_texto, contrato_id,
            chave_pix, link_pagamento, pago, data_pagamento, creator_plan, prosync_lead_id, fluxo
          ) VALUES (
            COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7::uuid[],
            $8, $9, $10, $11, $12,
-           $13, $14, $15, $16::jsonb, $17, $18,
-           $19, $20, $21, $22, $23, $24, $25::jsonb
+           $13, $14, $15, $16::jsonb, $17::jsonb, $18, $19,
+           $20, $21, $22, $23, $24, $25, $26::jsonb
          )
          RETURNING ${PROPOSTA_SELECT}`,
         [
@@ -200,6 +209,7 @@ export function createPropostasRouter(deps: {
           d.data_validade ?? null,
           d.status,
           JSON.stringify(d.elementos),
+          JSON.stringify(d.pageLayout ?? { widthMode: 'boxed', horizontalPadding: 60 }),
           d.contratoTexto ?? null,
           d.contratoId ?? null,
           d.chavePix ?? null,
@@ -262,8 +272,8 @@ export function createPropostasRouter(deps: {
     }
     const d = parsed.data
     try {
-      const before = await pool.query<{ status: string; pago: boolean }>(
-        `SELECT status, pago FROM propostas WHERE organization_id = $1 AND id = $2`,
+      const before = await pool.query<{ status: string; pago: boolean; data_envio: Date | null }>(
+        `SELECT status, pago, data_envio FROM propostas WHERE organization_id = $1 AND id = $2`,
         [req.auth.orgId, req.params.id],
       )
       if (!before.rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
@@ -277,7 +287,7 @@ export function createPropostasRouter(deps: {
         `UPDATE propostas SET
            cliente_id = CASE WHEN $3::boolean THEN $4 ELSE cliente_id END,
            cliente_nome = COALESCE($5, cliente_nome),
-           cliente_email = CASE WHEN $37::boolean THEN $38 ELSE cliente_email END,
+           cliente_email = CASE WHEN $39::boolean THEN $40 ELSE cliente_email END,
            modelo_id = CASE WHEN $6::boolean THEN $7 ELSE modelo_id END,
            servicos = CASE WHEN $8::boolean THEN $9::uuid[] ELSE servicos END,
            valor_cents = COALESCE($10, valor_cents),
@@ -289,14 +299,15 @@ export function createPropostasRouter(deps: {
            data_validade = CASE WHEN $19::boolean THEN $20 ELSE data_validade END,
            status = COALESCE($21, status),
            elementos = CASE WHEN $22::boolean THEN $23::jsonb ELSE elementos END,
-           contrato_texto = CASE WHEN $24::boolean THEN $25 ELSE contrato_texto END,
-           contrato_id = CASE WHEN $26::boolean THEN $27 ELSE contrato_id END,
-           chave_pix = CASE WHEN $28::boolean THEN $29 ELSE chave_pix END,
-           link_pagamento = CASE WHEN $30::boolean THEN $31 ELSE link_pagamento END,
-           pago = COALESCE($32, pago),
-           data_pagamento = CASE WHEN $33::boolean THEN $34 ELSE data_pagamento END,
-           creator_plan = COALESCE($35, creator_plan),
-           prosync_lead_id = COALESCE($36, prosync_lead_id)
+           page_layout = CASE WHEN $24::boolean THEN $25::jsonb ELSE page_layout END,
+           contrato_texto = CASE WHEN $26::boolean THEN $27 ELSE contrato_texto END,
+           contrato_id = CASE WHEN $28::boolean THEN $29 ELSE contrato_id END,
+           chave_pix = CASE WHEN $30::boolean THEN $31 ELSE chave_pix END,
+           link_pagamento = CASE WHEN $32::boolean THEN $33 ELSE link_pagamento END,
+           pago = COALESCE($34, pago),
+           data_pagamento = CASE WHEN $35::boolean THEN $36 ELSE data_pagamento END,
+           creator_plan = COALESCE($37, creator_plan),
+           prosync_lead_id = COALESCE($38, prosync_lead_id)
          WHERE organization_id = $1 AND id = $2
          RETURNING ${PROPOSTA_SELECT}`,
         [
@@ -323,6 +334,8 @@ export function createPropostasRouter(deps: {
           d.status ?? null,
           d.elementos !== undefined,
           d.elementos !== undefined ? JSON.stringify(d.elementos) : null,
+          d.pageLayout !== undefined,
+          d.pageLayout !== undefined ? JSON.stringify(d.pageLayout) : null,
           'contratoTexto' in d,
           d.contratoTexto ?? null,
           'contratoId' in d,
@@ -346,11 +359,17 @@ export function createPropostasRouter(deps: {
       const prevStatus = String(before.rows[0].status ?? '')
       const prevPago = !!before.rows[0].pago
 
+      const hadDataEnvio = before.rows[0].data_envio != null
+      const nowHasDataEnvio = updated.data_envio != null
+
       if (updated.prosync_lead_id) {
         if (status === 'aprovada') {
           emitEvent('proposal.approved', updated, updated.prosync_lead_id, { status })
         } else if (status === 'recusada') {
           emitEvent('proposal.rejected', updated, updated.prosync_lead_id, { status })
+        }
+        if (!hadDataEnvio && nowHasDataEnvio) {
+          emitEvent('proposal.sent', updated, updated.prosync_lead_id, { status: 'sent' })
         }
       }
 
@@ -478,10 +497,16 @@ export function createPropostasRouter(deps: {
         tag: 'proposal_sent:client',
       })
 
-      await pool.query(
-        `UPDATE propostas SET data_envio = COALESCE(data_envio, NOW()) WHERE organization_id = $1 AND id = $2`,
+      const { rows: afterSend } = await pool.query(
+        `UPDATE propostas SET data_envio = COALESCE(data_envio, NOW())
+         WHERE organization_id = $1 AND id = $2
+         RETURNING ${PROPOSTA_SELECT}`,
         [req.auth.orgId, req.params.id],
       )
+      const sentRow = afterSend[0]
+      if (sentRow?.prosync_lead_id) {
+        emitEvent('proposal.sent', sentRow, sentRow.prosync_lead_id, { status: 'sent' })
+      }
 
       return res.json({ sent: true, to })
     } catch (err) {

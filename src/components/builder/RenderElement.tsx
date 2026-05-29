@@ -1,11 +1,31 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  AlertCircle, ArrowRight, CheckCircle2, ChevronDown, ChevronLeft,
-  Maximize2, MessageCircle, Minus, PlayCircle, Quote, Sparkles, Star
+  AlertCircle, ArrowRight, ChevronDown, ChevronLeft,
+  Maximize2, PlayCircle, Star
 } from 'lucide-react';
-import type { BuilderElement } from '../../types/builder';
+import type { BuilderElement, BuilderPageLayout, BuilderViewport } from '../../types/builder';
 import { TabsElement } from './TabsElement';
+import { BuilderIcon } from './icons/BuilderIcon';
+import { normalizeIconItems } from './icons/normalizeIconItem';
+import { DEFAULT_LIST_ICON } from './icons/iconCatalog';
+import { featureGridColsClass, gridColsClass } from './gridUtils';
+import { resolvePagePadding } from './pageLayoutUtils';
+import { ProjectionCalculator } from './widgets/ProjectionCalculator';
+import { MetricsTable } from './widgets/MetricsTable';
+import { AccordionWidget } from './widgets/AccordionWidget';
+import { CountdownWidget } from './widgets/CountdownWidget';
+import { ImageCarouselWidget } from './widgets/ImageCarouselWidget';
+import { SliderWidget } from './widgets/SliderWidget';
+import {
+  normalizeStatsItems,
+  normalizeAccordionItems,
+  normalizeStrategySteps,
+  normalizeComparisonTable,
+  normalizeContextDescription,
+  normalizeHeroCopy,
+} from './propUtils';
+import { resolveThemeColors } from '../../lib/proposalTheme';
 
 type ElementData = BuilderElement;
 
@@ -17,7 +37,7 @@ function resolveProposalAction(
 ): 'approve' | 'none' {
   if (props.proposalAction === 'none') return 'none';
   if (props.proposalAction === 'approve') return 'approve';
-  if (['button', 'marketing_cta', 'pricing', 'card'].includes(elType)) return 'approve';
+  if (['button', 'marketing_cta', 'pricing', 'card', 'marketing_hero', 'marketing_pricing'].includes(elType)) return 'approve';
   return 'none';
 }
 
@@ -42,15 +62,24 @@ function proposalClickProps(
 export function RenderElement({
   element,
   previewMode,
+  allowInteraction,
   onProposalAction,
+  viewport = 'desktop',
+  pageLayout,
 }: {
   element: ElementData;
   previewMode?: boolean;
+  allowInteraction?: boolean;
   onProposalAction?: ProposalActionHandler;
+  viewport?: BuilderViewport;
+  pageLayout?: BuilderPageLayout | null;
   key?: React.Key;
 }) {
   const { type, props } = element;
-  const childRenderProps = { previewMode, onProposalAction };
+  const childRenderProps = { previewMode, allowInteraction, onProposalAction, viewport, pageLayout };
+  const contentPad = pageLayout?.widthMode === 'boxed' ? resolvePagePadding(pageLayout) : undefined;
+  const theme = resolveThemeColors(pageLayout);
+  const isInteractive = previewMode || allowInteraction;
 
   // Animation Helper for specific elements
   const getAnimationProps = (animType: string) => {
@@ -100,6 +129,31 @@ export function RenderElement({
         </motion.button>
       );
     
+    case 'logo': {
+      const logoSrc = (props.logoUrl as string) || theme.logoUrl;
+      const align = props.align === 'left' ? 'justify-start' : props.align === 'right' ? 'justify-end' : 'justify-center';
+      return (
+        <motion.div {...getAnimationProps('fade-up')} className={`flex ${align} py-4`}>
+          {props.mode === 'image' && logoSrc ? (
+            <img
+              src={logoSrc}
+              alt={String(props.logoText ?? 'Logo')}
+              style={{ height: `${props.height ?? 48}px` }}
+              className="object-contain"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <span
+              className="font-black tracking-tighter"
+              style={{ color: props.textColor as string, fontSize: `${Math.max(20, parseInt(String(props.height ?? 48), 10) * 0.6)}px` }}
+            >
+              {props.logoText}
+            </span>
+          )}
+        </motion.div>
+      );
+    }
+
     case 'image':
       return (
         <motion.div {...getAnimationProps(props.animation || 'fade-up')} className="relative group overflow-hidden" style={{ width: props.width }}>
@@ -114,21 +168,27 @@ export function RenderElement({
         </motion.div>
       );
     
-    case 'divider':
+    case 'divider': {
+      const dividerMargin = parseInt(String(props.margin ?? '32'), 10);
       return (
-        <motion.div {...getAnimationProps('fade-up')} className="w-full flex justify-center py-8">
+        <motion.div
+          {...getAnimationProps('fade-up')}
+          className="w-full flex justify-center"
+          style={{ paddingTop: dividerMargin, paddingBottom: dividerMargin }}
+        >
           <div style={{ width: '100%', borderTopWidth: `${props.thickness}px`, borderTopStyle: props.style, borderTopColor: props.color, opacity: 0.3 }} />
         </motion.div>
       );
+    }
     
     case 'grid':
-      const gridColsCls = props.columns === '1' ? 'grid-cols-1' : props.columns === '2' ? 'grid-cols-1 md:grid-cols-2' : props.columns === '3' ? 'grid-cols-1 md:grid-cols-3' : props.columns === '4' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : props.columns === '5' ? 'grid-cols-1 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-6';
       return (
         <div 
-          className={`grid ${gridColsCls} ${props.radius}`}
+          className={`grid ${gridColsClass(String(props.columns), viewport)} ${props.radius}`}
           style={{ 
             gap: `${props.gap}px`, 
             padding: `${props.padding}px`,
+            margin: props.margin && props.margin !== '0' ? `${props.margin}px` : undefined,
             backgroundColor: props.bgColor 
           }}
         >
@@ -145,6 +205,7 @@ export function RenderElement({
           className={`flex flex-col ${props.radius} ${props.shadow} h-full`}
           style={{ 
             padding: `${props.padding}px`,
+            margin: props.margin && props.margin !== '0' ? `${props.margin}px` : undefined,
             backgroundColor: props.bgColor,
             alignItems: props.align === 'center' ? 'center' : props.align === 'right' ? 'flex-end' : 'flex-start'
           }}
@@ -211,45 +272,50 @@ export function RenderElement({
         </motion.div>
       );
     
-    case 'stats':
+    case 'stats': {
+      const statItems = normalizeStatsItems(props);
+      const cols = statItems.length <= 1 ? 'grid-cols-1' : statItems.length === 2 ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3';
+      const darkBg = props.bgColor === '#0a0a0a' || props.textColor === '#ffffff';
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
-          whileHover={{ scale: 1.02 }}
-          className="flex flex-col items-center justify-center p-10 glass-panel rounded-[2rem] border border-black/5 shadow-lg relative overflow-hidden group"
+          className={`grid ${cols} gap-6 py-8 w-full rounded-[2rem] ${props.bgColor ? 'p-8' : ''}`}
+          style={{ backgroundColor: props.bgColor as string | undefined }}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-white/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          <motion.div 
-            initial={{ scale: 0.5, opacity: 0, y: 20 }}
-            whileInView={{ scale: 1, opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ type: "spring", stiffness: 100, damping: 15 }}
-            className="text-7xl font-black tracking-tighter mb-3 relative z-10 drop-shadow-sm"
-            style={{ color: props.color }}
-          >
-            {props.value}<span className="text-4xl ml-1 opacity-80">{props.suffix}</span>
-          </motion.div>
-          <div className="text-zinc-500 font-bold uppercase tracking-widest text-sm relative z-10">{props.label}</div>
+          {statItems.map((stat, idx) => (
+            <motion.div
+              key={idx}
+              whileHover={{ scale: 1.02 }}
+              className="flex flex-col items-center justify-center p-8 glass-panel rounded-[2rem] border border-black/5 shadow-lg relative overflow-hidden group"
+            >
+              <motion.div
+                initial={{ scale: 0.5, opacity: 0, y: 20 }}
+                whileInView={{ scale: 1, opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ type: 'spring', stiffness: 100, damping: 15 }}
+                className="text-5xl md:text-6xl font-black tracking-tighter mb-3 relative z-10 drop-shadow-sm"
+                style={{ color: stat.color }}
+              >
+                {stat.value}
+                {stat.suffix && <span className="text-2xl md:text-3xl ml-1 opacity-80">{stat.suffix}</span>}
+              </motion.div>
+              <div className={`font-bold uppercase tracking-widest text-sm relative z-10 ${darkBg ? 'text-gray-400' : 'text-zinc-500'}`}>
+                {stat.label}
+              </div>
+            </motion.div>
+          ))}
         </motion.div>
       );
-    
+    }
+
     case 'accordion':
-      // Note: In builder mode, we show it open or toggleable visually, but keep it simple for preview
       return (
-        <motion.div 
-          {...getAnimationProps('fade-up')}
-          className="glass-panel border border-black/5 rounded-2xl overflow-hidden shadow-sm transition-all duration-300 hover:shadow-md" 
-          style={{ backgroundColor: props.bgColor }}
-        >
-          <div className="p-6 flex justify-between items-center bg-black/5 border-b border-black/5 cursor-pointer group">
-            <h4 className="font-bold text-zinc-900 text-lg group-hover:text-blue-600 transition-colors">{props.title}</h4>
-            <motion.div whileHover={{ rotate: 180 }} transition={{ duration: 0.3 }}>
-              <ChevronDown className="w-5 h-5 text-zinc-400 group-hover:text-blue-600 transition-colors" />
-            </motion.div>
-          </div>
-          <div className="p-6 text-zinc-600 leading-relaxed bg-white/50 backdrop-blur-md">
-            {props.content}
-          </div>
+        <motion.div {...getAnimationProps('fade-up')} className="w-full">
+          <AccordionWidget
+            items={normalizeAccordionItems(props)}
+            bgColor={props.bgColor as string}
+            interactive={isInteractive}
+          />
         </motion.div>
       );
     
@@ -262,48 +328,58 @@ export function RenderElement({
         </motion.div>
       );
 
-    case 'marketing_hero':
+    case 'marketing_hero': {
+      const hero = normalizeHeroCopy(props);
+      const primary = (props.primaryColor as string) || theme.primaryColor;
+      const secondary = (props.secondaryColor as string) || theme.secondaryColor;
+      const logoSrc = (props.logoUrl as string) || theme.logoUrl;
       return (
         <div className="relative min-h-[600px] flex flex-col items-center justify-center text-center p-8 overflow-hidden" style={{ backgroundColor: '#000' }}>
-          {/* Background Gradient */}
-          <div className="absolute inset-0 opacity-40" style={{ background: `radial-gradient(circle at 50% 50%, ${props.primaryColor || '#B45309'} 0%, transparent 70%)` }}></div>
-          
-          <motion.div 
+          <div className="absolute inset-0 opacity-40" style={{ background: `radial-gradient(circle at 50% 50%, ${primary} 0%, transparent 70%)` }} />
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             className="relative z-10 max-w-4xl mx-auto"
           >
-            {props.logoUrl && (
-              <img src={props.logoUrl} alt="Logo" className="h-16 mx-auto mb-8" referrerPolicy="no-referrer" />
+            {logoSrc && (
+              <img src={logoSrc} alt="Logo" className="h-16 mx-auto mb-8 object-contain" referrerPolicy="no-referrer" />
             )}
-            <span className="inline-block px-4 py-1 rounded-full text-xs font-semibold tracking-widest uppercase mb-6" style={{ backgroundColor: props.primaryColor || '#B45309', color: '#fff' }}>
-              {props.subtitle}
-            </span>
-            <h1 className="text-5xl md:text-7xl font-bold text-white mb-8 leading-tight">
-              {props.title}
-            </h1>
-            <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-12 leading-relaxed">
-              {props.description}
-            </p>
+            {hero.badge && (
+              <span className="inline-block px-4 py-1 rounded-full text-xs font-semibold tracking-widest uppercase mb-6" style={{ backgroundColor: primary, color: '#fff' }}>
+                {hero.badge}
+              </span>
+            )}
+            <h1 className="text-5xl md:text-7xl font-bold text-white mb-8 leading-tight">{hero.title}</h1>
+            {hero.description && (
+              <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-12 leading-relaxed whitespace-pre-line">{hero.description}</p>
+            )}
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="px-8 py-4 rounded-xl font-bold text-white transition-all hover:scale-105" style={{ background: `linear-gradient(to right, ${props.primaryColor || '#B45309'}, ${props.secondaryColor || '#D97706'})` }}>
-                Garantir minha vaga
+              <button
+                {...proposalClickProps('marketing_hero', props, previewMode, onProposalAction)}
+                className="px-8 py-4 rounded-xl font-bold text-white transition-all hover:scale-105"
+                style={{ background: `linear-gradient(to right, ${primary}, ${secondary})` }}
+              >
+                {hero.buttonText}
               </button>
             </div>
           </motion.div>
         </div>
       );
+    }
 
-    case 'marketing_context':
+    case 'marketing_context': {
+      const description = normalizeContextDescription(props);
+      const accent = theme.primaryColor;
       return (
-        <div className="py-24 px-8" style={{ backgroundColor: '#0a0a0a' }}>
-          <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center">
+        <div className="py-24" style={{ backgroundColor: '#0a0a0a', paddingLeft: contentPad, paddingRight: contentPad }}>
+          <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center w-full">
             <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }}>
               <h2 className="text-4xl font-bold text-white mb-6">{props.title}</h2>
-              <p className="text-gray-400 text-lg mb-8 leading-relaxed">{props.description}</p>
-              
+              {description && (
+                <p className="text-gray-400 text-lg mb-8 leading-relaxed whitespace-pre-line">{description}</p>
+              )}
               <div className="grid grid-cols-2 gap-6">
-                {props.stats?.map((stat: any, i: number) => (
+                {props.stats?.map((stat: { value: string; label: string }, i: number) => (
                   <div key={i} className="p-6 rounded-2xl border border-white/10 bg-white/5">
                     <div className="text-3xl font-bold text-white mb-1">{stat.value}</div>
                     <div className="text-sm text-gray-500 uppercase tracking-wider">{stat.label}</div>
@@ -311,12 +387,11 @@ export function RenderElement({
                 ))}
               </div>
             </motion.div>
-            
             <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} className="space-y-6">
-              {props.challenges?.map((challenge: any, i: number) => (
+              {props.challenges?.map((challenge: { title: string; desc: string; icon?: string }, i: number) => (
                 <div key={i} className="flex gap-4 p-6 rounded-2xl bg-white/5 border border-white/10">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#B45309' }}>
-                    <AlertCircle className="text-white w-6 h-6" />
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: accent }}>
+                    <BuilderIcon name={challenge.icon ?? 'AlertCircle'} className="text-white w-6 h-6" />
                   </div>
                   <div>
                     <h4 className="text-white font-bold mb-1">{challenge.title}</h4>
@@ -328,17 +403,19 @@ export function RenderElement({
           </div>
         </div>
       );
+    }
 
-    case 'marketing_strategy':
+    case 'marketing_strategy': {
+      const steps = normalizeStrategySteps(props.steps ?? []);
+      const accent = theme.primaryColor;
       return (
         <div className="py-24 px-8" style={{ backgroundColor: '#000' }}>
           <div className="max-w-5xl mx-auto text-center mb-16">
             <h2 className="text-4xl font-bold text-white mb-4">{props.title}</h2>
           </div>
-          
           <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8">
-            {props.steps?.map((step: any, i: number) => (
-              <motion.div 
+            {steps.map((step, i) => (
+              <motion.div
                 key={i}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -348,7 +425,7 @@ export function RenderElement({
                 <div className="text-6xl font-black text-white/5 absolute top-4 right-8 group-hover:text-amber-600/10 transition-colors">
                   {step.letra}
                 </div>
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-6" style={{ backgroundColor: '#B45309' }}>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-6" style={{ backgroundColor: accent }}>
                   <span className="text-white font-bold">{i + 1}</span>
                 </div>
                 <h3 className="text-xl font-bold text-white mb-4">{step.titulo}</h3>
@@ -358,6 +435,7 @@ export function RenderElement({
           </div>
         </div>
       );
+    }
 
     case 'marketing_services':
       return (
@@ -393,7 +471,6 @@ export function RenderElement({
                 Recomendado
               </div>
             </div>
-            
             <div className="relative z-10">
               <h2 className="text-3xl font-bold text-white mb-8">{props.title}</h2>
               <div className="flex items-baseline gap-2 mb-12">
@@ -401,18 +478,19 @@ export function RenderElement({
                 <span className="text-6xl font-bold text-white">{props.price}</span>
                 <span className="text-gray-400">/mês</span>
               </div>
-              
               <div className="grid md:grid-cols-2 gap-6 mb-12">
-                {props.items?.map((item: string, i: number) => (
+                {normalizeIconItems(props.items, (props.listIcon as string) ?? DEFAULT_LIST_ICON).map((item, i) => (
                   <div key={i} className="flex items-center gap-3 text-gray-300">
-                    <CheckCircle2 className="text-amber-600 w-5 h-5 shrink-0" />
-                    <span>{item}</span>
+                    <BuilderIcon name={item.icon} className="text-amber-600 w-5 h-5 shrink-0" />
+                    <span>{item.text}</span>
                   </div>
                 ))}
               </div>
-              
-              <button className="w-full py-5 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xl transition-all shadow-lg shadow-amber-600/20">
-                Começar agora
+              <button
+                {...proposalClickProps('marketing_pricing', props, previewMode, onProposalAction)}
+                className="w-full py-5 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xl transition-all shadow-lg shadow-amber-600/20"
+              >
+                {props.buttonText ?? 'Aprovar proposta'}
               </button>
             </div>
           </div>
@@ -479,51 +557,21 @@ export function RenderElement({
 
     case 'slider':
       return (
-        <motion.div 
-          {...getAnimationProps('fade-up')}
-          className="w-full relative group overflow-hidden rounded-[2rem] shadow-lg border border-black/5" 
-          style={{ height: `${props.height}px` }}
-        >
-          <div className="flex w-full h-full overflow-x-auto snap-x snap-mandatory custom-scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {props.slides.map((slide: any, idx: number) => (
-              <div key={idx} className="w-full h-full flex-shrink-0 snap-center relative">
-                <img src={slide.image} alt={slide.title} className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-12">
-                  <motion.h3 
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="text-5xl font-black text-white mb-4 tracking-tight drop-shadow-md"
-                  >
-                    {slide.title}
-                  </motion.h3>
-                  <motion.p 
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="text-xl text-white/80 max-w-2xl leading-relaxed drop-shadow-sm"
-                  >
-                    {slide.desc}
-                  </motion.p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="absolute bottom-6 left-0 w-full flex justify-center gap-3">
-            {props.slides.map((_: any, idx: number) => (
-              <div key={idx} className={`w-2.5 h-2.5 rounded-full transition-all duration-300 shadow-sm ${idx === 0 ? 'bg-white w-8' : 'bg-white/50 hover:bg-white/80'}`} />
-            ))}
-          </div>
+        <motion.div {...getAnimationProps('fade-up')} className="w-full">
+          <SliderWidget
+            slides={props.slides ?? []}
+            height={String(props.height ?? '400')}
+            interactive={isInteractive}
+          />
         </motion.div>
       );
 
     case 'feature_grid': {
-      const gridCols = props.columns === '1' ? 'grid-cols-1' : props.columns === '2' ? 'grid-cols-1 md:grid-cols-2' : props.columns === '4' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-3';
       const features = props.features ?? props.items ?? [];
       return (
         <motion.div 
           {...getAnimationProps('fade-up')}
-          className={`grid ${gridCols} gap-8 py-12`} 
+          className={`grid ${featureGridColsClass(String(props.columns ?? '3'), viewport)} gap-8 py-12`} 
           style={{ backgroundColor: props.bgColor }}
         >
           {features.map((feature: any, idx: number) => (
@@ -533,7 +581,7 @@ export function RenderElement({
               className="flex flex-col p-8 rounded-[2rem] glass-panel border border-black/5 hover:bg-white hover:border-black/10 hover:shadow-xl transition-all duration-500 group"
             >
               <div className="w-14 h-14 bg-gradient-to-br from-blue-50 to-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-blue-200 group-hover:scale-110 transition-transform duration-300">
-                <Sparkles className="w-7 h-7" />
+                <BuilderIcon name={feature.icon ?? 'Sparkles'} className="w-7 h-7" />
               </div>
               <h4 className="text-2xl font-bold text-zinc-900 mb-4 tracking-tight">{feature.title}</h4>
               <p className="text-zinc-500 leading-relaxed text-lg">{feature.desc}</p>
@@ -595,13 +643,15 @@ export function RenderElement({
         </motion.div>
       );
 
-    case 'icon_list':
+    case 'icon_list': {
+      const listIcon = (props.listIcon as string) ?? DEFAULT_LIST_ICON;
+      const items = normalizeIconItems(props.items, listIcon);
       return (
         <motion.ul 
           {...getAnimationProps('fade-up')}
           className="space-y-6 py-6"
         >
-          {props.items.map((item: string, idx: number) => (
+          {items.map((item, idx: number) => (
             <motion.li 
               key={idx} 
               initial={{ opacity: 0, x: -20 }}
@@ -610,13 +660,14 @@ export function RenderElement({
               className="flex items-start gap-4 p-4 rounded-2xl hover:bg-black/5 transition-colors border border-transparent hover:border-black/5"
             >
               <div className="p-2 rounded-xl bg-black/5 border border-black/5 shadow-sm">
-                <CheckCircle2 className="w-6 h-6 shrink-0" style={{ color: props.iconColor }} />
+                <BuilderIcon name={item.icon} className="w-6 h-6 shrink-0" style={{ color: props.iconColor as string }} />
               </div>
-              <span className="text-xl font-medium pt-1" style={{ color: props.textColor }}>{item}</span>
+              <span className="text-xl font-medium pt-1" style={{ color: props.textColor as string }}>{item.text}</span>
             </motion.li>
           ))}
         </motion.ul>
       );
+    }
 
     case 'pricing':
       return (
@@ -633,12 +684,12 @@ export function RenderElement({
             <span className="text-zinc-500 font-medium ml-2 text-lg">{props.period}</span>
           </div>
           <ul className="space-y-5 mb-10 flex-1 relative z-10">
-            {props.items.map((item: string, idx: number) => (
+            {normalizeIconItems(props.items, (props.listIcon as string) ?? DEFAULT_LIST_ICON).map((item, idx: number) => (
               <li key={idx} className="flex items-center gap-4">
                 <div className="p-1 rounded-full bg-black/5">
-                  <CheckCircle2 className="w-5 h-5 shrink-0" style={{ color: props.buttonColor }} />
+                  <BuilderIcon name={item.icon} className="w-5 h-5 shrink-0" style={{ color: props.buttonColor as string }} />
                 </div>
-                <span className="text-zinc-600 font-medium text-lg">{item}</span>
+                <span className="text-zinc-600 font-medium text-lg">{item.text}</span>
               </li>
             ))}
           </ul>
@@ -663,7 +714,7 @@ export function RenderElement({
           style={{ backgroundColor: props.bgColor }}
         >
           <div className="absolute -top-8 left-10 w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-md transform -rotate-6 group-hover:rotate-0 transition-transform duration-300">
-            <Quote className="w-8 h-8 text-white" />
+            <BuilderIcon name={(props.quoteIcon as string) ?? 'Quote'} className="w-8 h-8 text-white" />
           </div>
           <p className="text-2xl md:text-3xl font-medium italic text-zinc-600 mb-10 relative z-10 leading-relaxed tracking-tight">
             "{props.quote}"
@@ -710,25 +761,14 @@ export function RenderElement({
 
     case 'countdown':
       return (
-        <motion.div 
-          {...getAnimationProps('fade-up')}
-          className="flex flex-col items-center justify-center p-10 rounded-[2.5rem] shadow-lg glass-panel border border-black/5 relative overflow-hidden" 
-          style={{ backgroundColor: props.bgColor }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-b from-white/50 to-transparent pointer-events-none" />
-          <div className="flex gap-6 md:gap-10 text-center relative z-10">
-            {['Dias', 'Horas', 'Minutos', 'Segundos'].map((label, i) => (
-              <div key={label} className="flex flex-col items-center">
-                <div className="w-20 h-24 md:w-28 md:h-32 rounded-2xl bg-white/80 backdrop-blur-md border border-black/5 flex items-center justify-center shadow-sm mb-3">
-                  <span className="text-4xl md:text-6xl font-black font-mono tracking-tighter" style={{ color: props.color }}>
-                    {['00', '23', '59', '59'][i]}
-                  </span>
-                </div>
-                <span className="text-sm font-bold uppercase tracking-widest" style={{ color: props.labelColor }}>{label}</span>
-              </div>
-            ))}
-          </div>
-        </motion.div>
+        <CountdownWidget
+          targetDate={String(props.targetDate ?? new Date(Date.now() + 86400000).toISOString().split('T')[0])}
+          targetTime={String(props.targetTime ?? '23:59')}
+          color={props.color as string}
+          bgColor={props.bgColor as string}
+          labelColor={props.labelColor as string}
+          expiredText={String(props.expiredText ?? 'Oferta Encerrada!')}
+        />
       );
 
     case 'whatsapp_button':
@@ -743,7 +783,7 @@ export function RenderElement({
           className={`${previewMode ? 'fixed' : 'relative mx-auto'} z-50 flex items-center justify-center w-16 h-16 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 ${previewMode ? (props.position === 'bottom-right' ? 'bottom-8 right-8' : 'bottom-8 left-8') : ''} border border-black/5 backdrop-blur-md`}
           style={{ backgroundColor: props.bgColor }}
         >
-          <MessageCircle className="w-8 h-8" style={{ color: props.iconColor }} />
+          <BuilderIcon name={(props.icon as string) ?? 'MessageCircle'} className="w-8 h-8" style={{ color: props.iconColor as string }} />
         </motion.a>
       );
 
@@ -837,17 +877,22 @@ export function RenderElement({
         </motion.div>
       );
 
-    case 'comparison_table':
+    case 'comparison_table': {
+      const { headers, rows } = normalizeComparisonTable(props);
+      const isTextMode = rows.some((r) => r.us !== 'yes' && r.us !== 'no');
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
-          className="w-full overflow-x-auto rounded-[2rem] shadow-lg glass-panel border border-black/5" 
-          style={{ backgroundColor: props.bgColor }}
+          className="w-full overflow-x-auto rounded-[2rem] shadow-lg glass-panel border border-black/5"
+          style={{ backgroundColor: props.bgColor as string }}
         >
+          {props.title && (
+            <h3 className="p-6 pb-0 text-2xl font-bold text-zinc-900">{props.title as string}</h3>
+          )}
           <table className="w-full text-left border-collapse min-w-[600px]">
             <thead>
               <tr>
-                {props.headers.map((header: string, idx: number) => (
+                {headers.map((header, idx) => (
                   <th key={idx} className="p-6 border-b border-black/5 font-bold text-zinc-900 bg-white/80 backdrop-blur-md text-lg tracking-tight">
                     {header}
                   </th>
@@ -855,18 +900,30 @@ export function RenderElement({
               </tr>
             </thead>
             <tbody>
-              {props.rows.map((row: any, idx: number) => (
-                <motion.tr 
-                  key={idx} 
+              {rows.map((row, idx) => (
+                <motion.tr
+                  key={idx}
                   whileHover={{ backgroundColor: 'rgba(0,0,0,0.02)' }}
                   className="border-b border-black/5 last:border-0 transition-colors"
                 >
                   <td className="p-6 font-medium text-zinc-600 text-lg">{row.feature}</td>
                   <td className="p-6 text-center bg-black/5">
-                    {row.us ? <CheckCircle2 className="w-8 h-8 mx-auto drop-shadow-sm" style={{ color: props.color }} /> : <Minus className="w-8 h-8 mx-auto text-zinc-400" />}
+                    {isTextMode ? (
+                      <span className="text-zinc-700">{row.us}</span>
+                    ) : row.us === 'yes' ? (
+                      <BuilderIcon name={(props.yesIcon as string) ?? 'CheckCircle2'} className="w-8 h-8 mx-auto drop-shadow-sm" style={{ color: props.color as string }} />
+                    ) : (
+                      <BuilderIcon name={(props.noIcon as string) ?? 'Minus'} className="w-8 h-8 mx-auto text-zinc-400" />
+                    )}
                   </td>
                   <td className="p-6 text-center">
-                    {row.them ? <CheckCircle2 className="w-8 h-8 mx-auto text-zinc-400" /> : <Minus className="w-8 h-8 mx-auto text-zinc-300" />}
+                    {isTextMode ? (
+                      <span className="text-zinc-700 font-medium">{row.them}</span>
+                    ) : row.them === 'yes' ? (
+                      <BuilderIcon name={(props.yesIcon as string) ?? 'CheckCircle2'} className="w-8 h-8 mx-auto text-zinc-400" />
+                    ) : (
+                      <BuilderIcon name={(props.noIcon as string) ?? 'Minus'} className="w-8 h-8 mx-auto text-zinc-300" />
+                    )}
                   </td>
                 </motion.tr>
               ))}
@@ -874,31 +931,19 @@ export function RenderElement({
           </table>
         </motion.div>
       );
+    }
 
     case 'image_carousel':
       return (
-        <motion.div 
-          {...getAnimationProps('fade-up')}
-          className={`w-full overflow-hidden shadow-lg relative group border border-black/5 ${props.radius}`} 
-          style={{ height: `${props.height}px` }}
-        >
-          <motion.img 
-            whileHover={{ scale: 1.05 }}
-            transition={{ duration: 0.7 }}
-            src={props.images[0]} 
-            alt="Carousel" 
-            className="w-full h-full object-cover" 
+        <motion.div {...getAnimationProps('fade-up')} className="w-full">
+          <ImageCarouselWidget
+            images={props.images ?? []}
+            height={String(props.height ?? '400')}
+            radius={String(props.radius ?? 'rounded-xl')}
+            autoPlay={props.autoPlay !== false}
+            interval={String(props.interval ?? '3000')}
+            interactive={isInteractive}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
-          <div className="absolute inset-0 flex items-center justify-between p-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="w-12 h-12 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center shadow-md border border-black/5 text-zinc-900 hover:bg-white transition-colors"><ChevronLeft className="w-6 h-6" /></motion.button>
-            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="w-12 h-12 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center shadow-md border border-black/5 text-zinc-900 hover:bg-white transition-colors"><ChevronLeft className="w-6 h-6 rotate-180" /></motion.button>
-          </div>
-          <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-3">
-            {props.images.map((_: any, idx: number) => (
-              <div key={idx} className={`w-2.5 h-2.5 rounded-full shadow-sm transition-all duration-300 ${idx === 0 ? 'bg-white w-8' : 'bg-white/50 hover:bg-white/80'}`} />
-            ))}
-          </div>
         </motion.div>
       );
 
@@ -920,6 +965,36 @@ export function RenderElement({
             </div>
           </motion.div>
         </AnimatePresence>
+      );
+
+    case 'projection_calculator':
+      return (
+        <motion.div {...getAnimationProps('fade-up')} className="w-full">
+          <ProjectionCalculator
+            title={props.title as string}
+            subtitle={props.subtitle as string}
+            sliders={props.sliders as Parameters<typeof ProjectionCalculator>[0]['sliders']}
+            outputs={props.outputs as Parameters<typeof ProjectionCalculator>[0]['outputs']}
+            showProfitBar={props.showProfitBar as boolean}
+            accentColor={props.accentColor as string}
+            headerBg={props.headerBg as string}
+            profitPositiveColor={props.profitPositiveColor as string}
+          />
+        </motion.div>
+      );
+
+    case 'metrics_table':
+      return (
+        <motion.div {...getAnimationProps('fade-up')} className="w-full">
+          <MetricsTable
+            title={props.title as string}
+            headers={props.headers as string[]}
+            rows={props.rows as Parameters<typeof MetricsTable>[0]['rows']}
+            headerBg={props.headerBg as string}
+            highlightColor={props.highlightColor as string}
+            bgColor={props.bgColor as string}
+          />
+        </motion.div>
       );
 
     default:

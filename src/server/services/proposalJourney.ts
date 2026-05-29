@@ -3,7 +3,7 @@ import type { Pool } from 'pg';
 import { createRubricaClient } from '../clients/rubricaClient.js';
 import type { IntegrationsConfig } from '../config.js';
 import type { EnvironmentConfig } from '../env.js';
-import { logIntegrationEvent, upsertMapping } from '../db/mappings.js';
+import { getMappingByProposal, logIntegrationEvent, upsertMapping } from '../db/mappings.js';
 import type { EnsureSuiteCredential } from '../integrations/ensureSuiteCredential.js';
 import { resolveIntegrationForOrg } from '../integrations/resolveIntegrationCredential.js';
 import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js';
@@ -210,6 +210,45 @@ export async function sendContractToRubrica(deps: {
   }
 }
 
+/** Alinha `propostas` com `integration_mappings` (ex.: envio async ou refresh na página pública). */
+export async function syncPropostaRubricaFromMapping(
+  pool: Pool,
+  proposalId: string,
+  organizationId: string,
+): Promise<void> {
+  const mapping = await getMappingByProposal(pool, proposalId);
+  if (!mapping) return;
+
+  let rubricaStatus: string | null = null;
+  if (mapping.status === 'sent' || mapping.status === 'signed') {
+    rubricaStatus = mapping.status;
+  } else if (mapping.status === 'failed') {
+    rubricaStatus = 'failed';
+  } else if (mapping.status === 'cancelled') {
+    rubricaStatus = 'cancelled';
+  }
+
+  await pool
+    .query(
+      `UPDATE propostas SET
+         rubrica_status = COALESCE($3, rubrica_status),
+         rubrica_document_id = COALESCE($4, rubrica_document_id),
+         rubrica_signing_url = COALESCE($5, rubrica_signing_url),
+         rubrica_signed_pdf_url = COALESCE($6, rubrica_signed_pdf_url),
+         rubrica_last_sync_at = NOW()
+       WHERE id::text = $1 AND organization_id = $2`,
+      [
+        proposalId,
+        organizationId,
+        rubricaStatus,
+        mapping.rubrica_document_id,
+        mapping.rubrica_signing_url,
+        mapping.rubrica_signed_pdf_url,
+      ],
+    )
+    .catch((err) => console.error('[proposalJourney] syncPropostaRubricaFromMapping:', err));
+}
+
 export async function triggerRubricaAfterApproval(deps: {
   pool: Pool;
   integrationsConfig: IntegrationsConfig;
@@ -219,7 +258,7 @@ export async function triggerRubricaAfterApproval(deps: {
   mail?: MailClient;
   proposalId: string;
   organizationId: string;
-}): Promise<void> {
+}): Promise<{ ok: boolean; signingUrl?: string; error?: string; skipped?: string }> {
   const { rows } = await deps.pool.query<{
     contrato_texto: string | null;
     cliente_nome: string;
@@ -251,18 +290,18 @@ export async function triggerRubricaAfterApproval(deps: {
   const row = rows[0];
   if (!row?.contrato_texto?.trim()) {
     console.info('[proposalJourney] Rubrica skip: proposta sem contrato_texto', deps.proposalId);
-    return;
+    return { ok: false, skipped: 'sem_contrato' };
   }
   const fluxo = parseProposalFlow(row.fluxo);
   if (!flowHasStep(fluxo, 'sign')) {
     console.info('[proposalJourney] Rubrica skip: fluxo sem passo sign', deps.proposalId);
-    return;
+    return { ok: false, skipped: 'sem_passo_sign' };
   }
 
   const email = row.cliente_email?.trim();
   if (!email) {
     console.info('[proposalJourney] Rubrica skip: cliente sem e-mail', deps.proposalId);
-    return;
+    return { ok: false, skipped: 'sem_email' };
   }
 
   const result = await sendContractToRubrica({
@@ -284,7 +323,9 @@ export async function triggerRubricaAfterApproval(deps: {
 
   if (result.error) {
     console.error('[proposalJourney] Rubrica send failed:', deps.proposalId, result.error);
+    return { ok: false, error: result.error };
   }
+  return { ok: true, signingUrl: result.signingUrl };
 }
 
 export async function confirmClientReceipt(deps: {

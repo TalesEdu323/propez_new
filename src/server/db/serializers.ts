@@ -5,6 +5,8 @@
  */
 
 import { parseProposalFlow, type ProposalFlowConfig } from '../../types/proposalFlow.js';
+import { normalizePageLayout } from '../../lib/pageLayout.js';
+import type { BuilderPageLayout } from '../../types/builder.js';
 
 export interface SerializedCliente {
   id: string
@@ -36,6 +38,7 @@ export interface SerializedModelo {
   id: string
   nome: string
   elementos: unknown[]
+  pageLayout: BuilderPageLayout
   servicos: string[]
   contratoId?: string
   contratoTexto?: string
@@ -62,6 +65,7 @@ export interface SerializedProposta {
   data_validade?: string | null
   status: 'pendente' | 'aprovada' | 'recusada'
   elementos: unknown[]
+  pageLayout: BuilderPageLayout
   contratoTexto?: string | null
   contratoId?: string | null
   chavePix?: string | null
@@ -127,6 +131,7 @@ export function serializeModelo(r: AnyRow): SerializedModelo {
     id: r.id,
     nome: r.nome,
     elementos: Array.isArray(r.elementos) ? r.elementos : [],
+    pageLayout: normalizePageLayout(r.page_layout),
     servicos: toArrayOfString(r.servicos),
     contratoId: r.contrato_id ?? undefined,
     contratoTexto: r.contrato_texto ?? undefined,
@@ -155,6 +160,7 @@ export function serializeProposta(r: AnyRow): SerializedProposta {
     data_validade: r.data_validade,
     status: (r.status ?? 'pendente') as 'pendente' | 'aprovada' | 'recusada',
     elementos: Array.isArray(r.elementos) ? r.elementos : [],
+    pageLayout: normalizePageLayout(r.page_layout),
     contratoTexto: r.contrato_texto,
     contratoId: r.contrato_id,
     chavePix: r.chave_pix,
