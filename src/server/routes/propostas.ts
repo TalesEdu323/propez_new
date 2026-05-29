@@ -25,6 +25,12 @@ const builderElement = z.object({}).passthrough()
 
 const statusSchema = z.enum(['pendente', 'aprovada', 'recusada'])
 
+const pageLayoutSchema = z.object({
+  widthMode: z.enum(['boxed', 'full']),
+  horizontalPadding: z.number().min(0).max(120),
+  maxContentWidth: z.number().positive().optional(),
+}).passthrough()
+
 const bodySchema = z.object({
   /** UUID gerado no cliente para alinhar cache/link antes do INSERT (opcional). */
   id: z.string().uuid().optional(),
@@ -72,12 +78,6 @@ const sendEmailSchema = z.object({
     .optional()
     .refine((v) => v == null || v.length <= 200, { message: 'E-mail muito longo' }),
 })
-
-const pageLayoutSchema = z.object({
-  widthMode: z.enum(['boxed', 'full']),
-  horizontalPadding: z.number().min(0).max(120),
-  maxContentWidth: z.number().positive().optional(),
-}).passthrough()
 
 const PROPOSTA_SELECT = `
   id, cliente_id, cliente_nome, cliente_email, modelo_id, servicos,
