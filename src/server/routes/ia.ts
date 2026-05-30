@@ -106,16 +106,16 @@ export function createIaRouter(deps: { pool: Pool; config: EnvironmentConfig }):
       let raw: unknown;
       try {
         raw = await callGroqJson({
-          system: buildLayoutSystemPrompt(allowedTypes),
+          system: buildLayoutSystemPrompt(parsed.data.prompt, allowedTypes),
           user: buildLayoutUserPrompt(parsed.data.prompt),
-          temperature: 0.4,
+          temperature: 0.55,
           max_tokens: 4096,
         });
       } catch {
         raw = await callGroqJson({
-          system: buildLayoutSystemPrompt(allowedTypes),
+          system: buildLayoutSystemPrompt(parsed.data.prompt, allowedTypes),
           user: buildLayoutUserPrompt(parsed.data.prompt),
-          temperature: 0.35,
+          temperature: 0.45,
           max_tokens: 4096,
         });
       }

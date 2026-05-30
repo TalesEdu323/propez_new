@@ -9,6 +9,7 @@ import {
   Users,
   Wrench,
   LayoutTemplate,
+  BookOpen,
 } from 'lucide-react';
 import type { AppRoute } from '../../types/navigation';
 
@@ -66,10 +67,16 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     label: 'Templates',
     icon: LayoutTemplate,
   },
+  {
+    id: 'admin-blog',
+    label: 'Blog',
+    icon: BookOpen,
+  },
 ];
 
 /** Rota admin-* → item ativo na sidebar (ex.: detalhe de org). */
 export function resolveAdminNavActive(route: AppRoute): AppRoute {
   if (route === 'admin-organization-detail') return 'admin-organizations';
+  if (route === 'admin-blog-editor') return 'admin-blog';
   return route;
 }

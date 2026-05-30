@@ -28,7 +28,9 @@ export type AppRoute =
   | 'admin-users'
   | 'admin-subscriptions'
   | 'admin-operations'
-  | 'admin-marketplace';
+  | 'admin-marketplace'
+  | 'admin-blog'
+  | 'admin-blog-editor';
 
 export type ModelosTab = 'meus' | 'loja';
 

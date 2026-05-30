@@ -526,7 +526,7 @@ export function createAuthRouter(deps: {
         [u.id, tokenHash, expiresAt],
       )
 
-      const resetUrl = `${config.appUrl.replace(/\/+$/, '')}/?route=reset-password&token=${encodeURIComponent(token)}`
+      const resetUrl = `${config.appUrl.replace(/\/+$/, '')}/login?token=${encodeURIComponent(token)}`
       const mailResult = await sendAuthEmail(
         config,
         'forgot-password',
