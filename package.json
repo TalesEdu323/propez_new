@@ -21,6 +21,7 @@
     "test:email": "node scripts/test-smtp-deliverability.mjs",
     "seed:dev": "node scripts/seed-dev.mjs",
     "migrate:suite-credentials": "node scripts/migrate-suite-credentials.mjs",
+    "migrate:apply": "tsx scripts/apply-migrations.mjs",
     "snapshot:mrr": "node scripts/snapshot-mrr.mjs",
     "snapshot:mrr:backfill": "node scripts/snapshot-mrr.mjs --backfill"
   },

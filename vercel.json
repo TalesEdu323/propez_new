@@ -24,10 +24,6 @@
       "destination": "/api/import-check"
     },
     {
-      "source": "/api/boot-check",
-      "destination": "/api/boot-check"
-    },
-    {
       "source": "/api/(.*)",
       "destination": "/api"
     },

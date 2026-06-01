@@ -1,4 +1,6 @@
+import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import pg from 'pg';
 import type { EnvironmentConfig } from './env.js';
 import { runMigrations } from './db/migrations.js';
@@ -12,15 +14,29 @@ export function createPool(config: EnvironmentConfig): pg.Pool {
     // Neon + Vercel: poucas conexões por instância; use DATABASE_URL com "-pooler" no host.
     max: isServerless ? 1 : 10,
     idleTimeoutMillis: isServerless ? 5_000 : 30_000,
+    connectionTimeoutMillis: isServerless ? 10_000 : undefined,
     ssl: config.nodeEnv === 'production'
       ? { rejectUnauthorized: false }
       : { rejectUnauthorized: false },
   });
 }
 
+/** Resolve pasta sql/ no bundle serverless (cwd pode variar na Vercel). */
+export function resolveSqlDir(): string {
+  const candidates = [
+    path.join(process.cwd(), 'sql'),
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '../../sql'),
+  ];
+  const found = candidates.find((d) => fs.existsSync(d));
+  if (!found) {
+    throw new Error(`sql/ não encontrado no bundle (tried: ${candidates.join(', ')})`);
+  }
+  return found;
+}
+
 export async function runStartupMigrations(pool: pg.Pool): Promise<void> {
   try {
-    const sqlDir = path.join(process.cwd(), 'sql');
+    const sqlDir = resolveSqlDir();
     await runMigrations(pool, sqlDir);
     await verifyIntegrationSchema(pool);
   } catch (err) {

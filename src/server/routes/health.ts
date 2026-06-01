@@ -29,6 +29,38 @@ function isLocalUrl(url: string): boolean {
 export function createHealthRouter({ pool, integrationsConfig, config }: HealthRouterOptions): Router {
   const router = express.Router();
 
+  router.get('/boot-check', async (_req: Request, res: Response) => {
+    const dbUrl = config.databaseUrl;
+    const hasPooler = dbUrl.includes('-pooler');
+    let dbOk = false;
+    let dbError: string | null = null;
+    try {
+      await pool.query('SELECT 1');
+      dbOk = true;
+    } catch (err) {
+      dbError = err instanceof Error ? err.message : String(err);
+    }
+
+    const migrationHint =
+      !hasPooler && (process.env.VERCEL === '1' || config.nodeEnv === 'production')
+        ? 'Prefira DATABASE_URL com host Neon "-pooler" na Vercel.'
+        : undefined;
+
+    const ok = dbOk;
+    res.status(ok ? 200 : 503).json({
+      ok,
+      nodeEnv: config.nodeEnv,
+      hasDatabaseUrl: Boolean(dbUrl?.trim()),
+      hasJwtSecret: Boolean(config.auth.jwtSecret?.trim()),
+      hasAppUrl: Boolean(config.appUrl?.trim()),
+      dbOk,
+      dbError,
+      hasPooler,
+      migrationHint,
+      bootErrors: [],
+    });
+  });
+
   router.get('/health', async (_req: Request, res: Response) => {
     let dbStatus = false;
     let client: pg.PoolClient | null = null;

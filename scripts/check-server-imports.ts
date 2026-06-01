@@ -25,6 +25,11 @@ if (!process.env.NODE_ENV) {
 try {
   await import('../src/server/app.js');
   console.log('[check-server-imports] módulos do servidor OK');
+  // Garante que createApp() executa (ex.: imports ausentes como createHealthRouter).
+  process.env.NODE_ENV = process.env.NODE_ENV || 'development';
+  const { createApp } = await import('../src/server/app.js');
+  await createApp();
+  console.log('[check-server-imports] createApp OK');
 } catch (err) {
   console.error('[check-server-imports] falha ao carregar o servidor:', err);
   process.exit(1);

@@ -284,7 +284,7 @@ export function createAuthRouter(deps: {
 
       const membership = await getPrimaryMembership(u.id)
       if (!membership) {
-        return res.status(500).json({ error: 'Conta sem organização' })
+        return res.status(403).json({ error: 'Conta sem organização' })
       }
 
       await issueTokensForUser({
@@ -381,7 +381,7 @@ export function createAuthRouter(deps: {
       }
 
       const membership = await getPrimaryMembership(u.id)
-      if (!membership) return res.status(500).json({ error: 'Conta sem organização' })
+      if (!membership) return res.status(403).json({ error: 'Conta sem organização' })
 
       await pool.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [u.id])
 

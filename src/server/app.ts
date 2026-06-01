@@ -31,6 +31,7 @@ import { createPropostasRouter } from './routes/propostas.js';
 import { createUsageRouter } from './routes/usage.js';
 import { createIaRouter } from './routes/ia.js';
 import { createPublicPropostasRouter } from './routes/publicPropostas.js';
+import { createHealthRouter } from './routes/health.js';
 import {
   createCheckoutRouter,
   createStripeWebhookRouter,
