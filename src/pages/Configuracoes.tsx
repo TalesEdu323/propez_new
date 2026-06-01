@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { 
   User, Building2, Shield, Bell, Download, 
   Smartphone, CheckCircle2, ChevronRight,
-  Camera, CreditCard, HelpCircle, Sparkles
+  Camera, CreditCard, HelpCircle, Sparkles, Palette
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { store, resolvePlan } from '../lib/store';
-import { PLAN_META } from '../lib/featureFlags';
+import { PLAN_META, hasWhiteLabel } from '../lib/featureFlags';
+import { ServiceRequestLauncher } from '../components/ServiceRequestLauncher';
 import { usePWA } from '../lib/usePWA';
 import type { NavigateFn } from '../types/navigation';
 import {
@@ -15,10 +16,20 @@ import {
   useNotifications,
 } from '../lib/useNotifications';
 import { api, ApiError } from '../lib/apiClient';
+import type { OfferType } from '../lib/layoutContext';
+import { SEGMENT_OPTIONS } from '../lib/segmentLabels';
 import {
   IntegrationProviderCard,
   type IntegrationCredentialSummary,
 } from './configuracoes/IntegrationProviderCard';
+
+interface ServiceRequestItem {
+  id: string;
+  type: string;
+  status: string;
+  createdAt: string;
+  adminNotes?: string | null;
+}
 
 interface IntegrationsCredentialsResponse {
   suiteEnabled: boolean;
@@ -41,6 +52,23 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
   const [provisioning, setProvisioning] = useState<'prosync' | 'rubrica' | null>(null);
   const plan = resolvePlan(userConfig);
   const planMeta = PLAN_META[plan];
+  const whiteLabelEnabled = hasWhiteLabel(userConfig);
+  const [myRequests, setMyRequests] = useState<ServiceRequestItem[]>([]);
+
+  const loadMyRequests = useCallback(async () => {
+    try {
+      const data = await api.get<ServiceRequestItem[]>('/api/requests/mine');
+      setMyRequests(data);
+    } catch {
+      setMyRequests([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMyRequests();
+  }, [loadMyRequests]);
+
+  const latestWhitelabelRequest = myRequests.find((r) => r.type === 'whitelabel');
 
   const loadIntegrations = useCallback(async () => {
     setIntegrationsLoading(true);
@@ -225,6 +253,21 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
                     placeholder="00.000.000/0000-00"
                   />
                 </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Nicho / Segmento</label>
+                  <select
+                    value={userConfig.segment ?? 'generico'}
+                    onChange={(e) => setUserConfig({ ...userConfig, segment: e.target.value as OfferType })}
+                    className="glass-input px-5 py-4 text-sm font-medium w-full"
+                  >
+                    {SEGMENT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-zinc-400 ml-1">Define o estilo visual das imagens geradas por IA nos modelos.</p>
+                </div>
               </div>
 
               <div className="mt-10 pt-10 border-t border-zinc-100 flex justify-end">
@@ -236,6 +279,85 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
                   {isSaving ? 'Salvando...' : 'Salvar Alterações'}
                 </button>
               </div>
+            </motion.div>
+
+            <motion.div variants={itemVariants} className="apple-card p-6 md:p-7">
+              <div className="flex items-center gap-4 mb-10">
+                <div className="w-12 h-12 rounded-2xl bg-violet-50 flex items-center justify-center text-violet-600 border border-violet-100">
+                  <Palette className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-zinc-900 tracking-tight">Identidade visual</h3>
+                  <p className="text-sm text-zinc-400 font-medium">
+                    Marca personalizada no app e nas propostas públicas (gerenciada pela equipe Propez)
+                  </p>
+                </div>
+              </div>
+
+              {whiteLabelEnabled ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
+                      Whitelabel ativo
+                    </p>
+                    <div className="w-24 h-24 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center overflow-hidden">
+                      {userConfig.logo ? (
+                        <img src={userConfig.logo} alt="Logo" className="w-full h-full object-contain p-2" />
+                      ) : (
+                        <span className="text-2xl font-bold text-zinc-400">
+                          {(userConfig.nome || 'O').charAt(0)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-zinc-600">Configurado pela equipe Propez.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Cor principal</p>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="w-10 h-10 rounded-xl border border-black/10"
+                        style={{ backgroundColor: userConfig.primaryColor ?? '#18181b' }}
+                      />
+                      <span className="font-mono text-sm text-zinc-700">
+                        {userConfig.primaryColor ?? '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {latestWhitelabelRequest && (
+                    <div
+                      className={`p-4 rounded-2xl border text-sm ${
+                        latestWhitelabelRequest.status === 'pending'
+                          ? 'bg-amber-50 border-amber-100 text-amber-800'
+                          : latestWhitelabelRequest.status === 'rejected'
+                            ? 'bg-red-50 border-red-100 text-red-700'
+                            : 'bg-zinc-50 border-zinc-100 text-zinc-600'
+                      }`}
+                    >
+                      Solicitação {latestWhitelabelRequest.status === 'pending' ? 'em análise' : latestWhitelabelRequest.status === 'rejected' ? 'recusada' : 'processada'} —{' '}
+                      {new Date(latestWhitelabelRequest.createdAt).toLocaleDateString('pt-BR')}
+                      {latestWhitelabelRequest.adminNotes && (
+                        <p className="mt-2 text-xs opacity-80">{latestWhitelabelRequest.adminNotes}</p>
+                      )}
+                    </div>
+                  )}
+
+                  <ServiceRequestLauncher type="whitelabel">
+                    {({ open, loading }) => (
+                      <button
+                        type="button"
+                        onClick={open}
+                        disabled={loading || latestWhitelabelRequest?.status === 'pending'}
+                        className="btn-primary"
+                      >
+                        {loading ? 'Carregando…' : 'Solicitar identidade visual'}
+                      </button>
+                    )}
+                  </ServiceRequestLauncher>
+                </div>
+              )}
             </motion.div>
 
             {/* Notifications Section */}

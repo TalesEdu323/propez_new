@@ -8,7 +8,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <PageMeta title="Entrar" description="Acesse sua conta Propez." path="/login" />
+      <PageMeta title="Entrar" description="Acesse sua conta Propez." path="/login" noindex />
       <AuthForm resetToken={token} initialMode="login" />
     </>
   );

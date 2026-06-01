@@ -1,11 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Sparkles, Loader2, Building2 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { UpgradeGate } from '../UpgradeGate';
 import { useUserConfig } from '../../hooks/useStoreEntity';
 import { canUse, type PlanTier } from '../../lib/featureFlags';
 import { iaApi, getIaErrorMessage, getIaRequiredPlan } from '../../lib/iaApi';
-import type { BuilderElement } from '../../types/builder';
+import type { BuilderElement, BuilderPageLayout } from '../../types/builder';
+import type { OfferType } from '../../lib/layoutContext';
+import {
+  getBriefQuestionChipsForPrompt,
+  inferOfferPlaceholder,
+} from '../../lib/layoutBriefHints';
 
 export type AiBriefMode = 'layout' | 'contract';
 
@@ -13,7 +18,12 @@ export interface AiBriefPromptModalProps {
   open: boolean;
   onClose: () => void;
   mode: AiBriefMode;
-  onLayoutGenerated?: (elementos: BuilderElement[]) => void;
+  onLayoutGenerated?: (
+    elementos: BuilderElement[],
+    pageLayout?: BuilderPageLayout,
+    offerType?: OfferType,
+    brief?: string,
+  ) => void;
   onContractGenerated?: (result: { titulo: string; texto: string }) => void;
 }
 
@@ -23,7 +33,8 @@ const COPY: Record<
 > = {
   layout: {
     title: 'Gerar modelo de proposta',
-    description: 'Descreva em poucas linhas o tipo de proposta que você imagina.',
+    description:
+      'Descreva o negócio, escopo, prazos e investimento. Quanto mais detalhes, melhor o layout.',
     placeholder:
       'Ex.: Proposta de consultoria B2B por 90 dias, com diagnóstico, plano de ação e acompanhamento quinzenal.',
   },
@@ -54,13 +65,34 @@ export function AiBriefPromptModal({
   const [upgradeReason, setUpgradeReason] = useState<string | undefined>();
   const [requiredPlan, setRequiredPlan] = useState<PlanTier>('pro');
   const hasCompanyData = Boolean(userConfig.nome?.trim() || userConfig.cnpj?.trim());
-  const [useCompanyProfile, setUseCompanyProfile] = useState(hasCompanyData);
+  const [useCompanyProfile, setUseCompanyProfile] = useState(false);
 
   useEffect(() => {
-    if (open && mode === 'contract') {
-      setUseCompanyProfile(Boolean(userConfig.nome?.trim() || userConfig.cnpj?.trim()));
+    if (open) {
+      setUseCompanyProfile(mode === 'contract' ? hasCompanyData : false);
     }
-  }, [open, mode, userConfig.nome, userConfig.cnpj]);
+  }, [open, mode, hasCompanyData]);
+
+  const questionChips = useMemo(() => {
+    if (mode !== 'layout' || prompt.trim().length < 8) {
+      return getBriefQuestionChipsForPrompt('', userConfig);
+    }
+    return getBriefQuestionChipsForPrompt(prompt, userConfig);
+  }, [mode, prompt, userConfig]);
+
+  const layoutPlaceholder = useMemo(
+    () => (mode === 'layout' ? inferOfferPlaceholder(prompt, userConfig) : copy.placeholder),
+    [mode, prompt, userConfig, copy.placeholder],
+  );
+
+  const appendChip = (text: string) => {
+    setPrompt((prev) => {
+      const base = prev.trim();
+      if (!base) return text;
+      if (base.includes(text)) return prev;
+      return `${base}\n${text}`;
+    });
+  };
 
   const handleClose = () => {
     if (loading) return;
@@ -87,8 +119,10 @@ export function AiBriefPromptModal({
     setError(null);
     try {
       if (mode === 'layout') {
-        const { elementos } = await iaApi.generateLayout(trimmed);
-        onLayoutGenerated?.(elementos);
+        const { elementos, pageLayout, offerType } = await iaApi.generateLayout(trimmed, {
+          useCompanyProfile,
+        });
+        onLayoutGenerated?.(elementos, pageLayout, offerType, trimmed);
         setPrompt('');
         onClose();
       } else {
@@ -170,7 +204,7 @@ export function AiBriefPromptModal({
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder={copy.placeholder}
+          placeholder={mode === 'layout' ? layoutPlaceholder : copy.placeholder}
           rows={5}
           maxLength={2000}
           disabled={loading}
@@ -178,7 +212,28 @@ export function AiBriefPromptModal({
         />
         <p className="text-[10px] text-zinc-400 mt-2 text-right">{prompt.length}/2000</p>
 
-        {mode === 'contract' ? (
+        {mode === 'layout' && questionChips.length > 0 ? (
+          <div className="mt-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-2">
+              Inclua no texto (clique para adicionar)
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {questionChips.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => appendChip(chip)}
+                  className="text-xs px-3 py-1.5 rounded-full border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400 hover:text-zinc-900 transition-colors disabled:opacity-50"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {(mode === 'contract' || mode === 'layout') && hasCompanyData ? (
           <div className="mt-4 p-4 rounded-xl border border-zinc-200 bg-zinc-50 space-y-3">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
@@ -197,21 +252,17 @@ export function AiBriefPromptModal({
                   <p>
                     <span className="text-zinc-400 text-xs uppercase tracking-wide">Nome</span>
                     <br />
-                    {userConfig.nome?.trim() || '— não cadastrado —'}
+                    {userConfig.nome?.trim() || '—'}
                   </p>
-                  <p className="mt-2">
-                    <span className="text-zinc-400 text-xs uppercase tracking-wide">CNPJ</span>
-                    <br />
-                    {userConfig.cnpj?.trim() || '— não cadastrado —'}
-                  </p>
+                  {mode === 'contract' ? (
+                    <p className="mt-2">
+                      <span className="text-zinc-400 text-xs uppercase tracking-wide">CNPJ</span>
+                      <br />
+                      {userConfig.cnpj?.trim() || '—'}
+                    </p>
+                  ) : null}
                 </div>
               </div>
-            ) : null}
-            {useCompanyProfile && !hasCompanyData ? (
-              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 ml-7">
-                Cadastre nome e CNPJ em Configurações → Dados da Empresa, ou desmarque esta opção para gerar sem
-                contexto da contratada.
-              </p>
             ) : null}
           </div>
         ) : null}

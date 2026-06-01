@@ -7,7 +7,7 @@ const FAQ = [
   { q: 'Posso começar de graça?', a: 'Sim. O plano Free inclui 3 propostas por mês para você testar o fluxo completo.' },
   { q: 'Como funciona o pagamento dos planos pagos?', a: 'Checkout seguro via Stripe. Cancele quando quiser, sem multa.' },
   { q: 'Preciso de cartão no cadastro?', a: 'Não para o plano Free. Planos pagos são ativados após o checkout.' },
-  { q: 'Integra com outras ferramentas?', a: 'Pro, Business e integrações Suite Taggo (ProSync, Rubrica).' },
+  { q: 'Integra com outras ferramentas?', a: 'Pro, Business e integrações Taggo Growth Suite (ProSync, Rubrica).' },
 ];
 
 export default function PublicPlanosPage() {

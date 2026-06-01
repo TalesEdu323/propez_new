@@ -4,7 +4,7 @@ import { PageMeta } from '../../marketing/PageMeta';
 export default function CadastroPage() {
   return (
     <>
-      <PageMeta title="Criar conta" description="Comece grátis no Propez." path="/cadastro" />
+      <PageMeta title="Criar conta" description="Comece grátis no Propez." path="/cadastro" noindex />
       <AuthForm initialMode="register" />
     </>
   );

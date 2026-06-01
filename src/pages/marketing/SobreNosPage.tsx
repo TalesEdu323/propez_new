@@ -8,6 +8,7 @@ import {
   Heart,
   MapPin,
   Mail,
+  Phone,
   Calendar,
   Award,
   Code2,
@@ -15,6 +16,8 @@ import {
 } from 'lucide-react';
 import { MarketingLayout } from '../../marketing/MarketingLayout';
 import { PageMeta } from '../../marketing/PageMeta';
+import { TAGGO_COMPANY } from '../../marketing/company';
+import { organizationJsonLdForPage } from '../../marketing/OrganizationJsonLd';
 import { FounderPhoto } from '../../marketing/FounderPhoto';
 import { ImageWithFallback } from '../../marketing/ImageWithFallback';
 import { PropezLogo } from '../../components/PropezLogo';
@@ -30,8 +33,9 @@ export default function SobreNosPage() {
     <MarketingLayout>
       <PageMeta
         title="Quem somos — Propez"
-        description="Conheça o Propez, ferramenta desenvolvida pela Taggo Software. Plataforma brasileira de propostas comerciais."
+        description={`Conheça o Propez, produto ${TAGGO_COMPANY.brandName} (${TAGGO_COMPANY.legalName}). Plataforma brasileira de propostas comerciais.`}
         path="/sobre-nos"
+        jsonLd={organizationJsonLdForPage('/sobre-nos')}
       />
 
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24">
@@ -42,8 +46,8 @@ export default function SobreNosPage() {
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight">Sobre nós</h1>
           <p className="text-lg sm:text-xl text-zinc-500 max-w-2xl mx-auto leading-relaxed">
-            O <strong className="text-zinc-900">Propez</strong> é uma ferramenta desenvolvida pela{' '}
-            <strong className="text-zinc-900">Taggo Software</strong>, empresas brasileiras dedicadas a transformar a
+            O <strong className="text-zinc-900">Propez</strong> é um produto da{' '}
+            <strong className="text-zinc-900">{TAGGO_COMPANY.brandName}</strong> ({TAGGO_COMPANY.legalName}), dedicado a transformar a
             forma como profissionais e empresas criam, enviam e fecham propostas comerciais.
           </p>
         </div>
@@ -87,7 +91,7 @@ export default function SobreNosPage() {
           <div className="text-center space-y-4 mb-12">
             <h2 className="text-3xl sm:text-4xl font-bold">O Propez</h2>
             <p className="text-lg text-zinc-500 max-w-2xl mx-auto">
-              Ferramenta desenvolvida pela <strong>Taggo Software</strong>, plataforma brasileira criada em{' '}
+              Produto da <strong>{TAGGO_COMPANY.legalName}</strong> ({TAGGO_COMPANY.brandName}), plataforma brasileira criada em{' '}
               <strong>São Paulo, Brasil</strong> com foco em <strong>inovação, eficiência e resultados</strong> para quem
               vende serviços.
             </p>
@@ -104,7 +108,7 @@ export default function SobreNosPage() {
                   desconectados, planilhas e follow-ups perdidos.
                 </p>
                 <p className="text-zinc-500 leading-relaxed">
-                  A Taggo Software atua com visão de longo prazo e compromisso com a evolução contínua da plataforma,
+                  A {TAGGO_COMPANY.brandName} atua com visão de longo prazo e compromisso com a evolução contínua da plataforma,
                   sempre orientados pelas necessidades reais de quem vende serviços no dia a dia.
                 </p>
               </div>
@@ -115,7 +119,7 @@ export default function SobreNosPage() {
                   <Sparkles className="w-5 h-5" /> Por que o Propez existe
                 </h3>
                 <p className="text-zinc-500 leading-relaxed mb-4">
-                  A <strong>Taggo Software</strong> nasceu a partir de <strong>análise prática do cenário brasileiro</strong>{' '}
+                  A <strong>{TAGGO_COMPANY.brandName}</strong> nasceu a partir de <strong>análise prática do cenário brasileiro</strong>{' '}
                   e identificação de lacunas nas soluções disponíveis — especialmente em{' '}
                   <strong>usabilidade, adaptação ao contexto local e velocidade de melhoria do produto</strong>.
                 </p>
@@ -165,9 +169,9 @@ export default function SobreNosPage() {
                   <PropezLogo height="lg" />
                 </div>
                 <div className="space-y-3">
-                  <h3 className="text-2xl font-bold">Taggo Software</h3>
+                  <h3 className="text-2xl font-bold">{TAGGO_COMPANY.legalName}</h3>
                   <p className="text-zinc-500 leading-relaxed">
-                    Empresa brasileira de desenvolvimento de software especializada em soluções inovadoras para gestão,
+                    {TAGGO_COMPANY.legalName} — empresa brasileira de desenvolvimento de software especializada em soluções inovadoras para gestão,
                     automação de processos e transformação digital — incluindo o <strong>Propez</strong>.
                   </p>
                 </div>
@@ -356,18 +360,25 @@ export default function SobreNosPage() {
             <div className="p-8 lg:p-12 text-center space-y-8">
               <h2 className="text-3xl sm:text-4xl font-bold">Entre em contato</h2>
               <p className="text-lg text-zinc-500">Estamos prontos para ajudar você a vender com propostas profissionais</p>
-              <div className="grid sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
+              <div className="grid sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
                 <div className="flex flex-col items-center gap-3 p-6 rounded-xl bg-zinc-50 border border-black/5">
                   <Mail className="w-6 h-6 text-zinc-900" />
                   <p className="text-sm text-zinc-400">Email</p>
-                  <a href="mailto:contato@taggo.com.br" className="text-zinc-900 hover:underline font-medium">
-                    contato@taggo.com.br
+                  <a href={`mailto:${TAGGO_COMPANY.email}`} className="text-zinc-900 hover:underline font-medium text-center text-sm">
+                    {TAGGO_COMPANY.email}
                   </a>
                 </div>
                 <div className="flex flex-col items-center gap-3 p-6 rounded-xl bg-zinc-50 border border-black/5">
+                  <Phone className="w-6 h-6 text-zinc-900" />
+                  <p className="text-sm text-zinc-400">Telefone</p>
+                  <a href={`tel:${TAGGO_COMPANY.phoneTel}`} className="text-zinc-900 hover:underline font-medium">
+                    {TAGGO_COMPANY.phone}
+                  </a>
+                </div>
+                <div className="flex flex-col items-center gap-3 p-6 rounded-xl bg-zinc-50 border border-black/5 sm:col-span-1">
                   <MapPin className="w-6 h-6 text-zinc-900" />
-                  <p className="text-sm text-zinc-400">Localização</p>
-                  <p className="font-medium">São Paulo, Brasil</p>
+                  <p className="text-sm text-zinc-400">Endereço</p>
+                  <p className="font-medium text-sm text-center leading-relaxed">{TAGGO_COMPANY.address.formatted}</p>
                 </div>
               </div>
               <Link to="/cadastro" className="btn-primary inline-flex">

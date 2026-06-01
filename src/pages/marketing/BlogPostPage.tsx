@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { MarketingLayout } from '../../marketing/MarketingLayout';
 import { PageMeta } from '../../marketing/PageMeta';
+import { buildArticleJsonLd } from '../../marketing/articleJsonLd';
 import { BlogPostContent } from '../../marketing/blog/BlogPostContent';
 import { NewsletterSignup } from '../../marketing/NewsletterSignup';
 import type { BlogPostDetail } from '../../marketing/blog/blockTypes';
@@ -78,9 +79,28 @@ export default function BlogPostPage() {
     );
   }
 
+  const path = `/blog/${post.slug}`;
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const articleUrl = origin ? `${origin}${path}` : path;
+  const jsonLd = buildArticleJsonLd({
+    title: post.title,
+    description: post.summary || undefined,
+    url: articleUrl,
+    image: post.cover_image || undefined,
+    datePublished: post.published_at || undefined,
+    authorName: post.author_name || undefined,
+  });
+
   return (
     <MarketingLayout>
-      <PageMeta title={post.title} description={post.summary || undefined} path={`/blog/${post.slug}`} />
+      <PageMeta
+        title={post.title}
+        description={post.summary || undefined}
+        path={path}
+        image={post.cover_image || undefined}
+        ogType="article"
+        jsonLd={jsonLd}
+      />
       <article className="py-12">
         <div className="container mx-auto px-4 lg:px-8 max-w-3xl">
           <Link to="/blog" className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-900 mb-8">

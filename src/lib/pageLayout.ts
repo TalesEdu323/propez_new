@@ -1,4 +1,5 @@
 import type { BuilderPageLayout } from '../types/builder.js';
+import type { ResolvedOrgBrand } from './orgBrand.js';
 
 export const DEFAULT_PAGE_LAYOUT: BuilderPageLayout = {
   widthMode: 'boxed',
@@ -31,5 +32,19 @@ export function normalizePageLayout(raw: unknown): BuilderPageLayout {
     ...(textColor ? { textColor } : {}),
     ...(backgroundImage ? { backgroundImage } : {}),
     ...(logoUrl ? { logoUrl } : {}),
+  };
+}
+
+/** Mescla branding da org (Business) quando page_layout não define logo/cores. */
+export function mergeOrgBrandIntoPageLayout(
+  layout: BuilderPageLayout,
+  brand: Pick<ResolvedOrgBrand, 'isWhiteLabel' | 'logoUrl' | 'primaryColor' | 'secondaryColor'>,
+): BuilderPageLayout {
+  if (!brand.isWhiteLabel) return layout;
+  return {
+    ...layout,
+    ...(!layout.primaryColor && brand.primaryColor ? { primaryColor: brand.primaryColor } : {}),
+    ...(!layout.secondaryColor && brand.secondaryColor ? { secondaryColor: brand.secondaryColor } : {}),
+    ...(!layout.logoUrl && brand.logoUrl ? { logoUrl: brand.logoUrl } : {}),
   };
 }

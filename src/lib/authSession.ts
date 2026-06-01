@@ -11,6 +11,8 @@
 import { useSyncExternalStore } from 'react';
 import { api, ApiError, subscribeRefreshFailure } from './apiClient';
 
+import type { OfferType } from './layoutContext';
+
 export type Role = 'owner' | 'admin' | 'member';
 export type PlanTier = 'free' | 'pro' | 'business';
 
@@ -28,6 +30,9 @@ export interface CurrentOrg {
   cnpj: string | null;
   logoUrl: string | null;
   signatureUrl: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+  whitelabelEnabled: boolean;
   plan: PlanTier;
   billingCycle: 'monthly' | 'yearly' | null;
   trialEndsAt: string | null;
@@ -36,6 +41,7 @@ export interface CurrentOrg {
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   onboarded: boolean;
+  segment: OfferType | null;
   role: Role;
 }
 

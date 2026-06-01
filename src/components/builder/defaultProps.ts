@@ -230,6 +230,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     primaryColor: '#B45309',
     secondaryColor: '#D97706',
     logoUrl: '',
+    backgroundImageUrl: '',
   },
   marketing_context: {
     title: 'Entendemos o que você construiu.',

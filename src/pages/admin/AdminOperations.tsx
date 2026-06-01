@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Activity } from 'lucide-react';
+import { ExternalLink, Activity, Inbox } from 'lucide-react';
 import AdminPageShell from './AdminPageShell';
 import { api } from '../../lib/apiClient';
+import { AdminPlatformSettingsPanel } from './AdminPlatformSettingsPanel';
 import type { NavigateFn } from '../../types/navigation';
 
 export default function AdminOperations({ navigate }: { navigate: NavigateFn }) {
@@ -96,6 +97,24 @@ export default function AdminOperations({ navigate }: { navigate: NavigateFn }) 
                 ))}
               </ul>
             )}
+          </div>
+
+          <AdminPlatformSettingsPanel />
+
+          <div className="apple-card p-6 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-700 flex items-center gap-2">
+                <Inbox className="w-4 h-4" /> Fila de solicitações
+              </h2>
+              <p className="text-sm text-zinc-500 mt-1">Whitelabel e plano Business aguardando aprovação.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('admin-requests')}
+              className="btn-primary text-xs uppercase tracking-widest"
+            >
+              Abrir fila
+            </button>
           </div>
 
           <div className="apple-card p-6 bg-zinc-50">

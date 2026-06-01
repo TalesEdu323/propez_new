@@ -6,6 +6,7 @@ import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import { serializeModelo } from '../db/serializers.js'
 import { proposalFlowConfigSchema } from '../validation/proposalFlow.js'
+import { fetchOrgBrand, mergePageLayoutWithOrgBrand } from '../services/orgBrandDefaults.js'
 
 const builderElement = z.object({}).passthrough()
 
@@ -69,6 +70,11 @@ export function createModelosRouter(deps: {
     const parsed = bodySchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
     const d = parsed.data
+    const orgBrand = await fetchOrgBrand(pool, req.auth.orgId)
+    const pageLayout = mergePageLayoutWithOrgBrand(
+      d.pageLayout as Record<string, unknown> | undefined,
+      orgBrand,
+    )
     const { rows } = await pool.query(
       `INSERT INTO modelos_propostas
          (organization_id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
@@ -79,7 +85,7 @@ export function createModelosRouter(deps: {
         req.auth.orgId,
         d.nome,
         JSON.stringify(d.elementos),
-        JSON.stringify(d.pageLayout ?? { widthMode: 'boxed', horizontalPadding: 60 }),
+        JSON.stringify(pageLayout),
         d.servicos,
         d.contratoId ?? null,
         d.contratoTexto ?? null,

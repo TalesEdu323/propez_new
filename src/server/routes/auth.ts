@@ -605,6 +605,9 @@ export function createAuthRouter(deps: {
         cnpj: string | null
         logo_url: string | null
         signature_url: string | null
+        primary_color: string | null
+        secondary_color: string | null
+        whitelabel_enabled: boolean
         plan: string
         billing_cycle: string | null
         trial_ends_at: string | null
@@ -613,11 +616,14 @@ export function createAuthRouter(deps: {
         stripe_customer_id: string | null
         stripe_subscription_id: string | null
         onboarded: boolean
+        segment: string | null
         role: 'owner' | 'admin' | 'member'
       }>(
-        `SELECT o.id, o.name, o.cnpj, o.logo_url, o.signature_url, o.plan, o.billing_cycle,
+        `SELECT o.id, o.name, o.cnpj, o.logo_url, o.signature_url,
+                o.primary_color, o.secondary_color, o.whitelabel_enabled,
+                o.plan, o.billing_cycle,
                 o.trial_ends_at, o.plan_started_at, o.plan_renews_at,
-                o.stripe_customer_id, o.stripe_subscription_id, o.onboarded, m.role
+                o.stripe_customer_id, o.stripe_subscription_id, o.onboarded, o.segment, m.role
          FROM organizations o
          JOIN memberships m ON m.organization_id = o.id AND m.user_id = $1
          WHERE o.id = $2`,
@@ -640,6 +646,9 @@ export function createAuthRouter(deps: {
           cnpj: org.cnpj,
           logoUrl: org.logo_url,
           signatureUrl: org.signature_url,
+          primaryColor: org.primary_color ?? null,
+          secondaryColor: org.secondary_color ?? null,
+          whitelabelEnabled: org.whitelabel_enabled === true,
           plan: org.plan,
           billingCycle: org.billing_cycle,
           trialEndsAt: org.trial_ends_at,
@@ -648,6 +657,7 @@ export function createAuthRouter(deps: {
           stripeCustomerId: org.stripe_customer_id,
           stripeSubscriptionId: org.stripe_subscription_id,
           onboarded: org.onboarded,
+          segment: (org.segment as import('../../lib/layoutContext.js').OfferType | null) ?? null,
           role: org.role,
         },
       })

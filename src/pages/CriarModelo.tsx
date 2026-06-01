@@ -4,38 +4,54 @@ import { motion, AnimatePresence } from 'motion/react';
 import { store, ModeloProposta } from '../lib/store';
 import Builder from '../components/Builder';
 import { createId } from '../lib/ids';
-import { useContratos, useServicos } from '../hooks/useStoreEntity';
+import { useContratos, useServicos, useUserConfig } from '../hooks/useStoreEntity';
 import type { NavigateFn, RouteParams } from '../types/navigation';
 import type { BuilderElement, BuilderPageLayout } from '../types/builder';
+import type { OfferType } from '../lib/layoutContext';
 import { normalizePageLayout } from '../lib/pageLayout';
 import { flowHasStep } from '../types/proposalFlow';
 import { applyStarterTemplate } from '../data/starterTemplates';
 import { mergeServiceLayouts } from '../lib/mergeServiceLayouts';
+import { hasModelImageSlots } from '../lib/modelImageSlots';
 import type { CriarModeloStepDescriptor } from './criarModelo/types';
 import { INITIAL_CRIAR_MODELO_FORM } from './criarModelo/types';
 import { CriarModeloStepper } from './criarModelo/CriarModeloStepper';
 import { StepConfig } from './criarModelo/StepConfig';
 import { StepFluxo } from './criarModelo/StepFluxo';
 import { StepContrato } from './criarModelo/StepContrato';
+import { StepImagens } from './criarModelo/StepImagens';
 import { EscolherPontoDePartida } from './criarModelo/EscolherPontoDePartida';
 
 const STEPS: CriarModeloStepDescriptor[] = [
   { id: 1, title: 'Configurações Base', desc: 'Nome, serviços e pagamentos' },
   { id: 2, title: 'Fluxo da proposta', desc: 'Aprovar, assinar e pagar' },
   { id: 3, title: 'Contrato Padrão', desc: 'Selecione o contrato' },
-  { id: 4, title: 'Editor Visual', desc: 'Construa o layout da página' },
+  { id: 4, title: 'Imagens e banners', desc: 'Visual gerado por IA' },
+  { id: 5, title: 'Editor Visual', desc: 'Construa o layout da página' },
 ];
+
+const IMAGENS_STEP = 4;
+const BUILDER_STEP = 5;
 
 export default function CriarModelo({ navigate, initialData }: { navigate: NavigateFn; initialData?: RouteParams }) {
   const [pickerDone, setPickerDone] = useState(!!initialData?.editId);
   const [step, setStep] = useState(1);
   const servicosDisponiveis = useServicos();
   const contratos = useContratos();
+  const userConfig = useUserConfig();
 
   const [formData, setFormData] = useState(INITIAL_CRIAR_MODELO_FORM);
   const [elementos, setElementos] = useState<BuilderElement[]>([]);
   const [pageLayout, setPageLayout] = useState<BuilderPageLayout>(() => normalizePageLayout(null));
   const [importedServicoNames, setImportedServicoNames] = useState<string[]>([]);
+  const [iaBrief, setIaBrief] = useState('');
+  const [layoutOfferType, setLayoutOfferType] = useState<OfferType>(
+    userConfig.segment ?? 'generico',
+  );
+
+  useEffect(() => {
+    if (userConfig.segment) setLayoutOfferType(userConfig.segment);
+  }, [userConfig.segment]);
 
   useEffect(() => {
     if (initialData?.editId) {
@@ -95,8 +111,16 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
     setPickerDone(true);
   };
 
-  const handleAiGenerated = (els: BuilderElement[]) => {
+  const handleAiGenerated = (
+    els: BuilderElement[],
+    layout?: BuilderPageLayout,
+    offerType?: OfferType,
+    brief?: string,
+  ) => {
     setElementos(els);
+    if (layout) setPageLayout(normalizePageLayout(layout));
+    if (offerType) setLayoutOfferType(offerType);
+    if (brief) setIaBrief(brief);
     setPickerDone(true);
   };
 
@@ -111,8 +135,12 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
   }
 
   const needsContractStep = flowHasStep(formData.fluxo, 'sign');
+  const visibleSteps = STEPS.filter((s) => s.id !== 3 || needsContractStep);
+  const totalSteps = visibleSteps.length;
 
-  if (step === 4) {
+  const builderBackStep = hasModelImageSlots(elementos) ? IMAGENS_STEP : needsContractStep ? 3 : 2;
+
+  if (step === BUILDER_STEP) {
     return (
       <motion.div className="h-screen w-full bg-transparent flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         {importedServicoNames.length > 0 && (
@@ -125,20 +153,25 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
           initialPageLayout={pageLayout}
           onPageLayoutChange={setPageLayout}
           onSave={handleSave}
-          onBack={() => setStep(needsContractStep ? 3 : 2)}
+          onBack={() => setStep(builderBackStep)}
           saveLabel="Salvar Modelo"
         />
       </motion.div>
     );
   }
 
-  const goToEditorWithServices = () => {
+  const goToImagensOrBuilder = () => {
     const names = formData.servicos
       .map((id) => servicosDisponiveis.find((s) => s.id === id)?.nome)
       .filter((n): n is string => !!n);
-    setElementos((prev) => mergeServiceLayouts(prev, formData.servicos, servicosDisponiveis));
+    const merged = mergeServiceLayouts(elementos, formData.servicos, servicosDisponiveis);
+    setElementos(merged);
     setImportedServicoNames(names);
-    setStep(4);
+    if (hasModelImageSlots(merged)) {
+      setStep(IMAGENS_STEP);
+    } else {
+      setStep(BUILDER_STEP);
+    }
   };
 
   const handleAdvance = () => {
@@ -150,23 +183,38 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
       setStep(2);
     } else if (step === 2) {
       if (needsContractStep) setStep(3);
-      else goToEditorWithServices();
+      else goToImagensOrBuilder();
     } else if (step === 3) {
-      goToEditorWithServices();
+      goToImagensOrBuilder();
+    } else if (step === IMAGENS_STEP) {
+      setStep(BUILDER_STEP);
     }
   };
 
   const handleBackStep = () => {
-    if (step === 4) setStep(needsContractStep ? 3 : 2);
-    else if (step === 3) setStep(2);
-    else setStep(step - 1);
+    if (step === IMAGENS_STEP) {
+      setStep(needsContractStep ? 3 : 2);
+    } else if (step === 3) {
+      setStep(2);
+    } else if (step === 2) {
+      setStep(1);
+    }
   };
+
+  const advanceLabel =
+    step === IMAGENS_STEP
+      ? 'Ir para o Editor Visual'
+      : step === 3 || (step === 2 && !needsContractStep)
+        ? hasModelImageSlots(elementos)
+          ? 'Revisar imagens'
+          : 'Ir para o Editor Visual'
+        : 'Próximo Passo';
 
   return (
     <div className="flex h-screen w-full bg-[#f5f5f4] overflow-hidden font-sans">
       <CriarModeloStepper
         step={step}
-        steps={STEPS.filter((s) => s.id !== 3 || needsContractStep)}
+        steps={visibleSteps}
         isEditing={!!initialData?.editId}
         formData={formData}
         onBack={() => navigate('modelos')}
@@ -177,7 +225,9 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
           <button onClick={() => navigate('modelos')} className="p-2 -ml-2 text-zinc-500">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Passo {step} de 4</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">
+            Passo {visibleSteps.findIndex((s) => s.id === step) + 1} de {totalSteps}
+          </span>
           <div className="w-9" />
         </div>
 
@@ -190,6 +240,14 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
               {step === 2 && <StepFluxo formData={formData} setFormData={setFormData} />}
               {step === 3 && needsContractStep && (
                 <StepContrato formData={formData} setFormData={setFormData} contratos={contratos} />
+              )}
+              {step === IMAGENS_STEP && (
+                <StepImagens
+                  elementos={elementos}
+                  offerType={layoutOfferType}
+                  brief={iaBrief || formData.nome}
+                  onElementosChange={setElementos}
+                />
               )}
             </AnimatePresence>
           </div>
@@ -209,7 +267,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
               onClick={handleAdvance}
               className="bg-[#0a0a0a] text-white hover:bg-zinc-800 rounded-xl px-8 py-4 text-sm font-medium transition-all active:scale-[0.98] flex items-center gap-2 shadow-lg shadow-black/10"
             >
-              {step === 3 || (step === 2 && !needsContractStep) ? 'Ir para o Editor Visual' : 'Próximo Passo'}
+              {advanceLabel}
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

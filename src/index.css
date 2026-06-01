@@ -22,6 +22,35 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+:root {
+  --org-primary: #18181b;
+  --org-primary-hover: #000000;
+  --org-primary-text: #ffffff;
+  --org-accent: var(--color-brand-500);
+}
+
+.whitelabel .btn-primary {
+  background-color: var(--org-primary);
+  color: var(--org-primary-text);
+}
+
+.whitelabel .btn-primary:hover {
+  background-color: var(--org-primary-hover);
+}
+
+.whitelabel .whitelabel-nav-active {
+  background-color: var(--org-primary);
+  color: var(--org-primary-text);
+}
+
+.whitelabel .whitelabel-badge {
+  background-color: var(--org-accent);
+}
+
+.whitelabel .whitelabel-accent-text {
+  color: var(--org-accent);
+}
+
 @layer utilities {
   .apple-blur {
     @apply backdrop-blur-2xl bg-white/80 border border-white/20;

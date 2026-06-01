@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
 import { APP_BASE_PATH } from '../lib/appPaths';
+import { PageMeta } from '../marketing/PageMeta';
 
 export default function NotFoundPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-8 bg-white text-zinc-700">
+      <PageMeta title="Página não encontrada" description="O endereço solicitado não existe." noindex />
       <h1 className="text-2xl font-semibold text-zinc-900">Página não encontrada</h1>
       <p className="text-sm text-zinc-500">O endereço que você acessou não existe.</p>
       <div className="flex flex-wrap gap-3 justify-center">

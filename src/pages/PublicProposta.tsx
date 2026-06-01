@@ -7,9 +7,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { api, ApiError } from '../lib/apiClient';
 import { RenderElement } from '../components/builder/RenderElement';
 import { PageShell } from '../components/builder/PageShell';
-import { normalizePageLayout } from '../lib/pageLayout';
+import { normalizePageLayout, mergeOrgBrandIntoPageLayout } from '../lib/pageLayout';
 import { PropezWatermark } from './visualizarProposta/PropezWatermark';
 import { shouldShowWatermark } from '../lib/featureFlags';
+import { resolveOrgBrand } from '../lib/orgBrand';
+import { PublicOrgHeader } from './publicProposta/PublicOrgHeader';
 import { flowHasStep, parseProposalFlow } from '../types/proposalFlow';
 import type { BuilderElement } from '../types/builder';
 import type { ProposalFlowConfig } from '../types/proposalFlow';
@@ -45,6 +47,9 @@ interface PublicOrg {
   cnpj: string | null;
   logoUrl: string | null;
   signatureUrl: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+  whitelabelEnabled?: boolean;
   plan: 'free' | 'pro' | 'business';
 }
 
@@ -126,6 +131,15 @@ export default function PublicProposta({ token }: Props) {
 
   const proposta = data?.proposta;
   const org = data?.organization;
+  const orgBrand = useMemo(
+    () => resolveOrgBrand(org ? { ...org, whitelabelEnabled: org.whitelabelEnabled, plan: org.plan } : null),
+    [org],
+  );
+  const pageLayout = useMemo(() => {
+    if (!proposta) return normalizePageLayout(undefined);
+    return mergeOrgBrandIntoPageLayout(normalizePageLayout(proposta.pageLayout), orgBrand);
+  }, [proposta, orgBrand]);
+  const showOrgHeader = orgBrand.isWhiteLabel;
   const fluxo = useMemo(
     () => parseProposalFlow(proposta?.fluxo ?? data?.journey?.fluxo),
     [proposta?.fluxo, data?.journey?.fluxo],
@@ -251,6 +265,13 @@ export default function PublicProposta({ token }: Props) {
 
   return (
     <div className="min-h-screen w-full bg-white relative font-sans">
+      {showOrgHeader && org && (
+        <PublicOrgHeader
+          name={org.name}
+          logoUrl={org.logoUrl}
+          primaryColor={org.primaryColor ?? orgBrand.primaryColor}
+        />
+      )}
       <AnimatePresence mode="wait">
         {proposta.elementos.length === 0 ? (
           <div className="min-h-screen flex items-center justify-center">
@@ -258,13 +279,13 @@ export default function PublicProposta({ token }: Props) {
           </div>
         ) : (
           <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full bg-white">
-            <PageShell layout={normalizePageLayout(proposta.pageLayout)}>
+            <PageShell layout={pageLayout}>
               {proposta.elementos.map((el) => (
                 <RenderElement
                   key={el.id}
                   element={el}
                   previewMode
-                  pageLayout={normalizePageLayout(proposta.pageLayout)}
+                  pageLayout={pageLayout}
                   onProposalAction={proposta.status === 'pendente' ? handleProposalAction : undefined}
                 />
               ))}

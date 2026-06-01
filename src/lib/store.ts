@@ -755,7 +755,11 @@ function buildUserConfig(org: CurrentOrg | null, usage: PlanUsage): UserConfig {
     cnpj: org.cnpj ?? '',
     logo: org.logoUrl ?? undefined,
     assinatura: org.signatureUrl ?? undefined,
+    primaryColor: org.primaryColor ?? undefined,
+    secondaryColor: org.secondaryColor ?? undefined,
+    whitelabelEnabled: org.whitelabelEnabled === true,
     onboarded: !!org.onboarded,
+    segment: org.segment ?? undefined,
     plan: (org.plan ?? 'free') as PlanTier,
     planStartedAt: org.planStartedAt ?? undefined,
     planRenewsAt: org.planRenewsAt ?? undefined,
@@ -763,6 +767,7 @@ function buildUserConfig(org: CurrentOrg | null, usage: PlanUsage): UserConfig {
     billingCycle: (org.billingCycle ?? undefined) as UserConfig['billingCycle'],
     stripeCustomerId: org.stripeCustomerId ?? undefined,
     stripeSubscriptionId: org.stripeSubscriptionId ?? undefined,
+    segment: org.segment ?? undefined,
     usage,
     isPro: (org.plan ?? 'free') !== 'free',
   };
@@ -775,6 +780,7 @@ async function pushOrgPatch(patch: Partial<UserConfig>): Promise<void> {
   if ('logo' in patch) body.logoUrl = patch.logo ?? null;
   if ('assinatura' in patch) body.signatureUrl = patch.assinatura ?? null;
   if ('onboarded' in patch) body.onboarded = patch.onboarded;
+  if ('segment' in patch) body.segment = patch.segment ?? null;
   if (Object.keys(body).length === 0) return;
   try {
     const updated = await api.patch<{
@@ -782,6 +788,9 @@ async function pushOrgPatch(patch: Partial<UserConfig>): Promise<void> {
       cnpj: string | null;
       logoUrl: string | null;
       signatureUrl: string | null;
+      primaryColor: string | null;
+      secondaryColor: string | null;
+      whitelabelEnabled: boolean;
       onboarded: boolean;
       plan: PlanTier;
       billingCycle: 'monthly' | 'yearly' | null;
@@ -790,12 +799,16 @@ async function pushOrgPatch(patch: Partial<UserConfig>): Promise<void> {
       planRenewsAt: string | null;
       stripeCustomerId: string | null;
       stripeSubscriptionId: string | null;
+      segment: import('./layoutContext').OfferType | null;
     }>('/api/organizations/current', body);
     patchOrganization({
       name: updated.name,
       cnpj: updated.cnpj,
       logoUrl: updated.logoUrl,
       signatureUrl: updated.signatureUrl,
+      primaryColor: updated.primaryColor,
+      secondaryColor: updated.secondaryColor,
+      whitelabelEnabled: updated.whitelabelEnabled,
       onboarded: updated.onboarded,
       plan: updated.plan,
       billingCycle: updated.billingCycle,
@@ -804,6 +817,7 @@ async function pushOrgPatch(patch: Partial<UserConfig>): Promise<void> {
       planRenewsAt: updated.planRenewsAt,
       stripeCustomerId: updated.stripeCustomerId,
       stripeSubscriptionId: updated.stripeSubscriptionId,
+      segment: updated.segment ?? null,
     });
   } catch (err) {
     console.error('[store] saveUserConfig erro', err);

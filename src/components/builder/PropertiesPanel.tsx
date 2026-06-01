@@ -10,6 +10,7 @@ import { PageLayoutFields } from './properties/PageLayoutFields';
 import { SpacingSection } from './properties/SpacingSection';
 import { IconFields } from './properties/IconFields';
 import { ProjectionCalculatorFields, MetricsTableFields } from './properties/ProjectionCalculatorFields';
+import { ImageSourceField } from './properties/ImageSourceField';
 
 export type BuilderTab = 'properties' | 'layers';
 
@@ -57,7 +58,7 @@ export function PropertiesPanel({
         {embedded && showPageLayoutPanel && (
           <div className="mb-6 p-3 rounded-xl bg-zinc-50 border border-black/5 text-xs text-zinc-600 leading-relaxed">
             <Layout className="w-4 h-4 text-zinc-400 mb-1" />
-            Este trecho entra dentro da proposta. As margens laterais são definidas no modelo.
+            Este trecho entra dentro da proposta. As cores globais são definidas no modelo.
           </div>
         )}
 
@@ -91,7 +92,11 @@ export function PropertiesPanel({
               <TextFields element={selectedElement} updateElement={updateElement} />
               <DateTimeFields element={selectedElement} updateElement={updateElement} />
               <DescriptionFields element={selectedElement} updateElement={updateElement} />
-              <UrlFields element={selectedElement} updateElement={updateElement} />
+              {selectedElement.type === 'image' ? (
+                <ImageSourceField element={selectedElement} updateElement={updateElement} />
+              ) : (
+                <UrlFields element={selectedElement} updateElement={updateElement} />
+              )}
               <IconFields element={selectedElement} updateElement={updateElement} />
               <ProjectionCalculatorFields element={selectedElement} updateElement={updateElement} />
               <MetricsTableFields element={selectedElement} updateElement={updateElement} />

@@ -3,12 +3,17 @@ import { ArrowLeft, Save } from 'lucide-react';
 import AdminPageShell from './AdminPageShell';
 import { api } from '../../lib/apiClient';
 import { formatBRL, formatDateBR } from '../../lib/format';
+import { ColorPickerRow } from '../../components/builder/properties/ColorPickerRow';
 import type { NavigateFn } from '../../types/navigation';
 
 interface OrgDetail {
   organization: {
     id: string;
     name: string;
+    logoUrl?: string | null;
+    primaryColor?: string | null;
+    secondaryColor?: string | null;
+    whitelabelEnabled?: boolean;
     plan: string | null;
     billingCycle: string | null;
     trialEndsAt: string | null;
@@ -46,7 +51,12 @@ export default function AdminOrganizationDetail({
 }) {
   const [data, setData] = useState<OrgDetail | null>(null);
   const [csNotes, setCsNotes] = useState('');
+  const [whitelabelEnabled, setWhitelabelEnabled] = useState(false);
+  const [primaryColor, setPrimaryColor] = useState('#18181b');
+  const [secondaryColor, setSecondaryColor] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savingBrand, setSavingBrand] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -54,6 +64,10 @@ export default function AdminOrganizationDetail({
       const d = await api.get<OrgDetail>(`/api/admin/organizations/${orgId}`);
       setData(d);
       setCsNotes((d.organization as { csNotes?: string }).csNotes ?? '');
+      setWhitelabelEnabled(d.organization.whitelabelEnabled === true);
+      setPrimaryColor(d.organization.primaryColor ?? '#18181b');
+      setSecondaryColor(d.organization.secondaryColor ?? '');
+      setLogoUrl(d.organization.logoUrl ?? null);
     } finally {
       setLoading(false);
     }
@@ -70,6 +84,29 @@ export default function AdminOrganizationDetail({
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveBrand = async () => {
+    setSavingBrand(true);
+    try {
+      await api.patch(`/api/admin/organizations/${orgId}`, {
+        whitelabelEnabled,
+        logoUrl,
+        primaryColor: primaryColor || null,
+        secondaryColor: secondaryColor || null,
+      });
+      await load();
+    } finally {
+      setSavingBrand(false);
+    }
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setLogoUrl(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   const healthColor: Record<string, string> = {
@@ -186,6 +223,38 @@ export default function AdminOrganizationDetail({
                 </ul>
               </div>
             )}
+
+            <div className="apple-card p-6">
+              <h3 className="text-sm font-semibold text-zinc-500 uppercase mb-3">Identidade visual</h3>
+              <label className="flex items-center gap-2 text-sm mb-4">
+                <input
+                  type="checkbox"
+                  checked={whitelabelEnabled}
+                  onChange={(e) => setWhitelabelEnabled(e.target.checked)}
+                />
+                Whitelabel ativo
+              </label>
+              <div className="mb-4">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Logo" className="h-12 object-contain mb-2" />
+                ) : null}
+                <input type="file" accept="image/*" onChange={handleLogoUpload} className="text-xs" />
+              </div>
+              <ColorPickerRow label="Cor primária" value={primaryColor} onChange={setPrimaryColor} />
+              {secondaryColor !== '' && (
+                <div className="mt-3">
+                  <ColorPickerRow label="Cor secundária" value={secondaryColor} onChange={setSecondaryColor} />
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={savingBrand}
+                onClick={() => void saveBrand()}
+                className="mt-4 flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-xl text-sm font-semibold w-full justify-center"
+              >
+                <Save className="w-4 h-4" /> Salvar identidade
+              </button>
+            </div>
 
             <div className="apple-card p-6">
               <h3 className="text-sm font-semibold text-zinc-500 uppercase mb-2">Notas CS</h3>

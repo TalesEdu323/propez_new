@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { BuilderElementType } from '../../types/builder';
 import { getWidgetRequiredPlan, PLAN_META } from '../../lib/featureFlags';
+import { PropezLogo } from '../PropezLogo';
 
 function WidgetCategory({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -113,12 +114,16 @@ export function BuilderWidgetPalette({
   return (
     <div className={`${widthClass} glass-panel flex flex-col border-r border-black/5 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all min-h-0`}>
       <div className={`${embedded ? 'p-3' : 'p-5'} border-b border-black/5 flex items-center gap-2 bg-white/50 shrink-0`}>
-        <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center shadow-sm shrink-0">
-          <LayoutTemplate className="w-4 h-4 text-white" />
-        </div>
-        <h1 className="font-semibold text-zinc-900 tracking-tight text-sm truncate">
-          {embedded ? 'Blocos' : 'Taggo Builder'}
-        </h1>
+        {embedded ? (
+          <>
+            <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center shadow-sm shrink-0">
+              <LayoutTemplate className="w-4 h-4 text-white" />
+            </div>
+            <h1 className="font-semibold text-zinc-900 tracking-tight text-sm truncate">Blocos</h1>
+          </>
+        ) : (
+          <PropezLogo height="sm" />
+        )}
       </div>
 
       <div className={`${embedded ? 'p-2' : 'p-4'} flex-1 min-h-0 overflow-y-auto custom-scrollbar`}>

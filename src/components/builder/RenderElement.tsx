@@ -333,8 +333,20 @@ export function RenderElement({
       const primary = (props.primaryColor as string) || theme.primaryColor;
       const secondary = (props.secondaryColor as string) || theme.secondaryColor;
       const logoSrc = (props.logoUrl as string) || theme.logoUrl;
+      const bgImage = props.backgroundImageUrl as string | undefined;
       return (
         <div className="relative min-h-[600px] flex flex-col items-center justify-center text-center p-8 overflow-hidden" style={{ backgroundColor: '#000' }}>
+          {bgImage ? (
+            <>
+              <img
+                src={bgImage}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-black/55" />
+            </>
+          ) : null}
           <div className="absolute inset-0 opacity-40" style={{ background: `radial-gradient(circle at 50% 50%, ${primary} 0%, transparent 70%)` }} />
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -798,19 +810,49 @@ export function RenderElement({
         </motion.div>
       );
 
-    case 'service_stack':
+    case 'service_stack': {
+      const previewLabels = Array.isArray(props.previewLabels)
+        ? (props.previewLabels as string[]).filter((l) => typeof l === 'string' && l.trim())
+        : [];
+      const showSyntheticPreview = previewMode && previewLabels.length > 0;
+
       return (
         <motion.div
           {...getAnimationProps('fade-up')}
-          className="w-full py-16 px-8 rounded-3xl border-2 border-dashed border-zinc-200 bg-zinc-50/80 text-center"
+          className={`w-full py-12 px-8 rounded-3xl border-2 border-dashed ${
+            showSyntheticPreview ? 'border-zinc-300 bg-white/90' : 'border-zinc-200 bg-zinc-50/80'
+          }`}
         >
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Seção de serviços</p>
-          <h3 className="text-xl font-semibold text-zinc-800 mb-2">{props.title ?? 'Serviços da proposta'}</h3>
-          <p className="text-sm text-zinc-500 max-w-lg mx-auto">
+          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2 text-center">
+            Seção de serviços
+          </p>
+          <h3 className="text-xl font-semibold text-zinc-800 mb-4 text-center">
+            {props.title ?? 'Serviços da proposta'}
+          </h3>
+
+          {showSyntheticPreview ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto mb-4">
+              {previewLabels.map((label, i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-left shadow-sm"
+                >
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                    Serviço {i + 1}
+                  </span>
+                  <p className="text-sm font-semibold text-zinc-800 mt-2">{label}</p>
+                  <p className="text-xs text-zinc-500 mt-2">Prévia — conteúdo real dos serviços no passo 1.</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <p className="text-sm text-zinc-500 max-w-lg mx-auto text-center">
             {props.hint ?? 'Selecione serviços no modelo para preencher esta área automaticamente.'}
           </p>
         </motion.div>
       );
+    }
 
     case 'progress_bar':
       return (

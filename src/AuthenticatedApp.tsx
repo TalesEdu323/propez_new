@@ -11,7 +11,9 @@ import {
   useInitialLoaded,
   useSession,
 } from './lib/authSession';
-import { PropezLogo } from './components/PropezLogo';
+import { BrandLogo } from './components/BrandLogo';
+import { OrgBrandProvider } from './components/OrgBrandProvider';
+import { resolveOrgBrand } from './lib/orgBrand';
 import { AppTopBar, AppTopBarMobileButton } from './components/AppTopBar';
 import { useNotifications } from './lib/useNotifications';
 
@@ -36,6 +38,7 @@ const AdminRetention = lazy(() => import('./pages/admin/AdminRetention'));
 const AdminAcquisition = lazy(() => import('./pages/admin/AdminAcquisition'));
 const AdminProduct = lazy(() => import('./pages/admin/AdminProduct'));
 const AdminOperations = lazy(() => import('./pages/admin/AdminOperations'));
+const AdminRequests = lazy(() => import('./pages/admin/AdminRequests'));
 const AdminOrganizationDetail = lazy(() => import('./pages/admin/AdminOrganizationDetail'));
 const AdminMarketplace = lazy(() => import('./pages/admin/AdminMarketplace'));
 const AdminBlogList = lazy(() => import('./pages/admin/AdminBlogList'));
@@ -136,6 +139,8 @@ export default function AuthenticatedApp() {
         return session?.user.isPlatformAdmin ? <AdminProduct navigate={navigate} /> : <Dashboard navigate={navigate} />;
       case 'admin-operations':
         return session?.user.isPlatformAdmin ? <AdminOperations navigate={navigate} /> : <Dashboard navigate={navigate} />;
+      case 'admin-requests':
+        return session?.user.isPlatformAdmin ? <AdminRequests navigate={navigate} /> : <Dashboard navigate={navigate} />;
       case 'admin-organization-detail':
         return session?.user.isPlatformAdmin ? <AdminOrganizationDetail navigate={navigate} orgId={routeParams.id ?? ''} /> : <Dashboard navigate={navigate} />;
       case 'admin-marketplace':
@@ -159,9 +164,20 @@ export default function AuthenticatedApp() {
     exit: { y: -8, scale: 0.99, transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] as const } },
   };
 
+  const brand = resolveOrgBrand(session.organization);
+  const navActiveClass =
+    brand.isWhiteLabel && brand.primaryColor
+      ? 'whitelabel-nav-active shadow-[0_10px_20px_-5px_rgba(0,0,0,0.15)]'
+      : 'bg-zinc-900 text-white shadow-[0_10px_20px_-5px_rgba(0,0,0,0.15)]';
+  const settingsActiveClass =
+    brand.isWhiteLabel && brand.primaryColor
+      ? 'whitelabel-nav-active shadow-sm'
+      : 'bg-zinc-900 text-white shadow-sm';
+
   if (route === 'propez-fluido' || route === 'visualizar-proposta' || route === 'criar-modelo') {
     return (
-      <AnimatePresence mode="wait">
+      <OrgBrandProvider>
+        <AnimatePresence mode="wait">
         <motion.div
           key={route}
           initial="initial"
@@ -173,6 +189,7 @@ export default function AuthenticatedApp() {
           <Suspense fallback={loadingFallback}>{renderContent()}</Suspense>
         </motion.div>
       </AnimatePresence>
+      </OrgBrandProvider>
     );
   }
 
@@ -200,10 +217,11 @@ export default function AuthenticatedApp() {
   }
 
   return (
+    <OrgBrandProvider>
     <div className="flex h-screen bg-[#F5F5F7] font-sans overflow-hidden">
       <div className="hidden md:flex flex-col w-64 bg-white/80 backdrop-blur-2xl border-r border-black/[0.05] z-40 relative">
         <div className="p-6">
-          <PropezLogo height="md" />
+          <BrandLogo height="md" />
         </div>
         <nav className="flex-1 px-4 mt-8 space-y-1.5 overflow-y-auto custom-scrollbar">
           {navItems.map((item) => {
@@ -214,7 +232,7 @@ export default function AuthenticatedApp() {
                 type="button"
                 onClick={() => navigate(item.id as AppRoute)}
                 className={`w-full flex items-center gap-3 px-5 py-3 rounded-2xl text-sm font-semibold transition-all duration-500 ${
-                  isActive ? 'bg-zinc-900 text-white shadow-[0_10px_20px_-5px_rgba(0,0,0,0.15)]' : 'text-zinc-400 hover:bg-zinc-50 hover:text-zinc-900'
+                  isActive ? navActiveClass : 'text-zinc-400 hover:bg-zinc-50 hover:text-zinc-900'
                 }`}
               >
                 <div className={`transition-transform duration-500 ${isActive ? 'scale-110' : 'scale-100 opacity-50'}`}>
@@ -230,7 +248,7 @@ export default function AuthenticatedApp() {
             type="button"
             onClick={() => navigate('configuracoes')}
             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              route === 'configuracoes' ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600'
+              route === 'configuracoes' ? settingsActiveClass : 'text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600'
             }`}
           >
             <Settings className="w-5 h-5" />
@@ -248,13 +266,13 @@ export default function AuthenticatedApp() {
       </div>
 
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-2xl border-b border-black/[0.05] z-40 flex items-center justify-between px-5">
-        <PropezLogo height="md" />
+        <BrandLogo height="md" />
         <div className="flex items-center gap-2">
           <AppTopBarMobileButton navigate={navigate} showPlatformButton={isPlatformAdmin} />
           <button type="button" onClick={() => navigate('configuracoes')} className="w-10 h-10 flex items-center justify-center text-zinc-500 bg-zinc-100 rounded-full relative">
             <Bell className="w-5 h-5" />
             {notificationUnread > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-[#ff5200] text-white rounded-full border-2 border-white">
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold whitelabel-badge text-white rounded-full border-2 border-white">
                 {notificationUnread > 9 ? '9+' : notificationUnread}
               </span>
             )}
@@ -297,5 +315,6 @@ export default function AuthenticatedApp() {
         })}
       </div>
     </div>
+    </OrgBrandProvider>
   );
 }

@@ -3,6 +3,8 @@
  * Arquivo sem dependências de React/API — seguro para import na Vercel (ESM).
  */
 
+import type { OfferType } from './layoutContext';
+
 export type PlanTier = 'free' | 'pro' | 'business';
 
 export interface PlanUsage {
@@ -18,6 +20,9 @@ export interface UserConfig {
   cnpj?: string;
   logo?: string;
   assinatura?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  whitelabelEnabled?: boolean;
   onboarded?: boolean;
   plan?: PlanTier;
   planStartedAt?: string;
@@ -26,6 +31,7 @@ export interface UserConfig {
   billingCycle?: 'monthly' | 'yearly';
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
+  segment?: OfferType;
   usage?: PlanUsage;
   /** @deprecated Use `plan !== 'free'`. */
   isPro?: boolean;

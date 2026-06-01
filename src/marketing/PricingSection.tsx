@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, CheckCircle2 } from 'lucide-react';
 import { PLAN_META, type PlanTier } from '../lib/featureFlags';
-import { WHATSAPP_URL } from './constants';
 import { AnimatedSection } from './landing/AnimatedSection';
 import { MagneticLink } from './landing/MagneticButton';
+import { PricingEnterpriseCta } from '../components/PricingEnterpriseCta';
 
 const PLAN_FEATURES: Record<PlanTier, string[]> = {
   free: [
@@ -203,14 +203,10 @@ export function PricingSection({
                 </ul>
 
                 {tier === 'business' ? (
-                  <a
-                    href={WHATSAPP_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <PricingEnterpriseCta
+                    marketing
                     className={`block w-full py-4 rounded-xl font-bold text-center transition-all ${ctaClass}`}
-                  >
-                    Falar com Vendas
-                  </a>
+                  />
                 ) : (
                   <MagneticLink
                     to={tier === 'free' ? '/cadastro' : `/cadastro?plan=${tier}`}
@@ -278,14 +274,10 @@ export function PricingSection({
                   ))}
                 </ul>
                 {tier === 'business' ? (
-                  <a
-                    href={WHATSAPP_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-8 py-3.5 rounded-xl text-center text-sm font-semibold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 block"
-                  >
-                    Falar com vendas
-                  </a>
+                  <PricingEnterpriseCta
+                    marketing
+                    className="mt-8 py-3.5 rounded-xl text-center text-sm font-semibold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 w-full"
+                  />
                 ) : (
                   <Link
                     to={tier === 'free' ? '/cadastro' : `/cadastro?plan=${tier}`}

@@ -13,7 +13,7 @@ export function FounderPhoto() {
   return (
     <img
       src="/founder.png"
-      alt="Eduardo Gomes - Fundador e CTO da Propez, ferramenta desenvolvida pela Taggo Software"
+      alt="Eduardo Gomes - Fundador e CTO do Propez, produto Taggo"
       className="w-full h-full object-cover"
       onError={() => setImageError(true)}
     />

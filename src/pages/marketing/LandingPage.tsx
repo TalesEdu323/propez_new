@@ -10,6 +10,8 @@ import { LandingAudience } from '../../marketing/landing/LandingAudience';
 import { LandingROICalculator } from '../../marketing/landing/LandingROICalculator';
 import { LandingPricing } from '../../marketing/landing/LandingPricing';
 import { LandingFinalCTA } from '../../marketing/landing/LandingFinalCTA';
+import { LandingTaggoTrust } from '../../marketing/landing/LandingTaggoTrust';
+import { organizationJsonLdForPage } from '../../marketing/OrganizationJsonLd';
 
 export default function LandingPage() {
   useLayoutEffect(() => {
@@ -34,6 +36,7 @@ export default function LandingPage() {
       <LandingROICalculator />
       <LandingPricing />
       <LandingFinalCTA />
+      <LandingTaggoTrust />
       <section className="py-16 bg-gray-50 border-t border-gray-100">
         <div className="max-w-lg mx-auto px-6 text-center">
           <h2 className="text-xl font-bold mb-4 font-heading">Newsletter</h2>

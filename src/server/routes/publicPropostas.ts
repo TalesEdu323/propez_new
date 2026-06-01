@@ -118,6 +118,7 @@ export function createPublicPropostasRouter(deps: {
     try {
       const { rows } = await pool.query(
         `SELECT p.organization_id, o.name AS org_name, o.logo_url, o.signature_url, o.cnpj, o.plan,
+                o.primary_color, o.secondary_color, o.whitelabel_enabled,
                 p.viewed_at,
                 ${PROPOSTA_SELECT.split(',').map((c) => `p.${c.trim()}`).join(', ')}
          FROM propostas p
@@ -179,6 +180,9 @@ export function createPublicPropostasRouter(deps: {
           cnpj: r.cnpj,
           logoUrl: r.logo_url,
           signatureUrl: r.signature_url,
+          primaryColor: r.primary_color ?? null,
+          secondaryColor: r.secondary_color ?? null,
+          whitelabelEnabled: r.whitelabel_enabled === true,
           plan: r.plan,
         },
         journey: buildJourneyPayload(propostaRow),

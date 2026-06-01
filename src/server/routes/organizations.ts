@@ -5,12 +5,24 @@ import { z } from 'zod'
 import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth, requireOrgRole } from '../auth/middleware.js'
 
+import type { OfferType } from '../../../lib/layoutContext.js';
+
+const OFFER_TYPES = [
+  'consultoria',
+  'agencia',
+  'recorrente',
+  'saas',
+  'evento',
+  'generico',
+] as const;
+
 const updateSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   cnpj: z.string().trim().max(32).optional().nullable(),
   logoUrl: z.string().max(500_000).optional().nullable(),
   signatureUrl: z.string().max(500_000).optional().nullable(),
   onboarded: z.boolean().optional(),
+  segment: z.enum(OFFER_TYPES).optional().nullable(),
 })
 
 const inviteSchema = z.object({
@@ -21,6 +33,29 @@ const inviteSchema = z.object({
 const roleSchema = z.object({
   role: z.enum(['owner', 'admin', 'member']),
 })
+
+function serializeOrgRow(org: Record<string, unknown>) {
+  return {
+    id: org.id,
+    name: org.name,
+    cnpj: org.cnpj,
+    logoUrl: org.logo_url,
+    signatureUrl: org.signature_url,
+    primaryColor: org.primary_color ?? null,
+    secondaryColor: org.secondary_color ?? null,
+    whitelabelEnabled: org.whitelabel_enabled === true,
+    plan: org.plan,
+    billingCycle: org.billing_cycle,
+    trialEndsAt: org.trial_ends_at,
+    planStartedAt: org.plan_started_at,
+    planRenewsAt: org.plan_renews_at,
+    stripeCustomerId: org.stripe_customer_id,
+    stripeSubscriptionId: org.stripe_subscription_id,
+    onboarded: org.onboarded,
+    segment: org.segment ?? null,
+    role: org.role,
+  }
+}
 
 export function createOrganizationsRouter(deps: {
   pool: Pool
@@ -36,9 +71,11 @@ export function createOrganizationsRouter(deps: {
     if (!req.auth) return res.status(401).end()
     try {
       const { rows } = await pool.query(
-        `SELECT o.id, o.name, o.cnpj, o.logo_url, o.signature_url, o.plan, o.billing_cycle,
+        `SELECT o.id, o.name, o.cnpj, o.logo_url, o.signature_url,
+                o.primary_color, o.secondary_color, o.whitelabel_enabled,
+                o.plan, o.billing_cycle,
                 o.trial_ends_at, o.plan_started_at, o.plan_renews_at,
-                o.stripe_customer_id, o.stripe_subscription_id, o.onboarded, m.role
+                o.stripe_customer_id, o.stripe_subscription_id, o.onboarded, o.segment, m.role
          FROM organizations o
          JOIN memberships m ON m.organization_id = o.id AND m.user_id = $1
          WHERE o.id = $2`,
@@ -46,22 +83,7 @@ export function createOrganizationsRouter(deps: {
       )
       const org = rows[0]
       if (!org) return res.status(404).json({ error: 'Organização não encontrada' })
-      return res.json({
-        id: org.id,
-        name: org.name,
-        cnpj: org.cnpj,
-        logoUrl: org.logo_url,
-        signatureUrl: org.signature_url,
-        plan: org.plan,
-        billingCycle: org.billing_cycle,
-        trialEndsAt: org.trial_ends_at,
-        planStartedAt: org.plan_started_at,
-        planRenewsAt: org.plan_renews_at,
-        stripeCustomerId: org.stripe_customer_id,
-        stripeSubscriptionId: org.stripe_subscription_id,
-        onboarded: org.onboarded,
-        role: org.role,
-      })
+      return res.json(serializeOrgRow(org))
     } catch (err) {
       console.error('[orgs/current] erro:', err)
       return res.status(500).json({ error: 'Erro ao buscar organização' })
@@ -82,11 +104,12 @@ export function createOrganizationsRouter(deps: {
            cnpj = CASE WHEN $3::boolean THEN $4 ELSE cnpj END,
            logo_url = CASE WHEN $5::boolean THEN $6 ELSE logo_url END,
            signature_url = CASE WHEN $7::boolean THEN $8 ELSE signature_url END,
-           onboarded = COALESCE($9, onboarded)
+           onboarded = COALESCE($9, onboarded),
+           segment = CASE WHEN $10::boolean THEN $11 ELSE segment END
          WHERE id = $1
-         RETURNING id, name, cnpj, logo_url, signature_url, plan, billing_cycle,
-                   trial_ends_at, plan_started_at, plan_renews_at,
-                   stripe_customer_id, stripe_subscription_id, onboarded`,
+         RETURNING id, name, cnpj, logo_url, signature_url, primary_color, secondary_color,
+                   whitelabel_enabled, plan, billing_cycle, trial_ends_at, plan_started_at,
+                   plan_renews_at, stripe_customer_id, stripe_subscription_id, onboarded, segment`,
         [
           req.auth.orgId,
           patch.name ?? null,
@@ -97,6 +120,8 @@ export function createOrganizationsRouter(deps: {
           'signatureUrl' in patch,
           patch.signatureUrl ?? null,
           patch.onboarded ?? null,
+          'segment' in patch,
+          patch.segment ?? null,
         ],
       )
       const o = rows[0]
@@ -114,6 +139,9 @@ export function createOrganizationsRouter(deps: {
         cnpj: o.cnpj,
         logoUrl: o.logo_url,
         signatureUrl: o.signature_url,
+        primaryColor: o.primary_color ?? null,
+        secondaryColor: o.secondary_color ?? null,
+        whitelabelEnabled: o.whitelabel_enabled === true,
         plan: o.plan,
         billingCycle: o.billing_cycle,
         trialEndsAt: o.trial_ends_at,
@@ -122,9 +150,10 @@ export function createOrganizationsRouter(deps: {
         stripeCustomerId: o.stripe_customer_id,
         stripeSubscriptionId: o.stripe_subscription_id,
         onboarded: o.onboarded,
+        segment: o.segment ?? null,
       })
     } catch (err) {
-      console.error('[orgs/update] erro:', err)
+      console.error('[orgs/current] patch erro:', err)
       return res.status(500).json({ error: 'Erro ao atualizar organização' })
     }
   })

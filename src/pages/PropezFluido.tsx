@@ -292,6 +292,10 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
   }
 
   const handleAdvance = async () => {
+    if (step === 1 && !formData.modeloId) {
+      alert('Selecione um modelo e confirme no preview antes de continuar.');
+      return;
+    }
     if (step === 2 && !formData.clienteNome) {
       alert('Preencha o nome do cliente.');
       return;

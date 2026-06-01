@@ -5,7 +5,8 @@ import { z } from 'zod';
 import type { EnvironmentConfig } from '../env.js';
 import { buildRequireAuth } from '../auth/middleware.js';
 import { createRateLimit } from '../middleware/rateLimit.js';
-import { getAllowedWidgets } from '../../lib/featureFlags.js';
+import { BUSINESS_ONLY_WIDGETS, getIaAllowedWidgets } from '../../lib/featureFlags.js';
+import { inferLayoutContext, type OfferType } from '../../lib/layoutContext.js';
 import { validateGeneratedLayout, LayoutValidationError } from '../validation/generatedLayout.js';
 import { validateGeneratedContract, ContractValidationError } from '../validation/generatedContract.js';
 import {
@@ -27,13 +28,51 @@ import {
   buildContractSystemPrompt,
   buildContractUserPrompt,
 } from '../services/llm/prompts/generateContract.js';
+import {
+  hydrateGeneratedLayout,
+  inferPageLayoutFromContext,
+  rehydrateModelImages,
+} from '../services/llm/hydrateGeneratedLayout.js';
+import { buildPollinationsImageUrl } from '../services/images/pollinationsImageGenerator.js';
+import type { ImageSlot } from '../services/images/imageSlotCatalog.js';
+import { searchPhoto } from '../services/images/unsplashResolver.js';
+import type { BuilderElement } from '../../types/builder.js';
+
+const OFFER_TYPES = [
+  'consultoria',
+  'agencia',
+  'recorrente',
+  'saas',
+  'evento',
+  'generico',
+] as const;
 
 const promptSchema = z.object({
   prompt: z.string().trim().min(20).max(2000),
+  useCompanyProfile: z.boolean().optional().default(false),
 });
 
 const contractPromptSchema = promptSchema.extend({
   useCompanyProfile: z.boolean().optional().default(true),
+});
+
+const generateImageSchema = z.object({
+  prompt: z.string().trim().min(10).max(500),
+  width: z.number().int().min(400).max(1920).optional(),
+  height: z.number().int().min(400).max(1920).optional(),
+  negativePrompt: z.string().trim().max(300).optional(),
+  source: z.enum(['generate', 'stock']).optional().default('generate'),
+  offerType: z.enum(OFFER_TYPES).optional(),
+  slot: z
+    .enum(['hero_banner', 'card', 'inline', 'avatar', 'gallery', 'carousel'])
+    .optional(),
+});
+
+const resolveModelImagesSchema = z.object({
+  elementos: z.array(z.custom<BuilderElement>()),
+  brief: z.string().trim().max(2000).optional(),
+  offerType: z.enum(OFFER_TYPES).optional(),
+  regenerate: z.union([z.literal('all'), z.array(z.string())]).optional(),
 });
 
 function handleIaError(res: Response, err: unknown): void {
@@ -83,6 +122,24 @@ async function callGroqJson(params: {
   return parseJsonContent(content);
 }
 
+async function loadOrgImageContext(
+  pool: Pool,
+  orgId: string,
+): Promise<{ segment: OfferType; logoUrl: string | null; name: string | null }> {
+  const { rows } = await pool.query<{
+    segment: string | null;
+    logo_url: string | null;
+    name: string;
+  }>(`SELECT segment, logo_url, name FROM organizations WHERE id = $1`, [orgId]);
+  const row = rows[0];
+  const segment = (row?.segment as OfferType) ?? 'generico';
+  return {
+    segment,
+    logoUrl: row?.logo_url?.trim() || null,
+    name: row?.name?.trim() || null,
+  };
+}
+
 export function createIaRouter(deps: { pool: Pool; config: EnvironmentConfig }): Router {
   const { pool, config } = deps;
   const router = express.Router();
@@ -91,9 +148,15 @@ export function createIaRouter(deps: { pool: Pool; config: EnvironmentConfig }):
     createRateLimit({
       windowMs: 60_000,
       max: 10,
-      key: (req) => `${req.auth?.orgId ?? req.ip ?? 'anon'}`,
+      key: (req) => `${req.auth?.orgId ?? req.ip ?? 'anon'}:ia`,
     }),
   );
+
+  const imageLimiter = createRateLimit({
+    windowMs: 60_000,
+    max: 10,
+    key: (req) => `${req.auth?.orgId ?? req.ip ?? 'anon'}:img`,
+  });
 
   router.post('/generate-layout', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end();
@@ -104,29 +167,106 @@ export function createIaRouter(deps: { pool: Pool; config: EnvironmentConfig }):
 
     try {
       const { plan } = await assertIaAllowed(pool, req.auth.orgId);
-      const allowed = getAllowedWidgets(plan);
-      const allowedTypes = [...allowed];
+      const allowed = getIaAllowedWidgets(plan);
+      const hasMarketing = BUSINESS_ONLY_WIDGETS.some((t) => allowed.has(t));
+      const orgCtx = await loadOrgImageContext(pool, req.auth.orgId);
+      const context = inferLayoutContext(parsed.data.prompt, hasMarketing, orgCtx.segment);
+
+      let companyName: string | null = null;
+      let organizationLogoUrl: string | null = null;
+      if (parsed.data.useCompanyProfile) {
+        companyName = orgCtx.name;
+        organizationLogoUrl = orgCtx.logoUrl;
+      }
 
       let raw: unknown;
       try {
         raw = await callGroqJson({
-          system: buildLayoutSystemPrompt(parsed.data.prompt, allowedTypes),
-          user: buildLayoutUserPrompt(parsed.data.prompt),
+          system: buildLayoutSystemPrompt(parsed.data.prompt, plan),
+          user: buildLayoutUserPrompt(parsed.data.prompt, companyName),
           temperature: 0.55,
-          max_tokens: 4096,
+          max_tokens: 6144,
         });
       } catch {
         raw = await callGroqJson({
-          system: buildLayoutSystemPrompt(parsed.data.prompt, allowedTypes),
-          user: buildLayoutUserPrompt(parsed.data.prompt),
+          system: buildLayoutSystemPrompt(parsed.data.prompt, plan),
+          user: buildLayoutUserPrompt(parsed.data.prompt, companyName),
           temperature: 0.45,
-          max_tokens: 4096,
+          max_tokens: 6144,
         });
       }
 
-      const elementos = validateGeneratedLayout(raw, allowed);
+      const validated = validateGeneratedLayout(raw, allowed);
+      const elementos = await hydrateGeneratedLayout(validated, {
+        userPrompt: parsed.data.prompt,
+        context,
+        allowed,
+        imageMode: 'generate',
+        organizationLogoUrl,
+      });
+      const pageLayout = inferPageLayoutFromContext(context);
+
       await incrementIaUsage(pool, req.auth.orgId);
-      return res.json({ elementos });
+      return res.json({ elementos, pageLayout, offerType: context.offerType });
+    } catch (err) {
+      handleIaError(res, err);
+    }
+  });
+
+  router.post('/resolve-model-images', imageLimiter, async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end();
+    const parsed = resolveModelImagesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Dados inválidos para resolver imagens.' });
+    }
+
+    try {
+      const orgCtx = await loadOrgImageContext(pool, req.auth.orgId);
+      const offerType = parsed.data.offerType ?? orgCtx.segment;
+      const elementos = await rehydrateModelImages(parsed.data.elementos, {
+        offerType,
+        imageMode: 'generate',
+        organizationLogoUrl: orgCtx.logoUrl,
+        brief: parsed.data.brief,
+        regenerate: parsed.data.regenerate,
+      });
+      return res.json({ elementos, offerType });
+    } catch (err) {
+      handleIaError(res, err);
+    }
+  });
+
+  router.post('/generate-image', imageLimiter, async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end();
+    const parsed = generateImageSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Descreva a imagem em 10 a 500 caracteres.' });
+    }
+
+    try {
+      const { prompt, width, height, source, offerType: bodyOfferType, slot } = parsed.data;
+      const orgCtx = await loadOrgImageContext(pool, req.auth.orgId);
+      const offerType = bodyOfferType ?? orgCtx.segment;
+
+      if (source === 'stock') {
+        const url = await searchPhoto(prompt, offerType);
+        return res.json({ url, source: 'stock' as const });
+      }
+
+      const generated = buildPollinationsImageUrl({
+        prompt,
+        width,
+        height,
+        offerType,
+        slot: slot as ImageSlot | undefined,
+      });
+
+      return res.json({
+        url: generated.url,
+        width: generated.width,
+        height: generated.height,
+        source: 'generate' as const,
+      });
     } catch (err) {
       handleIaError(res, err);
     }

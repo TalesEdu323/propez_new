@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Mail, Phone, MapPin, DollarSign, Users, BookOpen } from 'lucide-react';
 import { PropezLogo } from '../components/PropezLogo';
-
-const PROSYNC_URL = import.meta.env.VITE_PROSYNC_URL || 'https://prosync.tech';
+import { TAGGO_COMPANY, TAGGO_LAB_PRODUCTS, TAGGO_SUITE_PRODUCTS } from './company';
 
 type TaggoMarketingFooterProps = {
   className?: string;
@@ -10,6 +9,7 @@ type TaggoMarketingFooterProps = {
 
 export function TaggoMarketingFooter({ className = '' }: TaggoMarketingFooterProps) {
   const year = new Date().getFullYear();
+  const { brandName, email, phone, address, labName, suiteName } = TAGGO_COMPANY;
 
   return (
     <footer className={`border-t border-gray-200 bg-white py-6 sm:py-8 md:py-10 ${className}`}>
@@ -21,93 +21,50 @@ export function TaggoMarketingFooter({ className = '' }: TaggoMarketingFooterPro
             </Link>
             <p className="text-sm sm:text-base text-gray-500 leading-relaxed max-w-md">
               Propostas comerciais profissionais — builder visual, link público, assinatura digital e pagamentos em um
-              só lugar.
+              só lugar. Produto {brandName}.
             </p>
           </div>
 
           <div className="p-3 sm:p-4 md:p-5">
-            <h4 className="font-bold mb-2 sm:mb-3 text-sm sm:text-base text-gray-900">Taggo Lab</h4>
+            <h4 className="font-bold mb-2 sm:mb-3 text-sm sm:text-base text-gray-900">{labName}</h4>
             <ul className="space-y-2 sm:space-y-2.5">
-              <li>
-                <a
-                  href="https://social.taggo.com.br/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-brand-600 transition-colors font-medium text-xs sm:text-sm block text-gray-900"
-                >
-                  Para Infoprodutores
-                </a>
-                <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 leading-relaxed">
-                  Sistema completo de automação
-                </div>
-              </li>
-              <li>
-                <a
-                  href="https://lp.taggo.com.br/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-brand-600 transition-colors font-medium text-xs sm:text-sm block text-gray-900"
-                >
-                  Taggo Software House
-                </a>
-                <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 leading-relaxed">
-                  Transforme suas ideias em realidade
-                </div>
-              </li>
-              <li>
-                <a
-                  href="https://adv.taggo.com.br/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-brand-600 transition-colors font-medium text-xs sm:text-sm block text-gray-900"
-                >
-                  Para Advogados
-                </a>
-                <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 leading-relaxed">
-                  Sites profissionais para escritórios
-                </div>
-              </li>
+              {TAGGO_LAB_PRODUCTS.map((item) => (
+                <li key={item.href}>
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-brand-600 transition-colors font-medium text-xs sm:text-sm block text-gray-900"
+                  >
+                    {item.name}
+                  </a>
+                  <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 leading-relaxed">{item.subtitle}</div>
+                </li>
+              ))}
             </ul>
           </div>
 
           <div className="p-3 sm:p-4 md:p-5">
-            <h4 className="font-bold mb-2 sm:mb-3 text-sm sm:text-base text-gray-900">Taggo Growth Suite</h4>
+            <h4 className="font-bold mb-2 sm:mb-3 text-sm sm:text-base text-gray-900">{suiteName}</h4>
             <ul className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
-              <li>
-                <Link to="/" className="hover:text-brand-600 transition-colors text-gray-900 font-medium">
-                  Propez — Propostas comerciais
-                </Link>
-              </li>
-              <li>
-                <a
-                  href={PROSYNC_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-brand-600 transition-colors text-gray-900"
-                >
-                  ProSync — Gestão 360°
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://cronnus.taggo.com.br/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-brand-600 transition-colors text-gray-900"
-                >
-                  Cronnos AI
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://themis.taggo.com.br/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-brand-600 transition-colors text-gray-900"
-                >
-                  Themis
-                </a>
-              </li>
+              {TAGGO_SUITE_PRODUCTS.map((item) => (
+                <li key={item.name}>
+                  {item.internal ? (
+                    <Link to={item.href} className="hover:text-brand-600 transition-colors text-gray-900 font-medium">
+                      {item.name}
+                    </Link>
+                  ) : (
+                    <a
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-brand-600 transition-colors text-gray-900"
+                    >
+                      {item.name}
+                    </a>
+                  )}
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -116,20 +73,22 @@ export function TaggoMarketingFooter({ className = '' }: TaggoMarketingFooterPro
             <ul className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-gray-500">
               <li className="flex items-center gap-1.5 sm:gap-2">
                 <Mail className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-                <a href="mailto:contato@taggo.com.br" className="hover:text-brand-600 transition-colors">
-                  contato@taggo.com.br
+                <a href={`mailto:${email}`} className="hover:text-brand-600 transition-colors">
+                  {email}
                 </a>
               </li>
               <li className="flex items-center gap-1.5 sm:gap-2">
                 <Phone className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-                <span>(11) 91424-4166</span>
+                <a href={`tel:${TAGGO_COMPANY.phoneTel}`} className="hover:text-brand-600 transition-colors">
+                  {phone}
+                </a>
               </li>
               <li className="flex items-start gap-1.5 sm:gap-2">
                 <MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 mt-0.5" />
                 <span>
-                  R. Topázio, 534 - Sala 07
+                  {address.street}
                   <br />
-                  Jardim Nomura, Cotia/SP
+                  {address.neighborhood}, {address.city}/{address.state}
                 </span>
               </li>
               <li className="mt-2 pt-2 border-t border-gray-200 flex items-center gap-1.5 sm:gap-2">
@@ -165,9 +124,11 @@ export function TaggoMarketingFooter({ className = '' }: TaggoMarketingFooterPro
         </div>
 
         <div className="border-t border-gray-200 pt-4 sm:pt-5 md:pt-6 text-center text-xs sm:text-sm text-gray-500 px-4">
-          <p>&copy; {year} Taggo. Todos os direitos reservados.</p>
+          <p>
+            &copy; {year} {brandName}. Todos os direitos reservados.
+          </p>
           <p className="mt-1.5 sm:mt-2">
-            Estrutura mantida continuamente pela Taggo para garantir seu sucesso.
+            Estrutura mantida continuamente pela {brandName} para garantir seu sucesso.
           </p>
         </div>
       </div>

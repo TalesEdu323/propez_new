@@ -1,4 +1,4 @@
-import type { BuilderElement } from '../types/builder';
+import type { BuilderElement, BuilderPageLayout } from '../types/builder';
 import { api, ApiError } from './apiClient';
 import { store } from './store';
 
@@ -9,6 +9,15 @@ export interface IaContractResult {
 
 export interface IaLayoutResult {
   elementos: BuilderElement[];
+  pageLayout?: BuilderPageLayout;
+  offerType?: import('./layoutContext').OfferType;
+}
+
+export interface IaGenerateImageResult {
+  url: string;
+  source: 'generate' | 'stock';
+  width?: number;
+  height?: number;
 }
 
 export interface IaErrorBody {
@@ -19,8 +28,26 @@ export interface IaErrorBody {
 }
 
 export interface GenerateContractOptions {
-  /** Inclui nome/CNPJ da organização no contexto da IA (default: true). */
   useCompanyProfile?: boolean;
+}
+
+export interface GenerateLayoutOptions {
+  useCompanyProfile?: boolean;
+}
+
+export interface GenerateImageOptions {
+  width?: number;
+  height?: number;
+  negativePrompt?: string;
+  source?: 'generate' | 'stock';
+  offerType?: import('./layoutContext').OfferType;
+  slot?: 'hero_banner' | 'card' | 'inline' | 'avatar' | 'gallery' | 'carousel';
+}
+
+export interface ResolveModelImagesOptions {
+  brief?: string;
+  offerType?: import('./layoutContext').OfferType;
+  regenerate?: 'all' | string[];
 }
 
 function bumpLocalIaUsage(): void {
@@ -48,14 +75,46 @@ async function postIa<T>(path: string, body: Record<string, unknown>): Promise<T
   }
 }
 
+async function postIaNoUsage<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  try {
+    return await api.post<T>(`/api/ia/${path}`, body);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError(500, 'Falha na requisição de imagem');
+  }
+}
+
 export const iaApi = {
-  generateLayout: (prompt: string) =>
-    postIa<IaLayoutResult>('generate-layout', { prompt }),
+  generateLayout: (prompt: string, options?: GenerateLayoutOptions) =>
+    postIa<IaLayoutResult>('generate-layout', {
+      prompt,
+      useCompanyProfile: options?.useCompanyProfile ?? false,
+    }),
   generateContract: (prompt: string, options?: GenerateContractOptions) =>
     postIa<IaContractResult>('generate-contract', {
       prompt,
       useCompanyProfile: options?.useCompanyProfile ?? true,
     }),
+  generateImage: (prompt: string, options?: GenerateImageOptions) =>
+    postIaNoUsage<IaGenerateImageResult>('generate-image', {
+      prompt,
+      width: options?.width,
+      height: options?.height,
+      negativePrompt: options?.negativePrompt,
+      source: options?.source ?? 'generate',
+      offerType: options?.offerType,
+      slot: options?.slot,
+    }),
+  resolveModelImages: (elementos: BuilderElement[], options?: ResolveModelImagesOptions) =>
+    postIaNoUsage<{ elementos: BuilderElement[]; offerType?: import('./layoutContext').OfferType }>(
+      'resolve-model-images',
+      {
+        elementos,
+        brief: options?.brief,
+        offerType: options?.offerType,
+        regenerate: options?.regenerate,
+      },
+    ),
 };
 
 export function getIaErrorMessage(err: unknown): string {

@@ -112,40 +112,67 @@ export function BuilderToolbar({
       </div>
 
       {!previewMode && !embedded && (
-        <div className="flex items-center gap-2">
-          {onImport && (
-            <label className="btn-secondary cursor-pointer">
-              <Upload className="w-4 h-4" /> Importar
-              <input type="file" accept=".json" onChange={onImport} className="hidden" />
-            </label>
-          )}
-          {onExport && (
-            <button type="button" onClick={onExport} className="btn-secondary relative">
-              {exportLocked ? <Lock className="w-4 h-4 text-amber-500" /> : <Download className="w-4 h-4" />}
-              Exportar
-              {exportLocked && (
-                <span className="ml-1 text-[9px] font-bold text-amber-600 uppercase tracking-widest">Pro</span>
+        <div className="flex items-center gap-1.5">
+          {(onImport || onExport) && (
+            <div className="flex items-center bg-zinc-100 rounded-xl p-1 border border-black/5">
+              {onImport && (
+                <label
+                  title="Importar layout (JSON)"
+                  aria-label="Importar layout (JSON)"
+                  className="p-2 rounded-lg transition-colors text-zinc-700 hover:bg-white hover:text-zinc-900 cursor-pointer"
+                >
+                  <Upload className="w-4 h-4" />
+                  <input type="file" accept=".json" onChange={onImport} className="hidden" />
+                </label>
               )}
-            </button>
+              {onExport && (
+                <button
+                  type="button"
+                  title={exportLocked ? 'Exportar layout — plano Pro' : 'Exportar layout'}
+                  aria-label={exportLocked ? 'Exportar layout — plano Pro' : 'Exportar layout'}
+                  onClick={onExport}
+                  className="relative p-2 rounded-lg transition-colors text-zinc-700 hover:bg-white hover:text-zinc-900"
+                >
+                  {exportLocked ? <Lock className="w-4 h-4 text-amber-500" /> : <Download className="w-4 h-4" />}
+                  {exportLocked && (
+                    <span className="absolute top-0.5 right-0.5 text-[7px] font-bold text-amber-600 uppercase leading-none">Pro</span>
+                  )}
+                </button>
+              )}
+            </div>
           )}
-          {(onImport || onExport) && <div className="w-px h-6 bg-black/10 mx-2" />}
-          <button type="button" onClick={onClear} className="btn-danger">
-            <Trash className="w-4 h-4" /> Limpar
+          <button
+            type="button"
+            title="Limpar canvas"
+            aria-label="Limpar canvas"
+            onClick={onClear}
+            className="p-2 rounded-xl transition-colors text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100"
+          >
+            <Trash className="w-4 h-4" />
           </button>
           {onSave && (
-            <>
-              <div className="w-px h-6 bg-black/10 mx-2" />
-              <button type="button" onClick={onSave} className="btn-primary">
-                <Save className="w-4 h-4" /> {saveLabel}
-              </button>
-            </>
+            <button
+              type="button"
+              title={saveLabel}
+              aria-label={saveLabel}
+              onClick={onSave}
+              className="p-2 rounded-xl bg-zinc-900 text-white hover:bg-black transition-all active:scale-[0.97] shadow-lg shadow-black/5"
+            >
+              <Save className="w-4 h-4" />
+            </button>
           )}
         </div>
       )}
       {!previewMode && embedded && onSave && (
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={onSave} className="btn-primary">
-            <Save className="w-4 h-4" /> {saveLabel}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            title={saveLabel}
+            aria-label={saveLabel}
+            onClick={onSave}
+            className="p-2 rounded-xl bg-zinc-900 text-white hover:bg-black transition-all active:scale-[0.97] shadow-lg shadow-black/5"
+          >
+            <Save className="w-4 h-4" />
           </button>
         </div>
       )}

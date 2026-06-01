@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Rocket, Upload, CheckCircle2, User, Building2, FileText, Image as ImageIcon } from 'lucide-react';
 import { store, UserConfig } from '../lib/store';
+import type { OfferType } from '../lib/layoutContext';
+import { SEGMENT_OPTIONS } from '../lib/segmentLabels';
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -14,7 +16,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     cnpj: '',
     logo: '',
     assinatura: '',
-    onboarded: false
+    onboarded: false,
+    segment: 'generico',
   });
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,6 +112,22 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                       className="w-full bg-zinc-50 border border-zinc-100 rounded-2xl pl-12 pr-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-400 mb-3 uppercase tracking-widest">Qual é o seu nicho?</label>
+                  <select
+                    value={config.segment ?? 'generico'}
+                    onChange={(e) => setConfig({ ...config, segment: e.target.value as OfferType })}
+                    className="w-full bg-zinc-50 border border-zinc-100 rounded-2xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+                  >
+                    {SEGMENT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-zinc-400 mt-2">Usamos o nicho para personalizar imagens e layouts das propostas.</p>
                 </div>
               </div>
 

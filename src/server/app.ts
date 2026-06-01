@@ -35,7 +35,11 @@ import {
   createCheckoutRouter,
   createStripeWebhookRouter,
 } from './routes/stripe.js';
-import { createHealthRouter } from './routes/health.js';
+import { createPlatformRouter } from './routes/platform.js';
+import { createRequestsRouter } from './routes/requests.js';
+import { createSeoRouter } from './routes/seo.js';
+import { createBlogRouter } from './routes/blog.js';
+import { createNewsletterRouter } from './routes/newsletter.js';
 import { createNotificationsRouter } from './routes/notifications.js';
 import { createAdminRouter } from './routes/admin.js';
 import { createMarketplaceRouter, createAdminMarketplaceRouter } from './routes/marketplace.js';
@@ -136,6 +140,8 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
 
   // 5) CRUDs autenticados (todas com requireAuth internamente)
   app.use('/api/organizations', createOrganizationsRouter({ pool, config }));
+  app.use('/api/platform', createPlatformRouter({ pool }));
+  app.use('/api/requests', createRequestsRouter({ pool, config }));
   app.use('/api/clientes', createClientesRouter({ pool, config }));
   app.use('/api/servicos', createServicosRouter({ pool, config }));
   app.use('/api/contratos', createContratosRouter({ pool, config }));
@@ -183,6 +189,11 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   app.use('/api', createHealthRouter({ pool, integrationsConfig, config }));
   app.use('/api', createCheckoutRouter({ stripe, config }));
   app.use('/api', createNotificationsRouter({ pool, config }));
+  app.use('/api', createBlogRouter({ pool }));
+  app.use('/api', createNewsletterRouter({ pool }));
+
+  // SEO (dev/produção local — na Vercel use api/robots.ts e api/sitemap.ts)
+  app.use(createSeoRouter({ pool, config }));
 
   // 10) Error handler global sempre por último
   app.use(errorHandler);

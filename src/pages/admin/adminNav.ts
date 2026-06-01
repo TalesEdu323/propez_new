@@ -9,6 +9,7 @@ import {
   Users,
   Wrench,
   LayoutTemplate,
+  Inbox,
   BookOpen,
 } from 'lucide-react';
 import type { AppRoute } from '../../types/navigation';
@@ -61,6 +62,11 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     id: 'admin-operations',
     label: 'Operações',
     icon: Wrench,
+  },
+  {
+    id: 'admin-requests',
+    label: 'Solicitações',
+    icon: Inbox,
   },
   {
     id: 'admin-marketplace',

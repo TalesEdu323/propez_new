@@ -5,6 +5,7 @@ import { z } from 'zod'
 import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import { buildRequirePlatformAdmin } from '../auth/platformAdmin.js'
+import { registerAdminServiceRequestRoutes, adminOrgBrandPatchSchema, applyAdminOrgBrandPatch } from './adminServiceRequests.js'
 import { registerAdminAnalyticsRoutes, enrichOrgDetail } from './adminAnalytics.js'
 import { isOrgActiveForMrr, mrrBrlForPlan } from '../services/mrrPricing.js'
 function monthlyEquivalent(plan: string | null | undefined, cycle: string | null | undefined): number {
@@ -21,7 +22,7 @@ const updateOrgSchema = z.object({
   planRenewsAt: z.string().datetime().nullable().optional(),
   trialEndsAt: z.string().datetime().nullable().optional(),
   csNotes: z.string().max(10000).optional(),
-})
+}).merge(adminOrgBrandPatchSchema)
 
 const updateUserSchema = z.object({
   isPlatformAdmin: z.boolean(),
@@ -37,6 +38,8 @@ export function createAdminRouter(deps: {
   const requirePlatformAdmin = buildRequirePlatformAdmin({ pool, config })
 
   router.use(requireAuth, requirePlatformAdmin)
+
+  registerAdminServiceRequestRoutes(router, { pool, config })
 
   registerAdminAnalyticsRoutes(router, { pool, config })
 
@@ -257,7 +260,8 @@ export function createAdminRouter(deps: {
   router.get('/organizations/:id', async (req: Request, res: Response) => {
     try {
       const orgRes = await pool.query(
-        `SELECT id, name, cnpj, logo_url, plan, billing_cycle,
+        `SELECT id, name, cnpj, logo_url, primary_color, secondary_color,
+                whitelabel_enabled, plan, billing_cycle,
                 trial_ends_at, plan_started_at, plan_renews_at,
                 stripe_customer_id, stripe_subscription_id, onboarded,
                 cs_notes, created_at, updated_at
@@ -292,6 +296,9 @@ export function createAdminRouter(deps: {
           name: org.name,
           cnpj: org.cnpj,
           logoUrl: org.logo_url,
+          primaryColor: org.primary_color ?? null,
+          secondaryColor: org.secondary_color ?? null,
+          whitelabelEnabled: org.whitelabel_enabled === true,
           plan: org.plan,
           billingCycle: org.billing_cycle,
           trialEndsAt: org.trial_ends_at,
@@ -342,6 +349,18 @@ export function createAdminRouter(deps: {
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' })
     const patch = parsed.data
     try {
+      const brandPatch = {
+        whitelabelEnabled: patch.whitelabelEnabled,
+        logoUrl: patch.logoUrl,
+        primaryColor: patch.primaryColor,
+        secondaryColor: patch.secondaryColor,
+      };
+      const hasBrand =
+        patch.whitelabelEnabled !== undefined ||
+        'logoUrl' in patch ||
+        'primaryColor' in patch ||
+        'secondaryColor' in patch;
+
       const { rows } = await pool.query(
         `UPDATE organizations SET
            plan = COALESCE($2, plan),
@@ -365,6 +384,11 @@ export function createAdminRouter(deps: {
         ],
       )
       if (rows.length === 0) return res.status(404).json({ error: 'Organização não encontrada' })
+
+      if (hasBrand) {
+        await applyAdminOrgBrandPatch(pool, req.params.id, brandPatch)
+      }
+
       return res.json({ ok: true })
     } catch (err) {
       console.error('[admin/orgs/update] erro:', err)

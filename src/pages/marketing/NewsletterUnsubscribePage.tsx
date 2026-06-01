@@ -20,7 +20,12 @@ export default function NewsletterUnsubscribePage() {
 
   return (
     <MarketingLayout>
-      <PageMeta title="Cancelar inscrição" path="/newsletter/unsubscribe" />
+      <PageMeta
+        title="Cancelar inscrição"
+        description="Cancelamento de newsletter Propez."
+        path="/newsletter/unsubscribe"
+        noindex
+      />
       <div className="container mx-auto px-4 py-24 max-w-md text-center">
         {status === 'loading' && <p className="text-zinc-500">Processando...</p>}
         {status === 'ok' && (

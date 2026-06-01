@@ -4,6 +4,7 @@ import { Check, Sparkles, ChevronLeft, Loader2 } from 'lucide-react';
 import { store, resolvePlan } from '../lib/store';
 import { useUserConfig } from '../hooks/useStoreEntity';
 import { PLAN_META, type PlanTier } from '../lib/featureFlags';
+import { PricingEnterpriseCta } from '../components/PricingEnterpriseCta';
 import type { NavigateFn } from '../types/navigation';
 
 interface StripePlanApi {
@@ -305,6 +306,14 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
                   >
                     Continuar no Free
                   </button>
+                ) : planId === 'business' ? (
+                  <PricingEnterpriseCta
+                    className={`w-full h-12 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg ${
+                      isHighlighted
+                        ? 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-black/10'
+                        : 'bg-white text-zinc-900 border border-zinc-200 hover:border-zinc-900'
+                    }`}
+                  />
                 ) : (
                   <button
                     onClick={() => handleSubscribe(planId)}

@@ -3,9 +3,11 @@ import { FileText } from 'lucide-react';
 import { hydrateStore, isStoreHydrated, store, Proposta } from '../lib/store';
 import { RenderElement } from '../components/builder/RenderElement';
 import { PageShell } from '../components/builder/PageShell';
-import { normalizePageLayout } from '../lib/pageLayout';
+import { normalizePageLayout, mergeOrgBrandIntoPageLayout } from '../lib/pageLayout';
 import { motion, AnimatePresence } from 'motion/react';
 import { updateProposalStatusInCRM } from '../services/crmApi';
+import { resolveOrgBrand } from '../lib/orgBrand';
+import { PublicOrgHeader } from './publicProposta/PublicOrgHeader';
 import {
   sendToRubricaForSigning,
   getRubricaStatus,
@@ -26,6 +28,12 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
   const propostas = usePropostas();
   const userConfig = useUserConfig();
   const proposta: Proposta | null = useMemo(() => propostas.find(p => p.id === id) ?? null, [propostas, id]);
+  const orgBrand = useMemo(() => resolveOrgBrand(null, userConfig), [userConfig]);
+  const pageLayout = useMemo(() => {
+    if (!proposta) return normalizePageLayout(undefined);
+    return mergeOrgBrandIntoPageLayout(normalizePageLayout(proposta.pageLayout), orgBrand);
+  }, [proposta, orgBrand]);
+  const showOrgHeader = orgBrand.isWhiteLabel;
   const [isResolvingProposal, setIsResolvingProposal] = useState(false);
 
   const [viewState, setViewState] = useState<'proposal' | 'contract'>('proposal');
@@ -261,6 +269,14 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
 
       <ProposalHeader clienteNome={proposta.cliente_nome} onBack={() => navigate('propostas')} />
 
+      {showOrgHeader && (
+        <PublicOrgHeader
+          name={userConfig.nome || orgBrand.orgName}
+          logoUrl={orgBrand.logoUrl}
+          primaryColor={orgBrand.primaryColor}
+        />
+      )}
+
       <div className="pt-24 px-4 pb-12 relative z-10">
         <AnimatePresence mode="wait">
           {proposta.elementos.length === 0 ? (
@@ -286,13 +302,13 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
               className="pb-24"
             >
               <div className="w-full bg-white">
-                <PageShell layout={normalizePageLayout(proposta.pageLayout)}>
+                <PageShell layout={pageLayout}>
                   {proposta.elementos.map((el) => (
                     <RenderElement
                       key={el.id}
                       element={el}
                       previewMode
-                      pageLayout={normalizePageLayout(proposta.pageLayout)}
+                      pageLayout={pageLayout}
                       onProposalAction={
                         proposta.status === 'pendente'
                           ? () => { void handleApprove(); }

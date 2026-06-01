@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { LayoutTemplate, Plus, Sparkles } from 'lucide-react';
-import { STARTER_TEMPLATES } from '../../data/starterTemplates';
-import type { BuilderElement } from '../../types/builder';
+import { LayoutTemplate, Plus, Sparkles, Eye } from 'lucide-react';
+import { STARTER_TEMPLATES, applyStarterTemplate } from '../../data/starterTemplates';
+import type { BuilderElement, BuilderPageLayout } from '../../types/builder';
+import type { OfferType } from '../../lib/layoutContext';
 import { AiBriefPromptModal } from '../../components/ia/AiBriefPromptModal';
 import { AiLayoutPreviewModal } from '../../components/ia/AiLayoutPreviewModal';
 import { useUserConfig } from '../../hooks/useStoreEntity';
@@ -11,7 +12,12 @@ import { canUse } from '../../lib/featureFlags';
 export interface EscolherPontoDePartidaProps {
   onBlank: () => void;
   onStarter: (starterId: string) => void;
-  onAiGenerated: (elementos: BuilderElement[]) => void;
+  onAiGenerated: (
+    elementos: BuilderElement[],
+    pageLayout?: BuilderPageLayout,
+    offerType?: OfferType,
+    brief?: string,
+  ) => void;
 }
 
 export function EscolherPontoDePartida({ onBlank, onStarter, onAiGenerated }: EscolherPontoDePartidaProps) {
@@ -21,21 +27,63 @@ export function EscolherPontoDePartida({ onBlank, onStarter, onAiGenerated }: Es
   const [aiOpen, setAiOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewElements, setPreviewElements] = useState<BuilderElement[]>([]);
+  const [previewPageLayout, setPreviewPageLayout] = useState<BuilderPageLayout | undefined>();
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [pendingStarterId, setPendingStarterId] = useState<string | null>(null);
 
-  const handleLayoutGenerated = (elementos: BuilderElement[]) => {
+  const [previewOfferType, setPreviewOfferType] = useState<OfferType | undefined>();
+  const [previewBrief, setPreviewBrief] = useState('');
+
+  const handleLayoutGenerated = (
+    elementos: BuilderElement[],
+    pageLayout?: BuilderPageLayout,
+    offerType?: OfferType,
+    brief?: string,
+  ) => {
     setPreviewElements(elementos);
+    setPreviewPageLayout(pageLayout);
+    setPreviewOfferType(offerType);
+    setPreviewBrief(brief ?? '');
+    setPreviewTitle('Layout gerado por IA');
+    setPendingStarterId(null);
     setPreviewOpen(true);
   };
 
-  const handleAcceptLayout = () => {
-    onAiGenerated(previewElements);
+  const handleStarterClick = (starterId: string) => {
+    const applied = applyStarterTemplate(starterId);
+    if (!applied) return;
+    setPendingStarterId(starterId);
+    setPreviewElements(applied.elementos);
+    setPreviewPageLayout(applied.pageLayout);
+    setPreviewTitle(applied.nome);
+    setPreviewOpen(true);
+  };
+
+  const handleAcceptPreview = () => {
+    if (pendingStarterId) {
+      onStarter(pendingStarterId);
+      setPendingStarterId(null);
+    } else {
+      onAiGenerated(previewElements, previewPageLayout, previewOfferType, previewBrief);
+    }
     setPreviewOpen(false);
     setPreviewElements([]);
+    setPreviewPageLayout(undefined);
   };
 
   const handleRegenerate = () => {
     setPreviewOpen(false);
+    if (pendingStarterId) {
+      handleStarterClick(pendingStarterId);
+      return;
+    }
     setAiOpen(true);
+  };
+
+  const handleClosePreview = () => {
+    setPreviewOpen(false);
+    setPendingStarterId(null);
+    setPreviewElements([]);
   };
 
   return (
@@ -43,7 +91,9 @@ export function EscolherPontoDePartida({ onBlank, onStarter, onAiGenerated }: Es
       <div className="min-h-screen bg-[#f5f5f4] flex flex-col items-center justify-center p-6">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl w-full">
           <h1 className="text-3xl font-bold text-zinc-900 tracking-tight mb-2 text-center">Novo modelo de proposta</h1>
-          <p className="text-zinc-500 text-center mb-12">Escolha um template, gere com IA ou comece em branco.</p>
+          <p className="text-zinc-500 text-center mb-12">
+            Escolha um template (com preview), gere com IA ou comece em branco.
+          </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             <motion.button
@@ -82,7 +132,7 @@ export function EscolherPontoDePartida({ onBlank, onStarter, onAiGenerated }: Es
               <motion.button
                 key={t.id}
                 type="button"
-                onClick={() => onStarter(t.id)}
+                onClick={() => handleStarterClick(t.id)}
                 whileHover={{ y: -4 }}
                 className="p-6 rounded-[2rem] border border-black/5 bg-white text-left min-h-[200px] shadow-sm hover:shadow-md transition-all"
               >
@@ -92,6 +142,10 @@ export function EscolherPontoDePartida({ onBlank, onStarter, onAiGenerated }: Es
                 <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{t.categoria}</span>
                 <h3 className="text-lg font-bold text-zinc-900 mt-1">{t.nome}</h3>
                 <p className="text-sm text-zinc-500 mt-2 line-clamp-3">{t.descricao}</p>
+                <p className="text-xs text-zinc-400 mt-3 inline-flex items-center gap-1 font-medium">
+                  <Eye className="w-3.5 h-3.5" />
+                  Ver preview
+                </p>
               </motion.button>
             ))}
           </div>
@@ -108,9 +162,13 @@ export function EscolherPontoDePartida({ onBlank, onStarter, onAiGenerated }: Es
       <AiLayoutPreviewModal
         open={previewOpen}
         elementos={previewElements}
-        onClose={() => setPreviewOpen(false)}
-        onAccept={handleAcceptLayout}
-        onRegenerate={handleRegenerate}
+        pageLayout={previewPageLayout}
+        title={previewTitle ? `Preview — ${previewTitle}` : 'Preview do layout'}
+        description="Revise os blocos antes de continuar. Você poderá editar tudo no editor visual."
+        acceptLabel={pendingStarterId ? 'Usar este template' : 'Usar este layout'}
+        onClose={handleClosePreview}
+        onAccept={handleAcceptPreview}
+        onRegenerate={pendingStarterId ? undefined : handleRegenerate}
       />
     </>
   );

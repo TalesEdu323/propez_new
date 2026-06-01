@@ -27,6 +27,9 @@ export const PRO_ONLY_WIDGETS: readonly BuilderElementType[] = [
   'countdown', 'whatsapp_button', 'image_carousel', 'comparison_table',
 ];
 
+/** Widgets usados só pela IA / templates internos — não aparecem na paleta manual. */
+export const INTERNAL_BUILDER_WIDGETS: readonly BuilderElementType[] = ['service_stack'];
+
 /** Widgets premium adicionais no Business (somados ao Pro). */
 export const BUSINESS_ONLY_WIDGETS: readonly BuilderElementType[] = [
   'video', 'slider', 'funnel', 'google_map', 'toast_notification',
@@ -206,6 +209,12 @@ export function getAllowedWidgets(plan: PlanTier): ReadonlySet<BuilderElementTyp
   return LIMITS[plan].widgets;
 }
 
+/** Widgets que a IA pode gerar (plano comercial + marcadores internos como service_stack). */
+export function getIaAllowedWidgets(plan: PlanTier): ReadonlySet<BuilderElementType> {
+  const base = getAllowedWidgets(plan);
+  return new Set<BuilderElementType>([...base, ...INTERNAL_BUILDER_WIDGETS]);
+}
+
 export function isWidgetAllowed(plan: PlanTier, type: BuilderElementType): boolean {
   return LIMITS[plan].widgets.has(type);
 }
@@ -311,6 +320,11 @@ export function canUseRubrica(config: UserConfig | null | undefined): GateResult
 export function shouldShowWatermark(creatorPlan: PlanTier | undefined): boolean {
   const plan: PlanTier = creatorPlan ?? 'free';
   return LIMITS[plan].watermark;
+}
+
+/** Whitelabel ativo (logo/cores da org no app e propostas públicas). */
+export function hasWhiteLabel(config: UserConfig | null | undefined): boolean {
+  return config?.whitelabelEnabled === true;
 }
 
 /**

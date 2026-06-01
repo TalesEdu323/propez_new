@@ -28,6 +28,7 @@ export type AppRoute =
   | 'admin-users'
   | 'admin-subscriptions'
   | 'admin-operations'
+  | 'admin-requests'
   | 'admin-marketplace'
   | 'admin-blog'
   | 'admin-blog-editor';
