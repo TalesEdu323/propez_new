@@ -24,7 +24,11 @@ export default function PublicPlanosPage() {
         </div>
       </section>
 
-      <PricingSection id="pricing" showTitle={false} />
+      <section className="py-8 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4">
+          <PricingSection variant="studio" id="precos" showTitle={false} />
+        </div>
+      </section>
 
       <section className="py-16 bg-zinc-50">
         <div className="container mx-auto px-4 max-w-3xl">

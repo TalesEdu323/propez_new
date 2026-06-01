@@ -4,7 +4,7 @@ import { Menu, X, BookOpen, ArrowRight } from 'lucide-react';
 import { PropezLogo } from '../components/PropezLogo';
 
 const NAV_LINKS = [
-  { label: 'Planos', href: '/#pricing' },
+  { label: 'Planos', href: '/#precos' },
   { label: 'Blog', href: '/blog', icon: BookOpen },
   { label: 'Quem somos', href: '/sobre-nos' },
 ] as const;

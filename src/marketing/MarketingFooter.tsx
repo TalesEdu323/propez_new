@@ -21,7 +21,7 @@ export function MarketingFooter() {
           <div>
             <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-4">Produto</h3>
             <ul className="space-y-2 text-sm text-zinc-600">
-              <li><Link to="/#pricing" className="hover:text-zinc-900">Planos</Link></li>
+              <li><Link to="/#precos" className="hover:text-zinc-900">Planos</Link></li>
               <li><Link to="/planos" className="hover:text-zinc-900">Preços</Link></li>
               <li><Link to="/blog" className="hover:text-zinc-900">Blog</Link></li>
             </ul>
