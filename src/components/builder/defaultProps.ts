@@ -1,5 +1,5 @@
 import type { BuilderElementType } from '../../types/builder';
-import { DEFAULT_TRAFFIC_OUTPUTS, DEFAULT_TRAFFIC_SLIDERS } from '../../lib/projectionCalculator';
+import { DEFAULT_TRAFFIC_OUTPUTS, DEFAULT_TRAFFIC_SLIDERS } from '../../lib/projectionCalculator.js';
 
 /**
  * Props padrão para cada tipo de elemento do Builder.
