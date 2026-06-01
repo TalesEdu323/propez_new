@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { APP_BASE_PATH } from '../lib/appPaths';
 import type { AppRoute, NavigateFn, RouteParams } from '../types/navigation';
 
 const DEFAULT_ROUTE: AppRoute = 'dashboard';
@@ -35,10 +36,12 @@ function searchParamsFromRoute(route: AppRoute, params: RouteParams): URLSearchP
 }
 
 /**
- * Navegação interna do app sincronizada com ?route= na URL (histórico do navegador).
+ * Navegação interna do app sincronizada com ?route= em `/app` (histórico do navegador).
  */
 export function useAppNavigation() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { pathname } = useLocation();
+  const routerNavigate = useNavigate();
   const syncingFromUrl = useRef(false);
   const lastWrittenKey = useRef('');
 
@@ -62,16 +65,24 @@ export function useAppNavigation() {
   const navigate: NavigateFn = useCallback(
     (newRoute, params = {}, options?: { replace?: boolean }) => {
       const sp = searchParamsFromRoute(newRoute, params);
+      const query = sp.toString();
+      const target = query ? `${APP_BASE_PATH}?${query}` : APP_BASE_PATH;
       lastWrittenKey.current = `${newRoute}|${JSON.stringify(params)}`;
       syncingFromUrl.current = true;
       setRoute(newRoute);
       setRouteParams(params);
-      setSearchParams(sp, { replace: options?.replace ?? false });
+
+      if (!pathname.startsWith(APP_BASE_PATH)) {
+        routerNavigate(target, { replace: options?.replace ?? false });
+      } else {
+        setSearchParams(sp, { replace: options?.replace ?? false });
+      }
+
       queueMicrotask(() => {
         syncingFromUrl.current = false;
       });
     },
-    [setSearchParams],
+    [pathname, routerNavigate, setSearchParams],
   );
 
   return { route, routeParams, navigate, setRoute, setRouteParams };

@@ -135,7 +135,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
           status: 'aprovada',
           value: proposta.valor,
           updatedAt: new Date().toISOString(),
-          proposalUrl: `${window.location.origin}/?route=visualizar-proposta&id=${proposta.id}`,
+          proposalUrl: `${window.location.origin}/app?route=visualizar-proposta&id=${proposta.id}`,
           clientEmail: clientData.email,
           clientDocument: clientData.documento,
         });

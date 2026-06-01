@@ -161,8 +161,8 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
         body: JSON.stringify({
           priceId,
           clientReferenceId,
-          successPath: '/?route=planos&success=true&session_id={CHECKOUT_SESSION_ID}',
-          cancelPath: '/?route=planos&canceled=true',
+          successPath: '/app?route=planos&success=true&session_id={CHECKOUT_SESSION_ID}',
+          cancelPath: '/app?route=planos&canceled=true',
         }),
       });
       const { url, error } = await response.json();

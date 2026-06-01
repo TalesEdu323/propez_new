@@ -11,7 +11,7 @@ import { Sparkles } from 'lucide-react';
  */
 export function PropezWatermark() {
   const ctaUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/?route=planos&utm_source=watermark`
+    ? `${window.location.origin}/app?route=planos&utm_source=watermark`
     : '#';
 
   return (

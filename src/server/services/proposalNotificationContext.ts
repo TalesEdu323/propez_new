@@ -39,7 +39,7 @@ export function buildProposalUrls(appUrl: string, proposalId: string, publicToke
 } {
   const base = appUrl.replace(/\/+$/, '')
   return {
-    internalUrl: `${base}/?route=visualizar-proposta&id=${proposalId}`,
+    internalUrl: `${base}/app?route=visualizar-proposta&id=${proposalId}`,
     publicUrl: publicToken ? `${base}/p/${publicToken}` : null,
   }
 }

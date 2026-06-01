@@ -228,7 +228,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
 
       if (formData.prosyncLeadId) {
         void (async () => {
-          let proposalUrl = `${window.location.origin}/?route=visualizar-proposta&id=${persisted.id}`;
+          let proposalUrl = `${window.location.origin}/app?route=visualizar-proposta&id=${persisted.id}`;
           try {
             const publicLink = await generatePublicLink(persisted.id);
             if (publicLink?.url) proposalUrl = publicLink.url;

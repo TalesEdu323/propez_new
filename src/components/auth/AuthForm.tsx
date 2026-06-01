@@ -4,6 +4,7 @@ import { ArrowRight, ShieldCheck, ChevronLeft, CheckCircle2, AlertCircle } from 
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../lib/apiClient';
 import { bootstrapSession } from '../../lib/authSession';
+import { APP_BASE_PATH } from '../../lib/appPaths';
 import { PropezLogo } from '../PropezLogo';
 
 export type AuthMode =
@@ -49,9 +50,15 @@ export function AuthForm({
   }, [initialMode, resetToken]);
 
   async function finishAuth() {
-    await bootstrapSession();
+    const session = await bootstrapSession();
+    if (!session) {
+      setErrorMsg(
+        'Não foi possível validar sua sessão. Confirme que o servidor está ativo (npm run dev) e tente novamente.',
+      );
+      return;
+    }
     if (onSuccess) onSuccess();
-    else navigate('/', { replace: true });
+    else navigate(APP_BASE_PATH, { replace: true });
   }
 
   const goBack = (fallback: string) => {

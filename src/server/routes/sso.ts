@@ -74,7 +74,7 @@ export function createSsoRouter(deps: { pool: Pool; config: EnvironmentConfig })
     setShortCookie(res, STATE_COOKIE, state)
     setShortCookie(res, VERIFIER_COOKIE, verifier)
 
-    const redirectAfter = typeof req.query.redirect === 'string' ? req.query.redirect : '/'
+    const redirectAfter = typeof req.query.redirect === 'string' ? req.query.redirect : '/app'
     if (redirectAfter.startsWith('/')) {
       setShortCookie(res, POST_LOGIN_COOKIE, redirectAfter)
     }
@@ -249,7 +249,7 @@ export function createSsoRouter(deps: { pool: Pool; config: EnvironmentConfig })
       clearShortCookies(res)
 
       const redirectTo =
-        typeof dest === 'string' && dest.startsWith('/') ? dest : '/'
+        typeof dest === 'string' && dest.startsWith('/') ? dest : '/app'
       return res.redirect(redirectTo)
     } catch (err) {
       console.error('[sso/callback] erro:', err)

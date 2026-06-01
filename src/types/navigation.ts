@@ -41,4 +41,8 @@ export interface RouteParams {
   [key: string]: unknown;
 }
 
-export type NavigateFn = (route: AppRoute, params?: RouteParams) => void;
+export type NavigateFn = (
+  route: AppRoute,
+  params?: RouteParams,
+  options?: { replace?: boolean },
+) => void;

@@ -25,12 +25,12 @@ export function LoggedInRedirect({ children }: { children: React.ReactNode }) {
   }
 
   if (pathname === '/login' || pathname === '/cadastro') {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   if (pathname === '/planos') {
-    return <Navigate to="/?route=planos" replace />;
+    return <Navigate to="/app?route=planos" replace />;
   }
 
-  return <Navigate to="/" replace />;
+  return <Navigate to="/app" replace />;
 }

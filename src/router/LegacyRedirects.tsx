@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 /** Compatibilidade com links antigos (?route= na raiz, reset-password). */
 export function LegacyRedirects() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   useEffect(() => {
     const route = params.get('route');
@@ -15,12 +16,12 @@ export function LegacyRedirects() {
       return;
     }
 
-    // Links antigos /app?route=... → manter query na raiz (HomeRoute + AuthenticatedApp)
-    if (window.location.pathname === '/app' && route) {
+    // Links antigos /?route=... → /app?route=...
+    if (pathname === '/' && route) {
       const q = params.toString();
-      navigate(q ? `/?${q}` : '/', { replace: true });
+      navigate(q ? `/app?${q}` : '/app', { replace: true });
     }
-  }, [params, navigate]);
+  }, [params, navigate, pathname]);
 
   return null;
 }

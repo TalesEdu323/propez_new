@@ -469,8 +469,8 @@ export function createCheckoutRouter({ stripe, config }: StripeCheckoutOptions):
     try {
       const {
         priceId,
-        successPath = '/?route=configuracoes&success=true&session_id={CHECKOUT_SESSION_ID}',
-        cancelPath = '/?route=planos&canceled=true',
+        successPath = '/app?route=configuracoes&success=true&session_id={CHECKOUT_SESSION_ID}',
+        cancelPath = '/app?route=planos&canceled=true',
         clientReferenceId,
         customerEmail,
       } = (req.body ?? {}) as {
@@ -492,9 +492,9 @@ export function createCheckoutRouter({ stripe, config }: StripeCheckoutOptions):
 
       const safeSuccessPath = normalizeReturnPath(
         successPath,
-        '/?route=configuracoes&success=true&session_id={CHECKOUT_SESSION_ID}',
+        '/app?route=configuracoes&success=true&session_id={CHECKOUT_SESSION_ID}',
       );
-      const safeCancelPath = normalizeReturnPath(cancelPath, '/?route=planos&canceled=true');
+      const safeCancelPath = normalizeReturnPath(cancelPath, '/app?route=planos&canceled=true');
 
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',

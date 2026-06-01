@@ -2,7 +2,7 @@
  * Estado global da sessão autenticada.
  *
  * Fornece uma API simples (`getSession`, `subscribeSession`) e um hook React
- * (`useSession`) para consumir usuário + organização correntes.
+ * (`useSession`) para consumuir usuário + organização correntes.
  *
  * A sessão é populada via `/api/auth/me` e invalidada no logout / 401 final.
  * Integra-se com `apiClient` para receber notificação quando o refresh falha
@@ -53,9 +53,20 @@ let current: AuthSession | null = null;
 let initialLoaded = false;
 
 const listeners = new Set<() => void>();
+const initialListeners = new Set<() => void>();
 
-function notify() {
+function notifySession() {
   listeners.forEach((l) => l());
+}
+
+function notifyInitial() {
+  initialListeners.forEach((l) => l());
+}
+
+function markInitialLoaded(): void {
+  if (initialLoaded) return;
+  initialLoaded = true;
+  notifyInitial();
 }
 
 export function getSession(): AuthSession | null {
@@ -73,16 +84,21 @@ export function subscribeSession(listener: () => void): () => void {
   };
 }
 
+export function subscribeInitial(listener: () => void): () => void {
+  initialListeners.add(listener);
+  return () => initialListeners.delete(listener);
+}
+
 export function setSession(session: AuthSession | null): void {
   current = session;
-  initialLoaded = true;
-  notify();
+  markInitialLoaded();
+  notifySession();
 }
 
 export function patchOrganization(patch: Partial<CurrentOrg>): void {
   if (!current) return;
   current = { ...current, organization: { ...current.organization, ...patch } };
-  notify();
+  notifySession();
 }
 
 export async function fetchSession(): Promise<AuthSession | null> {
@@ -131,28 +147,12 @@ export function useSession(): AuthSession | null {
   return useSyncExternalStore(STORE.subscribe, STORE.getSnapshot, STORE.getSnapshot);
 }
 
-let initialLoadedFlag = false;
-const initialListeners = new Set<() => void>();
-
-export function subscribeInitial(listener: () => void): () => void {
-  initialListeners.add(listener);
-  return () => initialListeners.delete(listener);
-}
-
 export function useInitialLoaded(): boolean {
-  return useSyncExternalStore(
-    (l) => {
-      initialListeners.add(l);
-      return () => initialListeners.delete(l);
-    },
-    () => initialLoadedFlag,
-    () => initialLoadedFlag,
-  );
+  return useSyncExternalStore(subscribeInitial, () => initialLoaded, () => initialLoaded);
 }
 
 export async function bootstrapSession(): Promise<AuthSession | null> {
   const result = await fetchSession();
-  initialLoadedFlag = true;
-  initialListeners.forEach((l) => l());
+  markInitialLoaded();
   return result;
 }
