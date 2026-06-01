@@ -25,10 +25,16 @@ import {
   type CurrentOrg,
 } from './authSession';
 
-import type { PlanTier, PlanUsage, UserConfig as PlanUserConfig } from './planConfig.js';
+import {
+  getCurrentMonthKey,
+  resolvePlan,
+  type PlanTier,
+  type PlanUsage,
+  type UserConfig as PlanUserConfig,
+} from './planConfig.js';
 
-export type { PlanTier, PlanUsage } from './planConfig.js';
-export { getCurrentMonthKey, resolvePlan } from './planConfig.js';
+export { getCurrentMonthKey, resolvePlan };
+export type { PlanTier, PlanUsage };
 
 /** Config do usuário no frontend (campos obrigatórios após login). */
 export interface UserConfig extends PlanUserConfig {
