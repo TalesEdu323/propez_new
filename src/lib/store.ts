@@ -88,6 +88,7 @@ export interface Proposta {
   id: string;
   cliente_id: string;
   cliente_nome: string;
+  clienteEmail?: string;
   modelo_id?: string;
   servicos: string[];
   valor: number;
@@ -255,6 +256,7 @@ interface ApiProposta {
   id: string;
   cliente_id: string | null;
   cliente_nome: string;
+  clienteEmail?: string | null;
   modelo_id?: string | null;
   servicos: string[];
   valor: number;
@@ -333,6 +335,7 @@ function fromApiProposta(a: ApiProposta): Proposta {
     id: a.id,
     cliente_id: a.cliente_id ?? '',
     cliente_nome: a.cliente_nome ?? '',
+    clienteEmail: a.clienteEmail?.trim() || undefined,
     modelo_id: a.modelo_id ?? undefined,
     servicos: Array.isArray(a.servicos) ? a.servicos : [],
     valor: Number(a.valor ?? 0),
@@ -370,20 +373,51 @@ function fromApiProposta(a: ApiProposta): Proposta {
 // ============================================================================
 // Hydration
 // ============================================================================
+export type HydrateStoreError = {
+  entity: 'clientes' | 'servicos' | 'modelos' | 'propostas' | 'contratos' | 'usage';
+  message: string;
+};
+
+let lastHydrateErrors: HydrateStoreError[] = [];
+
+export function getLastHydrateErrors(): readonly HydrateStoreError[] {
+  return lastHydrateErrors;
+}
+
+async function hydrateFetch<T>(
+  entity: HydrateStoreError['entity'],
+  url: string,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await api.get<T>(url);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[hydrateStore] falha ao carregar ${entity}:`, err);
+    lastHydrateErrors.push({ entity, message });
+    return fallback;
+  }
+}
+
 export async function hydrateStore(force = false): Promise<void> {
   if (hydrated && !force) return;
   if (!force && hydratePromise) return hydratePromise;
   hydratePromise = (async () => {
+    lastHydrateErrors = [];
     const [clientes, servicos, modelos, propostas, contratos, usage] = await Promise.all([
-      api.get<ApiCliente[]>('/api/clientes').catch(() => []),
-      api.get<ApiServico[]>('/api/servicos').catch(() => []),
-      api.get<ApiModelo[]>('/api/modelos').catch(() => []),
-      api.get<ApiProposta[]>('/api/propostas').catch(() => []),
-      api.get<ApiContrato[]>('/api/contratos').catch(() => []),
-      api
-        .get<PlanUsage>('/api/usage/current')
-        .catch(() => emptyUsage()),
+      hydrateFetch<ApiCliente[]>('clientes', '/api/clientes', []),
+      hydrateFetch<ApiServico[]>('servicos', '/api/servicos', []),
+      hydrateFetch<ApiModelo[]>('modelos', '/api/modelos', []),
+      hydrateFetch<ApiProposta[]>('propostas', '/api/propostas', []),
+      hydrateFetch<ApiContrato[]>('contratos', '/api/contratos', []),
+      hydrateFetch<PlanUsage>('usage', '/api/usage/current', emptyUsage()),
     ]);
+    if (lastHydrateErrors.length > 0) {
+      console.warn(
+        '[hydrateStore] algumas entidades não carregaram; dados podem estar incompletos:',
+        lastHydrateErrors.map((e) => e.entity).join(', '),
+      );
+    }
     cache.clientes = (clientes ?? []).map(fromApiCliente);
     cache.servicos = (servicos ?? []).map(fromApiServico);
     cache.modelos = (modelos ?? []).map(fromApiModelo);
@@ -622,6 +656,7 @@ interface PropostaPayload {
   id?: string;
   cliente_id?: string | null;
   cliente_nome: string;
+  clienteEmail?: string | null;
   modelo_id?: string | null;
   servicos: string[];
   valor: number;
@@ -674,6 +709,7 @@ function toPropostaPayload(p: Proposta): PropostaPayload {
     id: p.id,
     cliente_id: normalizeUuidOrNull(p.cliente_id),
     cliente_nome: p.cliente_nome,
+    clienteEmail: p.clienteEmail?.trim() || null,
     modelo_id: normalizeUuidOrNull(p.modelo_id),
     servicos: p.servicos ?? [],
     valor: p.valor,

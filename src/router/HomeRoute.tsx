@@ -1,6 +1,8 @@
 import { Suspense, lazy } from 'react';
+import { useInitialLoaded, useSession } from '../lib/authSession';
 
 const LandingPage = lazy(() => import('../pages/marketing/LandingPage'));
+const AuthenticatedApp = lazy(() => import('../AuthenticatedApp'));
 
 const loadingFallback = (
   <div className="min-h-screen flex items-center justify-center text-zinc-500 bg-white">
@@ -8,11 +10,18 @@ const loadingFallback = (
   </div>
 );
 
-/** `/` — landing pública (app autenticado em `/app`). */
+/** `/` — landing (visitante) ou painel (sessão ativa). */
 export default function HomeRoute() {
+  const session = useSession();
+  const initialLoaded = useInitialLoaded();
+
+  if (!initialLoaded) {
+    return loadingFallback;
+  }
+
   return (
     <Suspense fallback={loadingFallback}>
-      <LandingPage />
+      {session ? <AuthenticatedApp /> : <LandingPage />}
     </Suspense>
   );
 }

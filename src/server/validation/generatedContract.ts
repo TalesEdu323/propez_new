@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeContractPlaceholders } from '../services/llm/prompts/generateContract.js';
 
 const contractResponseSchema = z.object({
   titulo: z.string().trim().min(1).max(200),
@@ -27,6 +28,6 @@ export function validateGeneratedContract(raw: unknown): { titulo: string; texto
 
   return {
     titulo: parsed.data.titulo,
-    texto: stripDangerousHtml(parsed.data.texto),
+    texto: normalizeContractPlaceholders(stripDangerousHtml(parsed.data.texto)),
   };
 }

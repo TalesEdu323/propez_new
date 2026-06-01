@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Sparkles, Loader2, Building2 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { UpgradeGate } from '../UpgradeGate';
 import { useUserConfig } from '../../hooks/useStoreEntity';
@@ -53,6 +53,14 @@ export function AiBriefPromptModal({
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState<string | undefined>();
   const [requiredPlan, setRequiredPlan] = useState<PlanTier>('pro');
+  const hasCompanyData = Boolean(userConfig.nome?.trim() || userConfig.cnpj?.trim());
+  const [useCompanyProfile, setUseCompanyProfile] = useState(hasCompanyData);
+
+  useEffect(() => {
+    if (open && mode === 'contract') {
+      setUseCompanyProfile(Boolean(userConfig.nome?.trim() || userConfig.cnpj?.trim()));
+    }
+  }, [open, mode, userConfig.nome, userConfig.cnpj]);
 
   const handleClose = () => {
     if (loading) return;
@@ -84,7 +92,7 @@ export function AiBriefPromptModal({
         setPrompt('');
         onClose();
       } else {
-        const result = await iaApi.generateContract(trimmed);
+        const result = await iaApi.generateContract(trimmed, { useCompanyProfile });
         onContractGenerated?.(result);
         setPrompt('');
         onClose();
@@ -169,6 +177,45 @@ export function AiBriefPromptModal({
           className="w-full bg-zinc-50 border border-black/10 rounded-xl px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-black/5 resize-none disabled:opacity-60"
         />
         <p className="text-[10px] text-zinc-400 mt-2 text-right">{prompt.length}/2000</p>
+
+        {mode === 'contract' ? (
+          <div className="mt-4 p-4 rounded-xl border border-zinc-200 bg-zinc-50 space-y-3">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useCompanyProfile}
+                onChange={(e) => setUseCompanyProfile(e.target.checked)}
+                disabled={loading}
+                className="mt-1 rounded border-zinc-300"
+              />
+              <span className="text-sm font-medium text-zinc-800">Usar dados da empresa cadastrados</span>
+            </label>
+            {useCompanyProfile ? (
+              <div className="flex items-start gap-3 pl-7 text-sm text-zinc-600">
+                <Building2 className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
+                <div>
+                  <p>
+                    <span className="text-zinc-400 text-xs uppercase tracking-wide">Nome</span>
+                    <br />
+                    {userConfig.nome?.trim() || '— não cadastrado —'}
+                  </p>
+                  <p className="mt-2">
+                    <span className="text-zinc-400 text-xs uppercase tracking-wide">CNPJ</span>
+                    <br />
+                    {userConfig.cnpj?.trim() || '— não cadastrado —'}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            {useCompanyProfile && !hasCompanyData ? (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 ml-7">
+                Cadastre nome e CNPJ em Configurações → Dados da Empresa, ou desmarque esta opção para gerar sem
+                contexto da contratada.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         {copy.disclaimer ? (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-3">
             {copy.disclaimer}

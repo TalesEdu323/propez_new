@@ -32,6 +32,10 @@ const promptSchema = z.object({
   prompt: z.string().trim().min(20).max(2000),
 });
 
+const contractPromptSchema = promptSchema.extend({
+  useCompanyProfile: z.boolean().optional().default(true),
+});
+
 function handleIaError(res: Response, err: unknown): void {
   if (err instanceof IaGateError) {
     res.status(err.status).json({
@@ -130,7 +134,7 @@ export function createIaRouter(deps: { pool: Pool; config: EnvironmentConfig }):
 
   router.post('/generate-contract', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end();
-    const parsed = promptSchema.safeParse(req.body);
+    const parsed = contractPromptSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Descreva o contrato em 20 a 2000 caracteres.' });
     }
@@ -138,9 +142,24 @@ export function createIaRouter(deps: { pool: Pool; config: EnvironmentConfig }):
     try {
       await assertIaAllowed(pool, req.auth.orgId);
 
+      let company: { companyName: string | null; companyCnpj: string | null } | null = null;
+      if (parsed.data.useCompanyProfile) {
+        const { rows } = await pool.query<{ name: string; cnpj: string | null }>(
+          `SELECT name, cnpj FROM organizations WHERE id = $1`,
+          [req.auth.orgId],
+        );
+        const org = rows[0];
+        if (org) {
+          company = {
+            companyName: org.name?.trim() || null,
+            companyCnpj: org.cnpj?.trim() || null,
+          };
+        }
+      }
+
       const raw = await callGroqJson({
         system: buildContractSystemPrompt(),
-        user: buildContractUserPrompt(parsed.data.prompt),
+        user: buildContractUserPrompt(parsed.data.prompt, company),
         temperature: 0.3,
         max_tokens: 8192,
       });

@@ -1,10 +1,14 @@
 import { useEffect } from 'react';
 
-export function CustomCursor() {
+type CustomCursorProps = {
+  enabled?: boolean;
+};
+
+export function CustomCursor({ enabled = true }: CustomCursorProps) {
   useEffect(() => {
+    if (!enabled) return;
     if (typeof window === 'undefined') return;
     if (window.matchMedia('(hover: none)').matches) return;
-    if (!document.body.classList.contains('landing-marketing')) return;
 
     const dot = document.querySelector('.cursor-dot') as HTMLElement;
     const ring = document.querySelector('.cursor-ring') as HTMLElement;
@@ -76,8 +80,9 @@ export function CustomCursor() {
         el.removeEventListener('mouseleave', handleHoverLeave);
       });
     };
-  }, []);
+  }, [enabled]);
 
+  if (!enabled) return null;
   if (typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches) {
     return null;
   }

@@ -18,6 +18,11 @@ export interface IaErrorBody {
   retryAfter?: number;
 }
 
+export interface GenerateContractOptions {
+  /** Inclui nome/CNPJ da organização no contexto da IA (default: true). */
+  useCompanyProfile?: boolean;
+}
+
 function bumpLocalIaUsage(): void {
   const cfg = store.getUserConfig();
   const usage = cfg.usage ?? {
@@ -32,9 +37,9 @@ function bumpLocalIaUsage(): void {
   });
 }
 
-async function postIa<T>(path: string, prompt: string): Promise<T> {
+async function postIa<T>(path: string, body: Record<string, unknown>): Promise<T> {
   try {
-    const result = await api.post<T>(`/api/ia/${path}`, { prompt });
+    const result = await api.post<T>(`/api/ia/${path}`, body);
     bumpLocalIaUsage();
     return result;
   } catch (err) {
@@ -44,8 +49,13 @@ async function postIa<T>(path: string, prompt: string): Promise<T> {
 }
 
 export const iaApi = {
-  generateLayout: (prompt: string) => postIa<IaLayoutResult>('generate-layout', prompt),
-  generateContract: (prompt: string) => postIa<IaContractResult>('generate-contract', prompt),
+  generateLayout: (prompt: string) =>
+    postIa<IaLayoutResult>('generate-layout', { prompt }),
+  generateContract: (prompt: string, options?: GenerateContractOptions) =>
+    postIa<IaContractResult>('generate-contract', {
+      prompt,
+      useCompanyProfile: options?.useCompanyProfile ?? true,
+    }),
 };
 
 export function getIaErrorMessage(err: unknown): string {

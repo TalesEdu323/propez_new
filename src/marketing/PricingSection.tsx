@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, CheckCircle2 } from 'lucide-react';
 import { PLAN_META, type PlanTier } from '../lib/featureFlags';
@@ -40,14 +40,74 @@ const STUDIO_TARGETS: Record<PlanTier, string> = {
   business: 'Times comerciais',
 };
 
-type StripePlan = { id: 'pro' | 'business'; prices: { monthly: string | null; yearly: string | null } };
-
 type PricingSectionProps = {
   id?: string;
   showTitle?: boolean;
   compact?: boolean;
   variant?: 'default' | 'studio';
 };
+
+function getDisplayPrice(tier: PlanTier, cycle: 'monthly' | 'yearly'): number {
+  const meta = PLAN_META[tier];
+  if (tier === 'free') return 0;
+  return cycle === 'yearly' ? meta.yearlyMonthlyEquivalent : meta.monthlyPrice;
+}
+
+function PriceBlock({
+  tier,
+  cycle,
+  isStudio,
+  popular,
+}: {
+  tier: PlanTier;
+  cycle: 'monthly' | 'yearly';
+  isStudio: boolean;
+  popular?: boolean;
+}) {
+  const meta = PLAN_META[tier];
+  const price = getDisplayPrice(tier, cycle);
+
+  if (tier === 'business' && isStudio) {
+    return (
+      <div className="mb-8">
+        <span className={`text-5xl font-bold tracking-tight ${popular ? 'text-white' : 'text-gray-900'}`}>
+          Personalizado
+        </span>
+        <p className={`text-sm mt-2 font-medium ${popular ? 'text-gray-400' : 'text-gray-500'}`}>
+          Fale com nosso time para times comerciais
+        </p>
+      </div>
+    );
+  }
+
+  const mainClass = isStudio
+    ? `text-5xl font-bold tracking-tight ${popular ? 'text-white' : 'text-gray-900'}`
+    : 'text-4xl font-bold';
+  const subClass = isStudio
+    ? `text-sm font-medium mt-2 ${popular ? 'text-gray-400' : 'text-gray-500'}`
+    : 'text-xs text-zinc-400 font-medium mt-2';
+
+  return (
+    <div className={isStudio ? 'mb-8' : 'mt-5'}>
+      <div className="flex items-baseline gap-2">
+        <span className={mainClass}>R$ {price}</span>
+        {price > 0 && (
+          <span className={isStudio ? `text-sm font-bold ${popular ? 'text-gray-400' : 'text-gray-500'}` : 'text-zinc-400 text-sm'}>
+            /mês
+          </span>
+        )}
+      </div>
+      {tier !== 'free' && cycle === 'yearly' && (
+        <p className={subClass}>
+          Cobrado anualmente R$ {meta.yearlyTotal} (equivale a R$ {meta.yearlyMonthlyEquivalent}/mês)
+        </p>
+      )}
+      {tier !== 'free' && cycle === 'monthly' && (
+        <p className={subClass}>Ou R$ {meta.yearlyMonthlyEquivalent}/mês no plano anual</p>
+      )}
+    </div>
+  );
+}
 
 export function PricingSection({
   id = 'pricing',
@@ -56,36 +116,12 @@ export function PricingSection({
   variant = 'default',
 }: PricingSectionProps) {
   const [cycle, setCycle] = useState<'monthly' | 'yearly'>('yearly');
-  const [stripePlans, setStripePlans] = useState<StripePlan[]>([]);
   const isStudio = variant === 'studio';
-
-  useEffect(() => {
-    fetch('/api/stripe/plans')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d?.plans && setStripePlans(d.plans))
-      .catch(() => {});
-  }, []);
-
-  const formatPrice = (tier: PlanTier) => {
-    if (tier === 'free') return 'R$ 0';
-    if (tier === 'business' && isStudio) return 'Personalizado';
-    const sp = stripePlans.find((p) => p.id === tier);
-    const raw = cycle === 'yearly' ? sp?.prices.yearly : sp?.prices.monthly;
-    if (!raw) {
-      const fallback = PLAN_META[tier].monthlyPrice;
-      return fallback > 0 ? `R$ ${fallback}` : '—';
-    }
-    const n = Number(raw);
-    return Number.isFinite(n) ? `R$ ${n.toFixed(2).replace('.', ',')}` : raw;
-  };
-
   const tiers: PlanTier[] = ['free', 'pro', 'business'];
 
   const cycleToggle = (
     <div className="flex justify-center mb-10">
-      <div
-        className={`inline-flex rounded-full p-1 ${isStudio ? 'bg-gray-100' : 'bg-zinc-100'}`}
-      >
+      <div className={`inline-flex rounded-full p-1 ${isStudio ? 'bg-gray-100' : 'bg-zinc-100'}`}>
         <button
           type="button"
           onClick={() => setCycle('monthly')}
@@ -111,9 +147,7 @@ export function PricingSection({
           }`}
         >
           Anual
-          <span
-            className={`ml-2 text-[10px] font-bold ${isStudio ? 'text-brand-600' : 'text-emerald-600'}`}
-          >
+          <span className={`ml-2 text-[10px] font-bold ${isStudio ? 'text-brand-600' : 'text-emerald-600'}`}>
             20% OFF
           </span>
         </button>
@@ -148,7 +182,7 @@ export function PricingSection({
                   </div>
                 )}
 
-                <div className="mb-8">
+                <div className="mb-2">
                   <h3 className={`text-2xl font-bold mb-2 font-heading ${popular ? 'text-white' : 'text-gray-900'}`}>
                     {meta.name}
                   </h3>
@@ -157,14 +191,7 @@ export function PricingSection({
                   </p>
                 </div>
 
-                <div className="mb-8 flex items-baseline gap-1">
-                  <span className="text-5xl font-bold tracking-tight">{formatPrice(tier)}</span>
-                  {tier !== 'free' && tier !== 'business' && (
-                    <span className={`text-sm font-bold ${popular ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {cycle === 'yearly' ? '/ano' : '/mês'}
-                    </span>
-                  )}
-                </div>
+                <PriceBlock tier={tier} cycle={cycle} isStudio popular={popular} />
 
                 <ul className="space-y-4 mb-8 flex-1">
                   {features.map((feat) => (
@@ -239,13 +266,8 @@ export function PricingSection({
                 )}
                 <h3 className="text-2xl font-bold">{meta.name}</h3>
                 <p className="text-sm text-zinc-500 mt-1">{meta.tagline}</p>
-                <div className="mt-5">
-                  <span className="text-4xl font-bold">{formatPrice(tier)}</span>
-                  {tier !== 'free' && tier !== 'business' && (
-                    <span className="text-zinc-400 ml-2 text-sm">{cycle === 'yearly' ? '/ano' : '/mês'}</span>
-                  )}
-                </div>
-                <ul className="mt-8 space-y-3 flex-1">
+                <PriceBlock tier={tier} cycle={cycle} isStudio={false} />
+                <ul className="mt-4 space-y-3 flex-1">
                   {PLAN_FEATURES[tier].map((f) => (
                     <li key={f} className="flex items-start gap-3 text-sm text-zinc-600">
                       <CheckCircle2

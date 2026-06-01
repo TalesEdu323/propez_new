@@ -128,6 +128,9 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id) WHERE revoked_
 
 -- ============================================================================
 -- 4) Business entities (escopadas por organization_id)
+-- Todas as entidades abaixo pertencem ao tenant (organização), não ao usuário
+-- individual. Membros da mesma org compartilham clientes, serviços, modelos e
+-- propostas. O isolamento é aplicado na API via req.auth.orgId (sem RLS).
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS clientes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { MarketingLayout } from '../../marketing/MarketingLayout';
 import { PageMeta } from '../../marketing/PageMeta';
 import { NewsletterSignup } from '../../marketing/NewsletterSignup';
@@ -12,7 +12,7 @@ import { LandingPricing } from '../../marketing/landing/LandingPricing';
 import { LandingFinalCTA } from '../../marketing/landing/LandingFinalCTA';
 
 export default function LandingPage() {
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.body.classList.add('landing-marketing');
     return () => {
       document.body.classList.remove('landing-marketing', 'cursor-active');
@@ -26,7 +26,7 @@ export default function LandingPage() {
         description="Plataforma de criação e gestão de propostas comerciais. Builder visual, link público, assinatura e pagamentos."
         path="/"
       />
-      <CustomCursor />
+      <CustomCursor enabled />
       <LandingHero />
       <LandingComparison />
       <LandingFeatures />

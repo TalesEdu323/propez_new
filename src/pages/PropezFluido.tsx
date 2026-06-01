@@ -4,9 +4,9 @@ import { ChevronLeft, ArrowRight } from 'lucide-react';
 import {
   store,
   resolvePlan,
-  Cliente,
   Proposta,
   generatePublicLink,
+  createCliente,
   createProposta,
   updateProposta,
 } from '../lib/store';
@@ -185,13 +185,14 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
     const newPropostaId = initialData?.editId || createId();
     const finalContractText = replaceString(formData.contratoTexto);
 
-    const clienteId = asUuidOrUndefined(formData.clienteId);
+    let resolvedClienteId = asUuidOrUndefined(formData.clienteId);
     const modeloId = asUuidOrUndefined(formData.modeloId);
 
     const newProposta: Proposta = {
       id: newPropostaId,
-      cliente_id: clienteId ?? '',
+      cliente_id: resolvedClienteId ?? '',
       cliente_nome: formData.clienteNome,
+      clienteEmail: formData.clienteEmail?.trim() || undefined,
       modelo_id: modeloId,
       servicos: formData.servicos,
       valor: Number(formData.valor),
@@ -218,13 +219,28 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
     setIsSaving(true);
     setSaveError(null);
     try {
+      if (
+        !isEditing &&
+        !resolvedClienteId &&
+        formData.clienteNome &&
+        !formData.prosyncLeadId
+      ) {
+        const createdCliente = await createCliente({
+          nome: formData.clienteNome,
+          empresa: '',
+          email: formData.clienteEmail || '',
+          telefone: '',
+        });
+        resolvedClienteId = createdCliente.id;
+        newProposta.cliente_id = createdCliente.id;
+        if (!newProposta.clienteEmail && createdCliente.email) {
+          newProposta.clienteEmail = createdCliente.email;
+        }
+      }
+
       const persisted = isEditing
         ? await updateProposta(newProposta.id, newProposta)
         : await createProposta(newProposta);
-
-      if (!isEditing) {
-        store.incrementUsage('propostasThisMonth');
-      }
 
       if (formData.prosyncLeadId) {
         void (async () => {
@@ -245,19 +261,6 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
             proposalUrl,
           });
         })();
-      }
-
-      if (!clienteId && !formData.clienteId && formData.clienteNome) {
-        const localClientId = createId();
-        const newCliente: Cliente = {
-          id: localClientId,
-          nome: formData.clienteNome,
-          empresa: '',
-          email: formData.clienteEmail || '',
-          telefone: '',
-          data_cadastro: new Date().toISOString(),
-        };
-        store.saveClientes([...clientes, newCliente]);
       }
 
       setCreatedPropostaId(persisted.id);
