@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, Settings, LogOut, Layers, Briefcase, Bell, DollarSign, User } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Settings, LogOut, Layers, Briefcase, Bell, DollarSign, User, Calendar } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { hydrateStore } from './lib/store';
 import { subscribeToPlanosRequest } from './lib/navigationEvents';
@@ -15,6 +15,7 @@ import { BrandLogo } from './components/BrandLogo';
 import { OrgBrandProvider } from './components/OrgBrandProvider';
 import { resolveOrgBrand } from './lib/orgBrand';
 import { AppTopBar, AppTopBarMobileButton } from './components/AppTopBar';
+import { StoreSaveErrorListener } from './components/StoreSaveErrorListener';
 import { useNotifications } from './lib/useNotifications';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -27,6 +28,7 @@ const Servicos = lazy(() => import('./pages/Servicos'));
 const Modelos = lazy(() => import('./pages/Modelos'));
 const CriarModelo = lazy(() => import('./pages/CriarModelo'));
 const Contratos = lazy(() => import('./pages/Contratos'));
+const Agenda = lazy(() => import('./pages/Agenda'));
 const Configuracoes = lazy(() => import('./pages/Configuracoes'));
 const Planos = lazy(() => import('./pages/Planos'));
 const Onboarding = lazy(() => import('./components/Onboarding'));
@@ -58,15 +60,17 @@ export default function AuthenticatedApp() {
   const { unreadCount: notificationUnread } = useNotifications(Boolean(session));
 
   const [hydrated, setHydrated] = useState(false);
+  const isAdminRoute = route.startsWith('admin-');
 
   useEffect(() => {
-    if (session && !hydrated) {
+    if (!initialLoaded || !session) return;
+    if (!isAdminRoute && !hydrated) {
       void hydrateStore().then(() => setHydrated(true));
     }
     if (!session && hydrated) {
       setHydrated(false);
     }
-  }, [session, hydrated]);
+  }, [session, hydrated, isAdminRoute, initialLoaded]);
 
   useEffect(() => {
     return subscribeToPlanosRequest((detail) => {
@@ -121,6 +125,8 @@ export default function AuthenticatedApp() {
         return <VisualizarProposta navigate={navigate} id={routeParams.id ?? ''} />;
       case 'configuracoes':
         return <Configuracoes navigate={navigate} />;
+      case 'agenda':
+        return <Agenda navigate={navigate} />;
       case 'planos':
         return <Planos navigate={navigate} targetPlan={routeParams.targetPlan as 'free' | 'pro' | 'business' | undefined} />;
       case 'admin-dashboard':
@@ -177,6 +183,7 @@ export default function AuthenticatedApp() {
   if (route === 'propez-fluido' || route === 'visualizar-proposta' || route === 'criar-modelo') {
     return (
       <OrgBrandProvider>
+        <StoreSaveErrorListener />
         <AnimatePresence mode="wait">
         <motion.div
           key={route}
@@ -200,11 +207,11 @@ export default function AuthenticatedApp() {
     { id: 'contratos', label: 'Contratos', icon: <FileText className="w-5 h-5" /> },
     { id: 'modelos', label: 'Modelos', icon: <Layers className="w-5 h-5" /> },
     { id: 'propostas', label: 'Propostas', icon: <FileText className="w-5 h-5" /> },
+    { id: 'agenda', label: 'Agenda', icon: <Calendar className="w-5 h-5" /> },
     { id: 'pagamentos', label: 'Pagamentos', icon: <DollarSign className="w-5 h-5" /> },
   ];
 
   const isPlatformAdmin = Boolean(session?.user.isPlatformAdmin);
-  const isAdminRoute = route.startsWith('admin-');
 
   if (isAdminRoute && isPlatformAdmin) {
     return (
@@ -218,6 +225,7 @@ export default function AuthenticatedApp() {
 
   return (
     <OrgBrandProvider>
+    <StoreSaveErrorListener />
     <div className="flex h-screen bg-[#F5F5F7] font-sans overflow-hidden">
       <div className="hidden md:flex flex-col w-64 bg-white/80 backdrop-blur-2xl border-r border-black/[0.05] z-40 relative">
         <div className="p-6">

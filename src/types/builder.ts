@@ -25,6 +25,8 @@ export interface BuilderPageLayout {
   textColor?: string;
   backgroundImage?: string;
   logoUrl?: string;
+  /** Efeito decorativo sobre o fundo da página */
+  backgroundEffect?: 'none' | 'dots' | 'grid';
 }
 
 export type BuilderViewport = 'desktop' | 'tablet' | 'mobile';

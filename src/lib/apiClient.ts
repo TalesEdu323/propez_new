@@ -110,6 +110,11 @@ function withJson(body: JsonBody): string | undefined {
 
 export const api = {
   get: <T>(url: string, opts: FetchOpts = {}) => apiJson<T>(url, { ...opts, method: 'GET' }),
+  getBlob: async (url: string, opts: FetchOpts = {}): Promise<Blob> => {
+    const res = await apiFetch(url, { ...opts, method: 'GET' });
+    if (!res.ok) throw await parseError(res);
+    return res.blob();
+  },
   post: <T>(url: string, body?: JsonBody, opts: FetchOpts = {}) =>
     apiJson<T>(url, { ...opts, method: 'POST', body: withJson(body ?? null) }),
   patch: <T>(url: string, body?: JsonBody, opts: FetchOpts = {}) =>

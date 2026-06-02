@@ -1,7 +1,6 @@
 import type { BuilderElement, BuilderPageLayout } from '../../types/builder';
 import { DEFAULT_PAGE_LAYOUT } from '../../lib/pageLayout';
-import { PageShell } from '../builder/PageShell';
-import { RenderElement } from '../builder/RenderElement';
+import { LayoutPreviewPanel } from '../builder/LayoutPreviewPanel';
 import { Modal } from '../ui/Modal';
 
 export interface AiLayoutPreviewModalProps {
@@ -64,15 +63,7 @@ export function AiLayoutPreviewModal({
         </>
       }
     >
-      <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-black/5 bg-[#fafafa]">
-        <PageShell layout={pageLayout} className="py-8">
-          <div className="space-y-2 pointer-events-none">
-            {elementos.map((el) => (
-              <RenderElement key={el.id} element={el} previewMode />
-            ))}
-          </div>
-        </PageShell>
-      </div>
+      <LayoutPreviewPanel elementos={elementos} pageLayout={pageLayout} />
     </Modal>
   );
 }

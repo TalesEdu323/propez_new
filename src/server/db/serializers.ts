@@ -31,6 +31,10 @@ export interface SerializedContrato {
   id: string
   titulo: string
   texto: string
+  sourceType: 'text' | 'pdf'
+  pdfFileName?: string
+  pageCount?: number
+  signatureConfig?: unknown
   data_criacao: string
 }
 
@@ -46,6 +50,7 @@ export interface SerializedModelo {
   linkPagamento?: string
   tier: 'free' | 'pro' | 'business'
   fluxo: ProposalFlowConfig
+  signatureConfig?: unknown
   data_criacao: string
 }
 
@@ -76,10 +81,20 @@ export interface SerializedProposta {
   creatorPlan?: string | null
   publicToken?: string | null
   prosyncLeadId?: string | null
+  contractSignDocumentId?: string | null
+  contractSignStatus?: string | null
+  contractSigningUrl?: string | null
+  contractSignedPdfPath?: string | null
+  contractSignLastSyncAt?: string | null
+  /** @deprecated legacy alias */
   rubricaDocumentId?: string | null
+  /** @deprecated legacy alias */
   rubricaStatus?: string | null
+  /** @deprecated legacy alias */
   rubricaSigningUrl?: string | null
+  /** @deprecated legacy alias */
   rubricaSignedPdfUrl?: string | null
+  /** @deprecated legacy alias */
   rubricaLastSyncAt?: string | null
   fluxo: ProposalFlowConfig
   clienteContratoRecebidoAt?: string | null
@@ -122,6 +137,10 @@ export function serializeContrato(r: AnyRow): SerializedContrato {
     id: r.id,
     titulo: r.titulo,
     texto: r.texto ?? '',
+    sourceType: (r.source_type === 'pdf' ? 'pdf' : 'text') as 'text' | 'pdf',
+    pdfFileName: r.pdf_file_name ?? undefined,
+    pageCount: r.page_count != null ? Number(r.page_count) : undefined,
+    signatureConfig: r.signature_config ?? undefined,
     data_criacao: r.created_at,
   }
 }
@@ -139,6 +158,7 @@ export function serializeModelo(r: AnyRow): SerializedModelo {
     linkPagamento: r.link_pagamento ?? undefined,
     tier: (r.tier ?? 'free') as 'free' | 'pro' | 'business',
     fluxo: parseProposalFlow(r.fluxo),
+    signatureConfig: r.signature_config ?? undefined,
     data_criacao: r.created_at,
   }
 }
@@ -171,14 +191,30 @@ export function serializeProposta(r: AnyRow): SerializedProposta {
     creatorPlan: r.creator_plan,
     publicToken: r.public_token,
     prosyncLeadId: r.prosync_lead_id,
-    rubricaDocumentId: r.rubrica_document_id,
-    rubricaStatus: r.rubrica_status,
-    rubricaSigningUrl: r.rubrica_signing_url,
-    rubricaSignedPdfUrl: r.rubrica_signed_pdf_url,
-    rubricaLastSyncAt: r.rubrica_last_sync_at,
+    contractSignDocumentId: r.contract_sign_document_id ?? r.rubrica_document_id ?? undefined,
+    contractSignStatus: r.contract_sign_status ?? r.rubrica_status ?? undefined,
+    contractSigningUrl: r.contract_signing_url ?? r.rubrica_signing_url ?? undefined,
+    contractSignedPdfPath: r.contract_signed_pdf_path ?? r.rubrica_signed_pdf_url ?? undefined,
+    contractSignLastSyncAt: r.contract_sign_last_sync_at ?? r.rubrica_last_sync_at ?? undefined,
+    rubricaDocumentId: r.contract_sign_document_id ?? r.rubrica_document_id ?? undefined,
+    rubricaStatus: r.contract_sign_status ?? r.rubrica_status ?? undefined,
+    rubricaSigningUrl: r.contract_signing_url ?? r.rubrica_signing_url ?? undefined,
+    rubricaSignedPdfUrl: r.contract_signed_pdf_path ?? r.rubrica_signed_pdf_url ?? undefined,
+    rubricaLastSyncAt: r.contract_sign_last_sync_at ?? r.rubrica_last_sync_at ?? undefined,
     fluxo: parseProposalFlow(r.fluxo),
     clienteContratoRecebidoAt: r.cliente_contrato_recebido_at ?? undefined,
     orgContratoAceitoAt: r.org_contrato_aceito_at ?? undefined,
     contratoConcluidoAt: r.contrato_concluido_at ?? undefined,
   }
+}
+
+/** Versão leve para listagem (sem elementos/pageLayout/contratoTexto). */
+export function serializePropostaSummary(r: AnyRow): SerializedProposta {
+  const full = serializeProposta({
+    ...r,
+    elementos: [],
+    page_layout: null,
+    contrato_texto: null,
+  })
+  return full
 }

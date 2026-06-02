@@ -16,16 +16,19 @@ export function createUsageRouter(deps: {
     if (!req.auth) return res.status(401).end()
     const month = new Date().toISOString().slice(0, 7)
     const { rows } = await pool.query(
-      `SELECT month_key, propostas, ia_geracoes, rubrica_assinaturas
+      `SELECT month_key, propostas, ia_geracoes,
+              COALESCE(contract_signatures, rubrica_assinaturas, 0) AS contract_signatures
        FROM usage_counters WHERE organization_id = $1 AND month_key = $2`,
       [req.auth.orgId, month],
     )
     const r = rows[0]
+    const signatures = Number(r?.contract_signatures ?? 0)
     return res.json({
       monthKey: month,
       propostasThisMonth: Number(r?.propostas ?? 0),
       iaGeracoesThisMonth: Number(r?.ia_geracoes ?? 0),
-      rubricaAssinaturasThisMonth: Number(r?.rubrica_assinaturas ?? 0),
+      contractSignaturesThisMonth: signatures,
+      rubricaAssinaturasThisMonth: signatures,
     })
   })
 

@@ -1,19 +1,32 @@
 import type { BuilderElement, BuilderPageLayout } from '../types/builder';
 import type { ProposalFlowConfig } from '../types/proposalFlow';
+import type { OfferType } from '../lib/layoutContext';
 import { DEFAULT_FLOW } from '../types/proposalFlow';
 import { createId } from '../lib/ids';
-import { DEFAULT_PROPS } from '../components/builder/defaultProps';
 import { DEFAULT_PAGE_LAYOUT, normalizePageLayout } from '../lib/pageLayout';
 import { applyThemeToPageLayout } from '../lib/proposalTheme';
+import { AUTO_IMAGE_PROMPT } from '../lib/hydrateStarterImagePrompts';
 
 export interface StarterTemplate {
   id: string;
   nome: string;
   descricao: string;
   categoria: string;
+  offerType: OfferType;
   elementos: BuilderElement[];
   fluxo: ProposalFlowConfig;
   pageLayout?: BuilderPageLayout;
+}
+
+export const STARTER_OFFER_TYPES: Record<string, OfferType> = {
+  'starter-consultoria': 'consultoria',
+  'starter-agencia': 'agencia',
+  'starter-saas': 'saas',
+  'starter-recorrente': 'recorrente',
+};
+
+export function getStarterOfferType(starterId: string): OfferType {
+  return STARTER_OFFER_TYPES[starterId] ?? 'generico';
 }
 
 function cloneElements(elements: BuilderElement[]): BuilderElement[] {
@@ -24,766 +37,720 @@ function cloneElements(elements: BuilderElement[]): BuilderElement[] {
   }));
 }
 
-const consultoriaElements: BuilderElement[] = [
-  {
-    id: 'c1',
+function navbar(links: string[]): BuilderElement {
+  return {
+    id: createId(),
+    type: 'navbar',
+    props: {
+      logoText: '[Nome da Org]',
+      logoUrl: '',
+      links,
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+      bgColor: '#0a0a0a',
+      textColor: '#fafafa',
+    },
+  };
+}
+
+function hero(config: {
+  badge: string;
+  title: string;
+  description: string;
+  secondaryButtonText?: string;
+}): BuilderElement {
+  return {
+    id: createId(),
     type: 'marketing_hero',
     props: {
-      title: 'Proposta de Consultoria Estratégica',
-      subtitle: 'Diagnóstico, plano de ação e acompanhamento para escalar resultados com previsibilidade.',
-      badge: 'Preparado exclusivamente para você',
+      badge: config.badge,
+      title: config.title,
+      description: config.description,
+      buttonText: 'Aprovar proposta',
+      secondaryButtonText: config.secondaryButtonText ?? 'Ver escopo completo',
+      secondaryButtonAction: 'none',
+      proposalAction: 'approve',
+      dotOverlay: true,
+      imageGeneratePrompt: AUTO_IMAGE_PROMPT,
+      backgroundImageUrl: '',
     },
-  },
+  };
+}
+
+function heading(title: string, align = 'center'): BuilderElement {
+  return {
+    id: createId(),
+    type: 'heading',
+    props: { text: title, size: 'text-3xl', align, weight: 'font-bold', color: '#fafafa' },
+  };
+}
+
+function footer(): BuilderElement[] {
+  return [
+    { id: createId(), type: 'spacer', props: { height: '48' } },
+    {
+      id: createId(),
+      type: 'logo',
+      props: { url: '', align: 'center', width: '120' },
+    },
+    {
+      id: createId(),
+      type: 'paragraph',
+      props: {
+        text: '© [Nome da Org] · Proposta comercial confidencial.',
+        align: 'center',
+        color: '#71717a',
+      },
+    },
+  ];
+}
+
+const consultoriaElements: BuilderElement[] = [
+  navbar(['Contexto', 'Metodologia', 'Jornada', 'Proposta']),
+  hero({
+    badge: 'Proposta exclusiva · [Nome do Cliente]',
+    title: 'Vendas que\ngeram resultado\nde verdade.',
+    description:
+      'Consultoria comercial B2B com metodologia SPIN, jornada estruturada e entregáveis claros para escalar receita previsível.',
+    secondaryButtonText: 'Ver metodologia',
+  }),
   {
-    id: 'c2',
-    type: 'spacer',
-    props: { height: '48px' },
-  },
-  {
-    id: 'c3',
+    id: createId(),
     type: 'marketing_context',
     props: {
-      title: 'Contexto e objetivo',
-      paragraphs: [
-        'Entendemos que sua operação precisa de clareza antes de escalar investimentos.',
-        'Esta proposta detalha escopo, entregáveis, cronograma, governança e investimento para uma parceria de alto impacto.',
+      sectionLabel: '01 · Contexto',
+      title: 'Entendemos o desafio de [Nome do Cliente]',
+      description:
+        'Operações B2B maduras precisam de clareza comercial antes de escalar investimento. Mapeamos gargalos, alinhamos liderança e desenhamos um plano executável.',
+      stats: [
+        { value: '55+', label: 'Empresas atendidas' },
+        { value: 'ISO', label: 'Processos certificados' },
+        { value: '90d', label: 'Horizonte do plano' },
+      ],
+      challenges: [
+        { title: 'Funil imprevisível', desc: 'Leads entram sem critério de qualificação ou próximo passo.', icon: 'AlertCircle' },
+        { title: 'Time desalinhado', desc: 'Marketing e vendas com metas e mensagens diferentes.', icon: 'AlertCircle' },
+        { title: 'Dados fragmentados', desc: 'CRM e planilhas não conversam — decisões no feeling.', icon: 'AlertCircle' },
       ],
     },
   },
+  heading('02 · Metodologia SPIN'),
   {
-    id: 'c4',
-    type: 'stats',
+    id: createId(),
+    type: 'tabs',
     props: {
-      items: [
-        { value: '90', label: 'Dias de plano' },
-        { value: '12', label: 'Sessões de alinhamento' },
-        { value: '3', label: 'Frentes de trabalho' },
+      sectionLabel: '02 · Metodologia',
+      tabs: [
+        {
+          title: 'S — Situação',
+          content:
+            'Mapeamos contexto atual: processos, equipe, stack e metas.\n\n• Como funciona o funil hoje?\n• Quais canais geram oportunidades?\n• Onde estão os gargalos operacionais?',
+        },
+        {
+          title: 'P — Problema',
+          content:
+            'Identificamos dores explícitas e implícitas.\n\n• O que impede bater meta?\n• Onde perdemos deals?\n• Quais objeções mais aparecem?',
+        },
+        {
+          title: 'I — Implicação',
+          content:
+            'Quantificamos o custo de não agir.\n\n• Quanto custa cada mês sem previsibilidade?\n• Qual impacto na retenção de clientes?\n• Risco de perder share para concorrentes?',
+        },
+        {
+          title: 'N — Necessidade',
+          content:
+            'Conectamos solução ao resultado desejado.\n\n• Qual ROI mínimo aceitável?\n• Quais entregáveis são inegociáveis?\n• Como medir sucesso em 90 dias?',
+        },
       ],
-      bgColor: '#fafafa',
+      activeColor: '#B45309',
+      bgColor: '#18181b',
     },
   },
+  heading('03 · Jornada comercial'),
   {
-    id: 'c5',
-    type: 'feature_grid',
+    id: createId(),
+    type: 'timeline',
     props: {
-      features: [
-        { title: 'Diagnóstico', desc: 'Mapeamento de processos, funil e gargalos com entrevistas e dados.' },
-        { title: 'Plano de ação', desc: 'Roadmap de 90 dias com metas, responsáveis e indicadores.' },
-        { title: 'Execução assistida', desc: 'Rituais quinzenais, revisão de KPIs e ajustes de rota.' },
+      steps: [
+        { title: 'Diagnóstico', desc: 'Entrevistas, dados de CRM e mapeamento do funil atual.' },
+        { title: 'Desenho SPIN', desc: 'Playbook de qualificação e roteiros por segmento.' },
+        { title: 'Enablement', desc: 'Treinamento do time comercial e rituais semanais.' },
+        { title: 'Pilotos', desc: 'Campanhas e cadências testadas com amostra controlada.' },
+        { title: 'Escala', desc: 'Expansão com KPIs, dashboards e governança.' },
       ],
+      color: '#B45309',
     },
   },
   {
-    id: 'c6',
+    id: createId(),
+    type: 'funnel',
+    props: {
+      sectionLabel: '03 · Jornada',
+      stages: [
+        { name: 'Empresas mapeadas', value: '100%' },
+        { name: 'Leads abordados', value: '60%' },
+        { name: 'Responderam', value: '30%' },
+        { name: 'Qualificados', value: '15%' },
+        { name: 'Propostas', value: '8%' },
+        { name: 'Fechados', value: '4%' },
+      ],
+      color: '#B45309',
+    },
+  },
+  {
+    id: createId(),
     type: 'service_stack',
     props: { mode: 'tabs', title: 'Escopo dos serviços', hint: 'Preenchido pelos serviços selecionados no modelo.' },
   },
   {
-    id: 'c7',
-    type: 'timeline',
+    id: createId(),
+    type: 'feature_grid',
     props: {
-      steps: [
-        { title: 'Semanas 1–2', desc: 'Kick-off, coleta de dados e diagnóstico inicial.' },
-        { title: 'Semanas 3–6', desc: 'Desenho do plano e validação com liderança.' },
-        { title: 'Semanas 7–12', desc: 'Implementação assistida e relatórios executivos.' },
+      columns: '3',
+      bgColor: '#0a0a0a',
+      features: [
+        { title: 'Diagnóstico comercial', desc: 'Auditoria de funil, ICP e processos.', icon: 'Search' },
+        { title: 'Playbook SPIN', desc: 'Scripts, cadências e critérios de qualificação.', icon: 'BookOpen' },
+        { title: 'Dashboards', desc: 'KPIs semanais e painéis executivos.', icon: 'BarChart3' },
+        { title: 'Enablement', desc: 'Treinamentos e role-play com o time.', icon: 'Users' },
+        { title: 'Governança', desc: 'Rituais, comitês e plano de 90 dias.', icon: 'Shield' },
+        { title: 'Acompanhamento', desc: 'Sessões quinzenais com sponsor.', icon: 'Calendar' },
       ],
     },
   },
   {
-    id: 'c8',
-    type: 'accordion',
+    id: createId(),
+    type: 'card',
     props: {
-      title: 'Perguntas frequentes',
+      title: 'Entrega principal',
+      content: 'Pacote consultivo com entregáveis documentados e cronograma executivo.',
+      imageGeneratePrompt: AUTO_IMAGE_PROMPT,
+      imageUrl: '',
+      buttonText: 'Ver detalhes',
+      proposalAction: 'none',
+    },
+  },
+  {
+    id: createId(),
+    type: 'marketing_pricing',
+    props: {
+      sectionLabel: '04 · Proposta',
+      title: 'Investimento recomendado',
+      price: '12.500',
+      listIcon: 'CheckCircle2',
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
       items: [
-        { title: 'Como funciona o acompanhamento?', content: 'Reuniões quinzenais de 60 minutos com pauta e registro de decisões.' },
-        { title: 'Quem participa do projeto?', content: 'Sponsor executivo, ponto focal operacional e nosso time consultivo.' },
-        { title: 'Posso ajustar o escopo depois?', content: 'Sim, mediante aditivo documentado e alinhamento de prazo/valor.' },
+        'Diagnóstico completo em 2 semanas',
+        'Playbook SPIN customizado',
+        '12 sessões de acompanhamento',
+        'Dashboards e rituais de governança',
       ],
     },
   },
   {
-    id: 'c9',
+    id: createId(),
     type: 'testimonial',
     props: {
-      quote: 'Em 60 dias saímos de um funil confuso para um processo comercial previsível e mensurável.',
-      author: 'Diretora Comercial',
-      role: 'Empresa de tecnologia B2B',
-      stars: 5,
+      quote: 'A metodologia trouxe previsibilidade ao pipeline em menos de 60 dias.',
+      author: 'Diretor Comercial',
+      role: '[Segmento]',
+      avatarUrl: '',
+      imageGeneratePrompt: AUTO_IMAGE_PROMPT,
+      bgColor: '#18181b',
     },
   },
   {
-    id: 'c10',
-    type: 'pricing',
-    props: {
-      title: 'Investimento total',
-      price: 'R$ 18.500',
-      period: '',
-      items: ['Diagnóstico completo', 'Plano de 90 dias', '12 sessões de acompanhamento'],
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-      buttonColor: '#0a0a0a',
-      bgColor: '#fafafa',
-    },
-  },
-  {
-    id: 'c11',
+    id: createId(),
     type: 'marketing_cta',
     props: {
-      title: 'Pronto para avançar?',
-      description: 'Revise os detalhes acima. Ao aprovar, iniciamos o onboarding em até 3 dias úteis.',
+      sectionLabel: '05 · Próximo passo',
+      title: 'Pronto para acelerar resultados?',
+      description: 'Validade desta proposta: 15 dias. Agende o kick-off assim que aprovar.',
       buttonText: 'Aprovar proposta',
       proposalAction: 'approve',
     },
   },
+  ...footer(),
 ];
 
 const agenciaElements: BuilderElement[] = [
+  navbar(['Estratégia', 'Campanhas', 'Resultados', 'Investimento']),
+  hero({
+    badge: 'Performance · [Nome do Cliente]',
+    title: 'Crescimento\nprevisível\ncom mídia paga.',
+    description: 'Agência full-funnel: criativos, tráfego e otimização contínua alinhados ao seu modelo de negócio.',
+    secondaryButtonText: 'Ver cases',
+  }),
   {
-    id: 'a1',
-    type: 'marketing_hero',
-    props: {
-      title: 'Proposta — Performance & Criativo',
-      subtitle: 'Gestão de mídia, produção de criativos e páginas de conversão para acelerar aquisição.',
-      badge: 'Marketing orientado a resultado',
-    },
-  },
-  {
-    id: 'a2',
-    type: 'marketing_strategy',
-    props: {
-      title: 'Nossa abordagem',
-      steps: [
-        { title: 'Auditar', desc: 'Contas, pixel, criativos e jornada de conversão.' },
-        { title: 'Otimizar', desc: 'Testes A/B contínuos em público, criativo e landing.' },
-        { title: 'Escalar', desc: 'Budget incremental com metas de CPA e ROAS.' },
-      ],
-    },
-  },
-  {
-    id: 'a3',
-    type: 'stats',
-    props: {
-      items: [
-        { value: '+38%', label: 'ROAS médio' },
-        { value: '4', label: 'Criativos/mês' },
-        { value: '24h', label: 'SLA suporte' },
-      ],
-      bgColor: '#0a0a0a',
-      textColor: '#ffffff',
-    },
-  },
-  {
-    id: 'a4',
-    type: 'service_stack',
-    props: { mode: 'tabs', title: 'Pacotes e entregas', hint: 'Conteúdo importado dos seus serviços cadastrados.' },
-  },
-  {
-    id: 'a5',
-    type: 'comparison_table',
-    props: {
-      title: 'Antes vs depois da parceria',
-      columns: ['Situação atual', 'Com nossa gestão'],
-      rows: [
-        ['Campanhas sem padronização', 'Playbook de testes semanais'],
-        ['Criativos esporádicos', 'Produção mensal orientada a dados'],
-        ['Landing genérica', 'Páginas com copy e prova social'],
-      ],
-    },
-  },
-  {
-    id: 'a6',
-    type: 'marketing_pricing',
-    props: {
-      title: 'Investimento mensal recomendado',
-      price: '4.997',
-      items: [
-        'Gestão Meta + Google Ads',
-        '4 criativos novos por mês',
-        '1 landing page otimizada',
-        'Relatório executivo quinzenal',
-      ],
-    },
-  },
-  {
-    id: 'a7',
-    type: 'icon_list',
-    props: {
-      items: ['Contrato mensal sem fidelidade após 90 dias', 'Acesso a dashboard de performance', 'Grupo dedicado no WhatsApp'],
-      iconColor: '#10b981',
-      textColor: '#52525b',
-    },
-  },
-  {
-    id: 'a8',
-    type: 'accordion',
-    props: {
-      title: 'FAQ',
-      items: [
-        { title: 'Quem cria os anúncios?', content: 'Nosso time de mídia com validação conjunta de mensagens.' },
-        { title: 'O budget de mídia está incluso?', content: 'Não — o investimento em plataformas é pago diretamente por você.' },
-      ],
-    },
-  },
-  {
-    id: 'a9',
-    type: 'marketing_cta',
-    props: {
-      title: 'Vamos colocar sua máquina de aquisição para rodar?',
-      description: 'Aprove abaixo para reservar agenda de kick-off e alinhamento de metas.',
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-    },
-  },
-];
-
-const recorrenteElements: BuilderElement[] = [
-  {
-    id: 'r1',
+    id: createId(),
     type: 'marketing_context',
     props: {
-      title: 'Assinatura de serviço recorrente',
-      paragraphs: [
-        'Modelo pensado para parcerias de longo prazo com entregas contínuas, previsibilidade de caixa e suporte prioritário.',
-        'Abaixo você encontra o escopo detalhado, SLA e condições comerciais.',
+      sectionLabel: '01 · Contexto',
+      title: 'Seu mercado exige velocidade e criatividade',
+      description: 'Campanhas isoladas não sustentam ROAS. Integramos estratégia, produção e mídia em um único squad.',
+      stats: [
+        { value: '3.2x', label: 'ROAS médio' },
+        { value: '48h', label: 'Primeiros criativos' },
+        { value: '24/7', label: 'Monitoramento' },
+      ],
+      challenges: [
+        { title: 'Criativos saturados', desc: 'Anúncios perdem performance sem rotação constante.', icon: 'AlertCircle' },
+        { title: 'Dados silados', desc: 'Pixel, CRM e planilhas sem visão unificada.', icon: 'AlertCircle' },
       ],
     },
   },
+  heading('02 · Funil T/M/F'),
   {
-    id: 'r2',
-    type: 'icon_list',
+    id: createId(),
+    type: 'tabs',
     props: {
-      items: ['Suporte prioritário em horário comercial', 'Atualizações e melhorias mensais', 'SLA de resposta em 24h úteis'],
-      iconColor: '#10b981',
-      textColor: '#52525b',
-    },
-  },
-  {
-    id: 'r3',
-    type: 'service_stack',
-    props: { mode: 'stack', title: 'Serviços inclusos na assinatura' },
-  },
-  {
-    id: 'r4',
-    type: 'feature_grid',
-    props: {
-      features: [
-        { title: 'Onboarding', desc: 'Semana 1 com mapeamento e alinhamento de metas.' },
-        { title: 'Rituais', desc: 'Check-in quinzenal e relatório mensal executivo.' },
-        { title: 'Renovação', desc: 'Revisão de escopo a cada 12 meses ou sob demanda.' },
+      sectionLabel: '02 · Metodologia',
+      tabs: [
+        { title: 'Topo — Atração', content: 'Campanhas de prospecção e awareness com criativos testados A/B.' },
+        { title: 'Meio — Nutrição', content: 'Remarketing, e-mail e conteúdo para leads mornos.' },
+        { title: 'Fundo — Conversão', content: 'Ofertas diretas, urgência e landing otimizada.' },
       ],
+      activeColor: '#B45309',
+      bgColor: '#18181b',
     },
   },
+  heading('03 · Jornada da campanha'),
   {
-    id: 'r5',
+    id: createId(),
     type: 'timeline',
     props: {
       steps: [
-        { title: 'Mês 1', desc: 'Setup, integrações e primeiras entregas.' },
-        { title: 'Mês 2', desc: 'Otimização com base em métricas acordadas.' },
-        { title: 'Mês 3', desc: 'Plano de expansão ou consolidação do escopo.' },
+        { title: 'Semana 1', desc: 'Auditoria de contas, pixel e concorrência.' },
+        { title: 'Semana 2', desc: 'Produção de criativos e estrutura de campanhas.' },
+        { title: 'Semana 3–4', desc: 'Go-live, testes e otimização diária.' },
+        { title: 'Mês 2+', desc: 'Escala com relatórios executivos semanais.' },
       ],
+      color: '#B45309',
     },
   },
   {
-    id: 'r6',
-    type: 'pricing',
-    props: {
-      title: 'Mensalidade',
-      price: 'R$ 2.990',
-      period: '/mês',
-      items: ['Todas as entregas do escopo', 'Suporte e rituais inclusos', 'Reajuste anual pelo IPCA'],
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-      buttonColor: '#18181b',
-      bgColor: '#fafafa',
-    },
-  },
-  {
-    id: 'r7',
-    type: 'accordion',
-    props: {
-      title: 'Termos comuns',
-      items: [
-        { title: 'Cancelamento', content: 'Aviso prévio de 30 dias após o período mínimo de 3 meses.' },
-        { title: 'Forma de pagamento', content: 'Boleto ou PIX até o dia 5 de cada mês.' },
-      ],
-    },
-  },
-  {
-    id: 'r8',
-    type: 'marketing_cta',
-    props: {
-      title: 'Confirme sua assinatura',
-      description: 'Ao aprovar, enviamos o contrato digital e o link de pagamento da primeira mensalidade.',
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-    },
-  },
-];
-
-const trafegoPagoElements: BuilderElement[] = [
-  {
-    id: 'tp1',
-    type: 'marketing_hero',
-    props: {
-      title: 'Plano de Tráfego Pago & Funil de Vendas',
-      subtitle: 'Estrutura completa de captação digital — da mídia paga ao contrato assinado.',
-      badge: 'Plano Estratégico de Aquisição',
-      description: 'Proposta com escopo de campanhas, landing pages, criativos e projeção de retorno sobre investimento em mídia.',
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-    },
-  },
-  { id: 'tp2', type: 'spacer', props: { height: '32' } },
-  {
-    id: 'tp3',
-    type: 'heading',
-    props: { text: 'O Que Vamos Construir', color: '#18181b', align: 'left', size: 'text-3xl', weight: 'font-bold' },
-  },
-  {
-    id: 'tp4',
-    type: 'feature_grid',
-    props: {
-      features: [
-        { title: 'Landing Page de Alta Conversão', desc: 'Página otimizada com formulário de pré-qualificação (CEP, valor da conta, CPF).' },
-        { title: 'Campanhas de Tráfego Pago', desc: 'Meta Ads segmentado por região, faixa etária e interesses com testes A/B contínuos.' },
-        { title: 'Criativos & Copies', desc: 'Pacote mensal de criativos estáticos e em vídeo com variações para teste.' },
-        { title: 'Funil de Qualificação', desc: 'Lead scoring: formulário → WhatsApp/CRM → equipe comercial.' },
-      ],
-    },
-  },
-  { id: 'tp5', type: 'spacer', props: { height: '48' } },
-  {
-    id: 'tp6',
-    type: 'heading',
-    props: { text: 'Estrutura do Funil', color: '#18181b', align: 'center', size: 'text-2xl', weight: 'font-bold' },
-  },
-  {
-    id: 'tp7',
+    id: createId(),
     type: 'funnel',
     props: {
-      color: '#1a1a2e',
+      sectionLabel: '03 · Jornada',
       stages: [
-        { name: 'Impressão do Anúncio (Meta Ads)', value: '1' },
-        { name: 'Clique → Landing Page', value: '2' },
-        { name: 'Lead Captado', value: '3' },
-        { name: 'Qualificação Interna', value: '4' },
-        { name: 'Contrato Fechado', value: '5' },
+        { name: 'Impressões', value: '100%' },
+        { name: 'Cliques', value: '4.2%' },
+        { name: 'Leads', value: '1.8%' },
+        { name: 'Oportunidades', value: '0.9%' },
+        { name: 'Vendas', value: '0.3%' },
       ],
-    },
-  },
-  { id: 'tp8', type: 'spacer', props: { height: '48' } },
-  {
-    id: 'tp9',
-    type: 'heading',
-    props: { text: 'Calculadora de Projeção', color: '#18181b', align: 'left', size: 'text-3xl', weight: 'font-bold' },
-  },
-  {
-    id: 'tp10',
-    type: 'paragraph',
-    props: {
-      text: 'Simule cenários reais com base no investimento em mídia e nas taxas de conversão do funil.',
-      color: '#636e72',
-      align: 'left',
-      size: 'text-base',
+      color: '#e94560',
     },
   },
   {
-    id: 'tp11',
-    type: 'projection_calculator',
-    props: { ...DEFAULT_PROPS.projection_calculator },
-  },
-  { id: 'tp12', type: 'spacer', props: { height: '48' } },
-  {
-    id: 'tp13',
-    type: 'heading',
-    props: { text: 'Cenários de Investimento', color: '#18181b', align: 'left', size: 'text-2xl', weight: 'font-bold' },
-  },
-  {
-    id: 'tp14',
-    type: 'metrics_table',
-    props: { ...DEFAULT_PROPS.metrics_table },
-  },
-  {
-    id: 'tp15',
-    type: 'timeline',
-    props: {
-      steps: [
-        { title: 'Semana 1 — SETUP', desc: 'Briefing, landing page, Pixel Meta, CRM/WhatsApp e conta de anúncios.' },
-        { title: 'Semana 2 — CRIATIVOS', desc: 'Pacote de criativos, copies A/B e estrutura de campanhas.' },
-        { title: 'Semana 3 — LANÇAMENTO', desc: 'Ativação, monitoramento de CPL/CTR/CPC e primeiros leads.' },
-        { title: 'Semana 4–8 — OTIMIZAÇÃO', desc: 'Ajustes por criativo, região e copy; escala gradual do budget.' },
-        { title: 'Mês 3+ — ESCALA', desc: 'Funil validado; aumento de investimento e expansão geográfica.' },
-      ],
-    },
-  },
-  {
-    id: 'tp16',
-    type: 'marketing_cta',
-    props: {
-      title: 'Próximos Passos',
-      description: 'Definir regiões, aprovar investimento inicial em mídia e briefing comercial.',
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-    },
-  },
-];
-
-const designElements: BuilderElement[] = [
-  { id: 'd1', type: 'logo', props: { logoText: 'Studio Criativo', mode: 'text', align: 'center', height: '56', textColor: '#7c3aed' } },
-  {
-    id: 'd2',
-    type: 'marketing_hero',
-    props: {
-      title: 'Identidade visual que converte',
-      badge: 'Proposta criativa',
-      subtitle: 'Branding, UI/UX e peças digitais alinhadas ao seu posicionamento e objetivos de negócio.',
-      description: 'Apresentamos escopo, processo criativo, entregáveis e investimento para elevar a presença da sua marca.',
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-      primaryColor: '#7c3aed',
-      secondaryColor: '#a78bfa',
-    },
-  },
-  {
-    id: 'd3',
+    id: createId(),
     type: 'gallery',
     props: {
       columns: '3',
-      images: [
-        'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1561070791-2526d30994b5?q=80&w=600&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1558655146-9f40138edfeb?q=80&w=600&auto=format&fit=crop',
-      ],
       gap: '16',
       radius: 'rounded-2xl',
-    },
-  },
-  {
-    id: 'd4',
-    type: 'feature_grid',
-    props: {
-      features: [
-        { title: 'Discovery', desc: 'Imersão na marca, concorrência e público-alvo.', icon: 'Search' },
-        { title: 'Design System', desc: 'Tipografia, cores e componentes reutilizáveis.', icon: 'Palette' },
-        { title: 'Entrega Final', desc: 'Arquivos editáveis e guia de uso da marca.', icon: 'Package' },
+      images: [
+        { imageGeneratePrompt: AUTO_IMAGE_PROMPT },
+        { imageGeneratePrompt: AUTO_IMAGE_PROMPT },
+        { imageGeneratePrompt: AUTO_IMAGE_PROMPT },
       ],
     },
   },
   {
-    id: 'd5',
+    id: createId(),
+    type: 'service_stack',
+    props: { mode: 'tabs', title: 'Pacotes de mídia', hint: 'Preenchido pelos serviços selecionados no modelo.' },
+  },
+  {
+    id: createId(),
+    type: 'card',
+    props: {
+      title: 'Squad dedicado',
+      content: 'Gestor de tráfego, designer e analista no mesmo time.',
+      imageGeneratePrompt: AUTO_IMAGE_PROMPT,
+      imageUrl: '',
+      buttonText: 'Saiba mais',
+      proposalAction: 'none',
+    },
+  },
+  {
+    id: createId(),
+    type: 'marketing_pricing',
+    props: {
+      sectionLabel: '04 · Proposta',
+      title: 'Investimento mensal',
+      price: '4.997',
+      listIcon: 'CheckCircle2',
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+      items: ['Gestão Meta + Google Ads', '8 criativos/mês', 'Landing page otimizada', 'Relatório semanal'],
+    },
+  },
+  {
+    id: createId(),
+    type: 'testimonial',
+    props: {
+      quote: 'Dobramos leads qualificados mantendo o CAC dentro da meta.',
+      author: 'Head de Marketing',
+      role: 'E-commerce B2C',
+      avatarUrl: '',
+      imageGeneratePrompt: AUTO_IMAGE_PROMPT,
+    },
+  },
+  {
+    id: createId(),
+    type: 'marketing_cta',
+    props: {
+      sectionLabel: '05 · Próximo passo',
+      title: 'Vamos colocar sua mídia para performar?',
+      description: 'Kick-off em até 7 dias após aprovação.',
+      buttonText: 'Aprovar proposta',
+      proposalAction: 'approve',
+    },
+  },
+  ...footer(),
+];
+
+const saasElements: BuilderElement[] = [
+  navbar(['Produto', 'Features', 'Onboarding', 'Planos']),
+  hero({
+    badge: 'SaaS · [Nome do Cliente]',
+    title: 'Software que\nescala com\nseu time.',
+    description: 'Proposta de implantação, licenciamento e sucesso do cliente para acelerar adoção e retenção.',
+    secondaryButtonText: 'Ver integrações',
+  }),
+  {
+    id: createId(),
+    type: 'marketing_context',
+    props: {
+      sectionLabel: '01 · Contexto',
+      title: 'Transformação digital com segurança',
+      description: 'Times precisam de ferramentas que integrem fluxo de trabalho, dados e governança desde o dia one.',
+      stats: [
+        { value: '99.9%', label: 'Uptime SLA' },
+        { value: '14d', label: 'Go-live médio' },
+        { value: '50+', label: 'Integrações nativas' },
+      ],
+      challenges: [
+        { title: 'Adoção lenta', desc: 'Usuários resistem sem treinamento e champions internos.', icon: 'AlertCircle' },
+        { title: 'Integração complexa', desc: 'APIs legadas atrasam o rollout.', icon: 'AlertCircle' },
+      ],
+    },
+  },
+  heading('02 · Módulos principais'),
+  {
+    id: createId(),
+    type: 'tabs',
+    props: {
+      sectionLabel: '02 · Metodologia',
+      tabs: [
+        { title: 'Features', content: 'Automação, dashboards, permissões granulares e auditoria.' },
+        { title: 'Integrações', content: 'CRM, ERP, webhooks e SSO corporativo.' },
+        { title: 'Suporte', content: 'CSM dedicado, base de conhecimento e SLA 4h.' },
+      ],
+      activeColor: '#2563eb',
+      bgColor: '#1e293b',
+    },
+  },
+  heading('03 · Onboarding'),
+  {
+    id: createId(),
     type: 'timeline',
     props: {
       steps: [
-        { title: 'Semana 1', desc: 'Briefing e moodboard.' },
-        { title: 'Semanas 2–3', desc: 'Conceitos e refinamento.' },
-        { title: 'Semana 4', desc: 'Entrega e handoff.' },
+        { title: 'Discovery', desc: 'Mapeamento de usuários, dados e integrações.' },
+        { title: 'Configuração', desc: 'Ambiente, SSO e importação inicial.' },
+        { title: 'Treinamento', desc: 'Workshops por squad e material gravado.' },
+        { title: 'Go-live', desc: 'Hypercare de 30 dias com CSM.' },
       ],
-      color: '#7c3aed',
+      color: '#2563eb',
     },
   },
   {
-    id: 'd6',
-    type: 'pricing',
+    id: createId(),
+    type: 'funnel',
     props: {
-      title: 'Investimento',
-      price: 'R$ 12.800',
-      period: '',
-      items: ['Identidade visual completa', '3 rodadas de revisão', 'Manual de marca PDF'],
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-      buttonColor: '#7c3aed',
-      bgColor: '#faf5ff',
+      sectionLabel: '03 · Jornada',
+      stages: [
+        { name: 'Trials iniciados', value: '100%' },
+        { name: 'Ativação', value: '65%' },
+        { name: 'Uso recorrente', value: '40%' },
+        { name: 'Conversão paga', value: '22%' },
+        { name: 'Expansão', value: '12%' },
+      ],
+      color: '#2563eb',
     },
   },
   {
-    id: 'd7',
-    type: 'marketing_cta',
-    props: {
-      title: 'Vamos criar algo memorável?',
-      description: 'Aprove abaixo para reservar agenda de kick-off criativo.',
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-    },
-  },
-];
-
-const juridicoElements: BuilderElement[] = [
-  {
-    id: 'j1',
-    type: 'heading',
-    props: { text: 'Proposta de Serviços Jurídicos', color: '#0f172a', align: 'left', size: 'text-4xl', weight: 'font-bold' },
-  },
-  {
-    id: 'j2',
-    type: 'paragraph',
-    props: {
-      text: 'Escopo detalhado de assessoria jurídica com prazos, entregáveis e honorários transparentes.',
-      color: '#475569',
-      align: 'left',
-      size: 'text-lg',
-    },
-  },
-  {
-    id: 'j3',
-    type: 'icon_list',
-    props: {
-      items: ['Atendimento dedicado', 'Relatórios mensais de andamento', 'Confidencialidade garantida'],
-      iconColor: '#2563eb',
-      textColor: '#334155',
-    },
-  },
-  {
-    id: 'j4',
+    id: createId(),
     type: 'service_stack',
-    props: { mode: 'stack', title: 'Serviços contratados' },
+    props: { mode: 'tabs', title: 'Módulos contratados', hint: 'Preenchido pelos serviços selecionados no modelo.' },
   },
   {
-    id: 'j5',
-    type: 'accordion',
+    id: createId(),
+    type: 'card',
     props: {
-      title: 'FAQ',
-      items: [
-        { title: 'Como são calculados os honorários?', content: 'Valor fixo mensal ou por demanda, conforme escopo acordado.' },
-        { title: 'Prazo de resposta?', content: 'SLA de 24h úteis para demandas urgentes.' },
-      ],
-      bgColor: '#f8fafc',
+      title: 'Implantação assistida',
+      content: 'Setup completo com migração de dados e treinamento.',
+      imageGeneratePrompt: AUTO_IMAGE_PROMPT,
+      imageUrl: '',
+      buttonText: 'Detalhes',
+      proposalAction: 'none',
     },
   },
   {
-    id: 'j6',
-    type: 'pricing',
+    id: createId(),
+    type: 'card',
     props: {
-      title: 'Honorários mensais',
-      price: 'R$ 6.500',
-      period: '/mês',
-      items: ['Consultoria contínua', 'Até 20h/mês de demandas', 'Reunião mensal de alinhamento'],
+      title: 'Suporte premium',
+      content: 'CSM dedicado e canal prioritário.',
+      imageGeneratePrompt: AUTO_IMAGE_PROMPT,
+      imageUrl: '',
+      buttonText: 'Detalhes',
+      proposalAction: 'none',
+    },
+  },
+  {
+    id: createId(),
+    type: 'marketing_pricing',
+    props: {
+      sectionLabel: '04 · Proposta',
+      title: 'Plano anual recomendado',
+      price: '899',
+      listIcon: 'CheckCircle2',
       buttonText: 'Aprovar proposta',
       proposalAction: 'approve',
-      buttonColor: '#2563eb',
-      bgColor: '#f8fafc',
+      items: ['Licenças ilimitadas no tier Business', 'Implantação inclusa', 'Integrações premium', 'CSM dedicado'],
     },
   },
   {
-    id: 'j7',
+    id: createId(),
+    type: 'testimonial',
+    props: {
+      quote: 'Reduzimos 40% do tempo operacional após a implantação.',
+      author: 'CTO',
+      role: 'Scale-up B2B',
+      avatarUrl: '',
+      imageGeneratePrompt: AUTO_IMAGE_PROMPT,
+    },
+  },
+  {
+    id: createId(),
     type: 'marketing_cta',
     props: {
-      title: 'Pronto para formalizar a parceria?',
-      description: 'Ao aprovar, enviamos o contrato de prestação de serviços.',
+      sectionLabel: '05 · Próximo passo',
+      title: 'Pronto para modernizar sua operação?',
+      description: 'Ambiente sandbox disponível após assinatura.',
       buttonText: 'Aprovar proposta',
       proposalAction: 'approve',
     },
   },
+  ...footer(),
 ];
 
-const imobiliarioElements: BuilderElement[] = [
+const recorrenteElements: BuilderElement[] = [
+  navbar(['SLA', 'Entregas', 'Governança', 'Investimento']),
+  hero({
+    badge: 'Retainer · [Nome do Cliente]',
+    title: 'Parceria\ncontínua\ncom previsibilidade.',
+    description: 'Modelo recorrente com entregas mensais, SLA claro e governança para evolução constante.',
+    secondaryButtonText: 'Ver entregáveis',
+  }),
   {
-    id: 'i1',
-    type: 'marketing_hero',
+    id: createId(),
+    type: 'marketing_context',
     props: {
-      title: 'Seu próximo imóvel está aqui',
-      badge: 'Exclusividade',
-      subtitle: 'Apresentamos condições especiais de aquisição com documentação completa e suporte em todas as etapas.',
-      description: 'Proposta comercial personalizada com valores, condições de pagamento e cronograma de entrega.',
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-      primaryColor: '#059669',
-      secondaryColor: '#10b981',
-    },
-  },
-  {
-    id: 'i2',
-    type: 'slider',
-    props: {
-      height: '420',
-      slides: [
-        { title: 'Ambientes integrados', desc: 'Plantas funcionais com acabamento premium.', image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=1200&auto=format&fit=crop' },
-        { title: 'Localização privilegiada', desc: 'Próximo a comércio, escolas e vias principais.', image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1200&auto=format&fit=crop' },
+      sectionLabel: '01 · Contexto',
+      title: 'Sucesso de longo prazo exige ritmo',
+      description: 'Projetos pontuais não sustentam melhoria contínua. Estruturamos retainer com metas trimestrais.',
+      stats: [
+        { value: '12m+', label: 'Contratos ativos' },
+        { value: '4h', label: 'SLA resposta' },
+        { value: '98%', label: 'Renovação' },
+      ],
+      challenges: [
+        { title: 'Escopo difuso', desc: 'Entregas sem priorização geram frustração.', icon: 'AlertCircle' },
+        { title: 'Falta de métricas', desc: 'Dificuldade em provar valor mês a mês.', icon: 'AlertCircle' },
       ],
     },
   },
+  heading('02 · Pilares do retainer'),
   {
-    id: 'i3',
-    type: 'stats',
+    id: createId(),
+    type: 'tabs',
     props: {
-      items: [
-        { value: '120', label: 'm² privativos', suffix: '', color: '#059669' },
-        { value: '3', label: 'Suítes', suffix: '', color: '#059669' },
-        { value: '2', label: 'Vagas', suffix: '', color: '#059669' },
+      sectionLabel: '02 · Metodologia',
+      tabs: [
+        { title: 'SLA', content: 'Tempos de resposta, canais e escalonamento definidos.' },
+        { title: 'Governança', content: 'Comitê mensal, backlog priorizado e QBR trimestral.' },
+        { title: 'Entregas', content: 'Pacote fixo de horas/skills com rollover controlado.' },
       ],
-      bgColor: '#f0fdf4',
+      activeColor: '#0d9488',
+      bgColor: '#134e4a',
+    },
+  },
+  heading('03 · Ciclo mensal'),
+  {
+    id: createId(),
+    type: 'timeline',
+    props: {
+      steps: [
+        { title: 'Semana 1', desc: 'Planning e alinhamento de prioridades.' },
+        { title: 'Semana 2–3', desc: 'Execução das entregas do sprint.' },
+        { title: 'Semana 4', desc: 'Review, métricas e próximo ciclo.' },
+      ],
+      color: '#0d9488',
     },
   },
   {
-    id: 'i4',
-    type: 'pricing',
+    id: createId(),
+    type: 'funnel',
     props: {
-      title: 'Condições comerciais',
-      price: 'R$ 890.000',
-      period: '',
-      items: ['Entrada facilitada', 'Financiamento assistido', 'Documentação regularizada'],
+      sectionLabel: '03 · Jornada',
+      stages: [
+        { name: 'Clientes ativos', value: '100%' },
+        { name: 'Engajamento mensal', value: '92%' },
+        { name: 'Metas atingidas', value: '78%' },
+        { name: 'Upsell', value: '24%' },
+        { name: 'Renovação', value: '98%' },
+      ],
+      color: '#14b8a6',
+    },
+  },
+  {
+    id: createId(),
+    type: 'service_stack',
+    props: { mode: 'stack', title: 'Entregas recorrentes', hint: 'Preenchido pelos serviços selecionados no modelo.' },
+  },
+  {
+    id: createId(),
+    type: 'card',
+    props: {
+      title: 'Pacote mensal',
+      content: 'Horas dedicadas, relatório e reunião de status.',
+      imageGeneratePrompt: AUTO_IMAGE_PROMPT,
+      imageUrl: '',
+      buttonText: 'Ver escopo',
+      proposalAction: 'none',
+    },
+  },
+  {
+    id: createId(),
+    type: 'marketing_pricing',
+    props: {
+      sectionLabel: '04 · Proposta',
+      title: 'Mensalidade recomendada',
+      price: '6.500',
+      listIcon: 'CheckCircle2',
       buttonText: 'Aprovar proposta',
       proposalAction: 'approve',
-      buttonColor: '#059669',
-      bgColor: '#f0fdf4',
+      items: ['40h/mês dedicadas', 'SLA 4h úteis', 'Comitê mensal', 'Relatório de performance'],
     },
   },
   {
-    id: 'i5',
+    id: createId(),
+    type: 'testimonial',
+    props: {
+      quote: 'Previsibilidade de custo e entrega transformou nossa operação.',
+      author: 'COO',
+      role: 'Serviços B2B',
+      avatarUrl: '',
+      imageGeneratePrompt: AUTO_IMAGE_PROMPT,
+    },
+  },
+  {
+    id: createId(),
     type: 'marketing_cta',
     props: {
-      title: 'Agende sua visita',
-      description: 'Aprove para confirmar interesse e receber o roteiro de visita.',
+      sectionLabel: '05 · Próximo passo',
+      title: 'Vamos estruturar sua parceria recorrente?',
+      description: 'Contrato mínimo de 6 meses com revisão trimestral.',
       buttonText: 'Aprovar proposta',
       proposalAction: 'approve',
     },
   },
+  ...footer(),
 ];
 
-const eventoElements: BuilderElement[] = [
-  {
-    id: 'e1',
-    type: 'marketing_hero',
-    props: {
-      title: 'Lançamento — Reserve sua vaga',
-      badge: 'Vagas limitadas',
-      subtitle: 'Evento exclusivo com condições especiais para os primeiros confirmados.',
-      description: 'Garanta sua participação antes do encerramento das inscrições.',
-      buttonText: 'Garantir minha vaga',
-      proposalAction: 'approve',
-      primaryColor: '#dc2626',
-      secondaryColor: '#ef4444',
-    },
-  },
-  {
-    id: 'e2',
-    type: 'countdown',
-    props: {
-      targetDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-      targetTime: '23:59',
-      color: '#dc2626',
-      bgColor: '#fef2f2',
-      labelColor: '#52525b',
-      expiredText: 'Inscrições encerradas',
-    },
-  },
-  {
-    id: 'e3',
-    type: 'feature_grid',
-    props: {
-      features: [
-        { title: 'Conteúdo ao vivo', desc: 'Apresentação exclusiva do produto/serviço.', icon: 'Zap' },
-        { title: 'Networking', desc: 'Conexão com outros participantes qualificados.', icon: 'Users' },
-        { title: 'Oferta especial', desc: 'Condições válidas apenas durante o evento.', icon: 'Gift' },
-      ],
-    },
-  },
-  {
-    id: 'e4',
-    type: 'pricing',
-    props: {
-      title: 'Investimento',
-      price: 'R$ 497',
-      period: '',
-      items: ['Acesso ao evento completo', 'Material de apoio', 'Gravação por 30 dias'],
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-      buttonColor: '#dc2626',
-      bgColor: '#fef2f2',
-    },
-  },
-  {
-    id: 'e5',
-    type: 'marketing_cta',
-    props: {
-      title: 'Não perca esta oportunidade',
-      description: 'As vagas são limitadas. Confirme agora.',
-      buttonText: 'Aprovar proposta',
-      proposalAction: 'approve',
-    },
-  },
-];
+function premiumPageLayout(themeId: string): BuilderPageLayout {
+  return {
+    ...applyThemeToPageLayout(normalizePageLayout(null), themeId),
+    backgroundEffect: 'dots',
+    widthMode: 'full',
+    horizontalPadding: 0,
+  };
+}
 
 export const STARTER_TEMPLATES: StarterTemplate[] = [
   {
     id: 'starter-consultoria',
-    nome: 'Consultoria B2B',
-    descricao: 'Narrativa completa: contexto, metodologia, serviços em abas, cronograma e FAQ.',
-    categoria: 'Serviços',
+    nome: 'Consultoria Executiva',
+    descricao: 'Blueprint Vortex: menu, hero IA, 5 seções numeradas, SPIN, funil e pricing premium.',
+    categoria: 'Consultoria',
+    offerType: 'consultoria',
     elementos: consultoriaElements,
     fluxo: DEFAULT_FLOW,
-    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'clean-corporate'),
+    pageLayout: premiumPageLayout('dark-premium'),
   },
   {
     id: 'starter-agencia',
-    nome: 'Agência / Marketing',
-    descricao: 'Performance, comparação, pacotes em abas e investimento mensal.',
+    nome: 'Agência Performance',
+    descricao: 'Funil T/M/F, galeria IA, timeline de campanha e investimento mensal.',
     categoria: 'Marketing',
+    offerType: 'agencia',
     elementos: agenciaElements,
     fluxo: DEFAULT_FLOW,
-    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'dark-premium'),
+    pageLayout: premiumPageLayout('dark-premium'),
+  },
+  {
+    id: 'starter-saas',
+    nome: 'SaaS / Produto Tech',
+    descricao: 'Onboarding, integrações, cards IA e pricing anual estilo produto.',
+    categoria: 'Tech',
+    offerType: 'saas',
+    elementos: saasElements,
+    fluxo: DEFAULT_FLOW,
+    pageLayout: premiumPageLayout('navy-performance'),
   },
   {
     id: 'starter-recorrente',
-    nome: 'Assinatura recorrente',
-    descricao: 'SLA, serviços empilhados, governança e mensalidade.',
+    nome: 'Retainer / Recorrente',
+    descricao: 'SLA, governança, ciclo mensal e mensalidade com imagens IA.',
     categoria: 'Recorrente',
+    offerType: 'recorrente',
     elementos: recorrenteElements,
     fluxo: DEFAULT_FLOW,
-    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'ocean-pro'),
-  },
-  {
-    id: 'starter-trafego-pago',
-    nome: 'Plano de Tráfego Pago',
-    descricao: 'Hero, escopo, funil, calculadora interativa de ROI, tabela de cenários e cronograma.',
-    categoria: 'Marketing',
-    elementos: trafegoPagoElements,
-    fluxo: DEFAULT_FLOW,
-    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'navy-performance'),
-  },
-  {
-    id: 'starter-design',
-    nome: 'Design / Criativo',
-    descricao: 'Portfolio visual, processo criativo e investimento em branding.',
-    categoria: 'Criativo',
-    elementos: designElements,
-    fluxo: DEFAULT_FLOW,
-    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'purple-creative'),
-  },
-  {
-    id: 'starter-juridico',
-    nome: 'Jurídico / Serviços',
-    descricao: 'Escopo formal, FAQ e honorários mensais.',
-    categoria: 'Serviços',
-    elementos: juridicoElements,
-    fluxo: DEFAULT_FLOW,
-    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'clean-corporate'),
-  },
-  {
-    id: 'starter-imobiliario',
-    nome: 'Imobiliário',
-    descricao: 'Galeria, métricas do imóvel e condições comerciais.',
-    categoria: 'Imobiliário',
-    elementos: imobiliarioElements,
-    fluxo: DEFAULT_FLOW,
-    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'forest-growth'),
-  },
-  {
-    id: 'starter-evento',
-    nome: 'Evento / Lançamento',
-    descricao: 'Urgência com countdown, benefícios e pricing.',
-    categoria: 'Eventos',
-    elementos: eventoElements,
-    fluxo: DEFAULT_FLOW,
-    pageLayout: applyThemeToPageLayout(normalizePageLayout(null), 'bold-red'),
+    pageLayout: premiumPageLayout('ocean-pro'),
   },
 ];
+
+export function applyOrgLogoToElements(
+  elements: BuilderElement[],
+  logoUrl?: string,
+): BuilderElement[] {
+  if (!logoUrl) return elements;
+  return elements.map((el) => {
+    if (el.type === 'navbar') {
+      return { ...el, props: { ...el.props, logoUrl } };
+    }
+    if (el.type === 'marketing_hero' && !el.props.logoUrl) {
+      return { ...el, props: { ...el.props, logoUrl } };
+    }
+    if (el.type === 'logo' && !el.props.url) {
+      return { ...el, props: { ...el.props, url: logoUrl } };
+    }
+    return el;
+  });
+}
 
 export function applyStarterTemplate(templateId: string): {
   elementos: BuilderElement[];
   fluxo: ProposalFlowConfig;
   nome: string;
   pageLayout: BuilderPageLayout;
+  offerType: OfferType;
 } | null {
   const t = STARTER_TEMPLATES.find((x) => x.id === templateId);
   if (!t) return null;
@@ -792,5 +759,28 @@ export function applyStarterTemplate(templateId: string): {
     fluxo: t.fluxo,
     nome: t.nome,
     pageLayout: normalizePageLayout(t.pageLayout ?? DEFAULT_PAGE_LAYOUT),
+    offerType: t.offerType,
   };
+}
+
+/** Conta slots de imagem IA (imageGeneratePrompt) por template — para testes. */
+export function countStarterImagePrompts(elements: BuilderElement[]): number {
+  let count = 0;
+  function walk(list: BuilderElement[]) {
+    for (const el of list) {
+      const props = el.props ?? {};
+      if (typeof props.imageGeneratePrompt === 'string' && props.imageGeneratePrompt.trim()) count++;
+      if (Array.isArray(props.images)) {
+        for (const item of props.images) {
+          if (typeof item === 'object' && item && 'imageGeneratePrompt' in item) {
+            const q = String((item as { imageGeneratePrompt: string }).imageGeneratePrompt).trim();
+            if (q) count++;
+          }
+        }
+      }
+      if (el.children?.length) walk(el.children);
+    }
+  }
+  walk(elements);
+  return count;
 }

@@ -6,7 +6,7 @@ import { formatBRL } from '../lib/format';
 import { usePropostas } from '../hooks/useStoreEntity';
 import type { NavigateFn } from '../types/navigation';
 
-export default function Pagamentos({ navigate: _navigate }: { navigate: NavigateFn }) {
+export default function Pagamentos({ navigate }: { navigate: NavigateFn }) {
   const allPropostas = usePropostas();
   const propostas = useMemo(() => allPropostas.filter(p => p.status === 'aprovada'), [allPropostas]);
   const [searchTerm, setSearchTerm] = useState('');

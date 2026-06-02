@@ -92,7 +92,7 @@ export function EscolherPontoDePartida({ onBlank, onStarter, onAiGenerated }: Es
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl w-full">
           <h1 className="text-3xl font-bold text-zinc-900 tracking-tight mb-2 text-center">Novo modelo de proposta</h1>
           <p className="text-zinc-500 text-center mb-12">
-            Escolha um template (com preview), gere com IA ou comece em branco.
+            4 templates premium com menu, banner IA e efeitos modernos — ou gere com IA / em branco.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">

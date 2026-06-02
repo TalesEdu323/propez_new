@@ -133,6 +133,21 @@ export function PageLayoutFields({ layout, onChange }: PageLayoutFieldsProps) {
             className="glass-input text-sm"
           />
         </div>
+        <div>
+          <label className="block text-[11px] font-medium text-zinc-600 mb-1.5">Efeito de fundo</label>
+          <select
+            value={layout.backgroundEffect ?? 'none'}
+            onChange={(e) => {
+              const v = e.target.value as 'none' | 'dots' | 'grid';
+              onChange({ ...layout, backgroundEffect: v === 'none' ? undefined : v });
+            }}
+            className="glass-input text-sm appearance-none cursor-pointer"
+          >
+            <option value="none">Nenhum</option>
+            <option value="dots">Pontos animados</option>
+            <option value="grid">Grid animado</option>
+          </select>
+        </div>
       </div>
 
       <div className="rounded-xl border border-black/5 overflow-hidden">

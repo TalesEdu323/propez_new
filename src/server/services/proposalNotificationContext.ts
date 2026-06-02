@@ -1,5 +1,5 @@
 import type { Pool } from 'pg'
-import { resolveSignedPdfUrlForNotification } from './rubricaSignedPdf.js'
+import { resolveSignedPdfUrlForNotification } from './contractSignedPdf.js'
 
 export type ProposalNotificationType =
   | 'proposal_created'
@@ -73,7 +73,10 @@ export async function loadProposalNotificationContext(
             p.cliente_nome, COALESCE(NULLIF(TRIM(p.cliente_email), ''), '') AS cliente_email,
             c.email AS cliente_email_join,
             p.status, p.valor_cents, p.desconto_cents,
-            p.public_token, p.rubrica_status, p.rubrica_signing_url, p.rubrica_signed_pdf_url,
+            p.public_token,
+            COALESCE(p.contract_sign_status, p.rubrica_status) AS rubrica_status,
+            COALESCE(p.contract_signing_url, p.rubrica_signing_url) AS rubrica_signing_url,
+            COALESCE(p.contract_signed_pdf_path, p.rubrica_signed_pdf_url) AS rubrica_signed_pdf_url,
             ct.titulo AS contrato_titulo, p.data_validade, p.pago
      FROM propostas p
      JOIN organizations o ON o.id = p.organization_id

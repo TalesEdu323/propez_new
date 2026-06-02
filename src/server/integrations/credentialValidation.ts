@@ -1,5 +1,4 @@
 import { createProsyncClient, ProsyncHttpError } from '../clients/prosyncClient.js'
-import { createRubricaClient, RubricaHttpError } from '../clients/rubricaClient.js'
 import type { SuiteApp } from '../clients/suiteLookup.js'
 
 export function normalizeBaseUrl(url: string | undefined | null, fallback: string): string {
@@ -14,13 +13,10 @@ export function validateApiKeyFormat(provider: SuiteApp, apiKey: string): string
   const key = apiKey.trim()
   if (!key) return 'Chave API obrigatória'
   if (provider === 'rubrica') {
-    if (!/^dm_(live|test)_[a-zA-Z0-9_-]+$/.test(key)) {
-      return 'Chave Rubrica inválida (esperado dm_live_... ou dm_test_...)'
-    }
-  } else {
-    if (!/^ps_(live|test)_[a-zA-Z0-9_-]+$/.test(key)) {
-      return 'Chave ProSync inválida (esperado ps_live_... ou ps_test_...)'
-    }
+    return 'Integração externa Rubrica descontinuada — assinatura nativa no PropEZ'
+  }
+  if (!/^ps_(live|test)_[a-zA-Z0-9_-]+$/.test(key)) {
+    return 'Chave ProSync inválida (esperado ps_live_... ou ps_test_...)'
   }
   return null
 }
@@ -35,17 +31,15 @@ export async function verifyUpstreamCredential(
   apiKey: string,
   baseUrl: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (provider === 'rubrica') {
+    return { ok: false, error: 'Integração externa Rubrica descontinuada — assinatura nativa no PropEZ' }
+  }
   try {
-    if (provider === 'rubrica') {
-      const client = createRubricaClient({ baseUrl, apiKey })
-      await client.getSignatureStatus('00000000-0000-0000-0000-000000000000')
-      return { ok: true }
-    }
     const client = createProsyncClient({ baseUrl, apiKey })
     await client.listLeads({ limit: 1 })
     return { ok: true }
   } catch (err) {
-    if (err instanceof RubricaHttpError || err instanceof ProsyncHttpError) {
+    if (err instanceof ProsyncHttpError) {
       if (err.status === 401 || err.status === 403) {
         return { ok: false, error: 'Chave API recusada pelo serviço (401/403)' }
       }

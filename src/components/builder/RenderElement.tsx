@@ -26,8 +26,48 @@ import {
   normalizeHeroCopy,
 } from './propUtils';
 import { resolveThemeColors } from '../../lib/proposalTheme';
+import { isSafeImageUrl, pickSafeImageUrl } from './imageUrlUtils';
 
-type ElementData = BuilderElement;
+function SectionLabel({
+  label,
+  accent,
+}: {
+  label?: unknown;
+  accent: string;
+}) {
+  const text = typeof label === 'string' ? label.trim() : '';
+  if (!text) return null;
+  return (
+    <span
+      className="inline-block text-xs font-semibold uppercase tracking-widest mb-4"
+      style={{ color: accent }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function ImagePlaceholder({ className = '' }: { className?: string }) {
+  return (
+    <div
+      className={`bg-gradient-to-br from-zinc-100 to-zinc-200 ${className}`}
+      aria-hidden
+    />
+  );
+}
+
+function SafeImg({
+  src,
+  alt,
+  className,
+  ...rest
+}: React.ImgHTMLAttributes<HTMLImageElement> & { src: unknown }) {
+  const safeSrc = isSafeImageUrl(src) ? src : undefined;
+  if (!safeSrc) {
+    return <ImagePlaceholder className={className} />;
+  }
+  return <img src={safeSrc} alt={alt ?? ''} className={className} referrerPolicy="no-referrer" {...rest} />;
+}
 
 export type ProposalActionHandler = (action: 'approve') => void;
 
@@ -134,13 +174,12 @@ export function RenderElement({
       const align = props.align === 'left' ? 'justify-start' : props.align === 'right' ? 'justify-end' : 'justify-center';
       return (
         <motion.div {...getAnimationProps('fade-up')} className={`flex ${align} py-4`}>
-          {props.mode === 'image' && logoSrc ? (
-            <img
+          {props.mode === 'image' && pickSafeImageUrl(logoSrc) ? (
+            <SafeImg
               src={logoSrc}
               alt={String(props.logoText ?? 'Logo')}
               style={{ height: `${props.height ?? 48}px` }}
               className="object-contain"
-              referrerPolicy="no-referrer"
             />
           ) : (
             <span
@@ -154,19 +193,25 @@ export function RenderElement({
       );
     }
 
-    case 'image':
+    case 'image': {
+      const imageSrc = pickSafeImageUrl(props.url);
       return (
         <motion.div {...getAnimationProps(props.animation || 'fade-up')} className="relative group overflow-hidden" style={{ width: props.width }}>
-          <motion.img 
-            whileHover={{ scale: 1.05 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            src={props.url} 
-            alt={props.alt || 'Imagem'} 
-            className={`${props.radius} ${props.shadow} object-cover w-full h-full`}
-          />
+          {imageSrc ? (
+            <motion.img
+              whileHover={{ scale: 1.05 }}
+              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              src={imageSrc}
+              alt={props.alt || 'Imagem'}
+              className={`${props.radius} ${props.shadow} object-cover w-full h-full`}
+            />
+          ) : (
+            <ImagePlaceholder className={`${props.radius} w-full h-48 min-h-[12rem]`} />
+          )}
           <div className={`absolute inset-0 ring-1 ring-inset ring-black/10 ${props.radius} pointer-events-none`} />
         </motion.div>
       );
+    }
     
     case 'divider': {
       const dividerMargin = parseInt(String(props.margin ?? '32'), 10);
@@ -246,13 +291,17 @@ export function RenderElement({
           style={{ backgroundColor: props.bgColor }}
         >
           <div className="md:w-2/5 h-64 md:h-auto relative overflow-hidden">
-            <motion.img 
-              whileHover={{ scale: 1.05 }}
-              transition={{ duration: 0.6 }}
-              src={props.imageUrl} 
-              alt={props.title} 
-              className="w-full h-full object-cover" 
-            />
+            {pickSafeImageUrl(props.imageUrl) ? (
+              <motion.img
+                whileHover={{ scale: 1.05 }}
+                transition={{ duration: 0.6 }}
+                src={pickSafeImageUrl(props.imageUrl)}
+                alt={props.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <ImagePlaceholder className="w-full h-full min-h-[16rem]" />
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent md:bg-gradient-to-r" />
           </div>
           <div className="p-8 md:p-10 md:w-3/5 flex flex-col justify-center relative z-10">
@@ -333,19 +382,26 @@ export function RenderElement({
       const primary = (props.primaryColor as string) || theme.primaryColor;
       const secondary = (props.secondaryColor as string) || theme.secondaryColor;
       const logoSrc = (props.logoUrl as string) || theme.logoUrl;
-      const bgImage = props.backgroundImageUrl as string | undefined;
+      const bgImage = pickSafeImageUrl(props.backgroundImageUrl as string | undefined);
+      const secondaryText = String(props.secondaryButtonText ?? '').trim();
+      const secondaryAction = resolveProposalAction('marketing_hero', {
+        ...props,
+        proposalAction: props.secondaryButtonAction ?? 'none',
+      });
       return (
         <div className="relative min-h-[600px] flex flex-col items-center justify-center text-center p-8 overflow-hidden" style={{ backgroundColor: '#000' }}>
           {bgImage ? (
             <>
-              <img
+              <SafeImg
                 src={bgImage}
                 alt=""
                 className="absolute inset-0 w-full h-full object-cover"
-                referrerPolicy="no-referrer"
               />
+              {props.dotOverlay ? <div className="propez-hero-dot-overlay" /> : null}
               <div className="absolute inset-0 bg-black/55" />
             </>
+          ) : props.dotOverlay ? (
+            <div className="propez-hero-dot-overlay" />
           ) : null}
           <div className="absolute inset-0 opacity-40" style={{ background: `radial-gradient(circle at 50% 50%, ${primary} 0%, transparent 70%)` }} />
           <motion.div
@@ -353,15 +409,15 @@ export function RenderElement({
             whileInView={{ opacity: 1, y: 0 }}
             className="relative z-10 max-w-4xl mx-auto"
           >
-            {logoSrc && (
-              <img src={logoSrc} alt="Logo" className="h-16 mx-auto mb-8 object-contain" referrerPolicy="no-referrer" />
+            {pickSafeImageUrl(logoSrc) && (
+              <SafeImg src={logoSrc} alt="Logo" className="h-16 mx-auto mb-8 object-contain" />
             )}
             {hero.badge && (
               <span className="inline-block px-4 py-1 rounded-full text-xs font-semibold tracking-widest uppercase mb-6" style={{ backgroundColor: primary, color: '#fff' }}>
                 {hero.badge}
               </span>
             )}
-            <h1 className="text-5xl md:text-7xl font-bold text-white mb-8 leading-tight">{hero.title}</h1>
+            <h1 className="text-5xl md:text-7xl font-bold text-white mb-8 leading-tight whitespace-pre-line">{hero.title}</h1>
             {hero.description && (
               <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-12 leading-relaxed whitespace-pre-line">{hero.description}</p>
             )}
@@ -373,6 +429,16 @@ export function RenderElement({
               >
                 {hero.buttonText}
               </button>
+              {secondaryText ? (
+                <button
+                  {...(secondaryAction === 'approve'
+                    ? proposalClickProps('marketing_hero', { ...props, proposalAction: 'approve' }, previewMode, onProposalAction)
+                    : { type: 'button' as const })}
+                  className="px-8 py-4 rounded-xl font-bold text-white border border-white/30 bg-white/10 backdrop-blur transition-all hover:scale-105 hover:bg-white/20"
+                >
+                  {secondaryText}
+                </button>
+              ) : null}
             </div>
           </motion.div>
         </div>
@@ -386,6 +452,7 @@ export function RenderElement({
         <div className="py-24" style={{ backgroundColor: '#0a0a0a', paddingLeft: contentPad, paddingRight: contentPad }}>
           <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center w-full">
             <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }}>
+              <SectionLabel label={props.sectionLabel} accent={accent} />
               <h2 className="text-4xl font-bold text-white mb-6">{props.title}</h2>
               {description && (
                 <p className="text-gray-400 text-lg mb-8 leading-relaxed whitespace-pre-line">{description}</p>
@@ -423,6 +490,7 @@ export function RenderElement({
       return (
         <div className="py-24 px-8" style={{ backgroundColor: '#000' }}>
           <div className="max-w-5xl mx-auto text-center mb-16">
+            <SectionLabel label={props.sectionLabel} accent={accent} />
             <h2 className="text-4xl font-bold text-white mb-4">{props.title}</h2>
           </div>
           <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8">
@@ -484,6 +552,7 @@ export function RenderElement({
               </div>
             </div>
             <div className="relative z-10">
+              <SectionLabel label={props.sectionLabel} accent="#f59e0b" />
               <h2 className="text-3xl font-bold text-white mb-8">{props.title}</h2>
               <div className="flex items-baseline gap-2 mb-12">
                 <span className="text-gray-400 text-xl">R$</span>
@@ -517,6 +586,7 @@ export function RenderElement({
             whileInView={{ opacity: 1, scale: 1 }}
             className="max-w-3xl mx-auto"
           >
+            <SectionLabel label={props.sectionLabel} accent={theme.primaryColor} />
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
               {props.title}
             </h2>
@@ -541,8 +611,18 @@ export function RenderElement({
           className="flex items-center justify-between py-5 px-8 glass-panel border-b border-black/5 backdrop-blur-2xl sticky top-0 z-50" 
           style={{ backgroundColor: props.bgColor }}
         >
-          <div className="font-black text-2xl tracking-tighter" style={{ color: props.textColor }}>
-            {props.logoText}
+          <div className="flex items-center gap-3">
+            {pickSafeImageUrl(props.logoUrl) || pickSafeImageUrl(theme.logoUrl) ? (
+              <SafeImg
+                src={(props.logoUrl as string) || theme.logoUrl}
+                alt={String(props.logoText ?? 'Logo')}
+                className="h-8 max-w-[140px] object-contain"
+              />
+            ) : (
+              <div className="font-black text-2xl tracking-tighter" style={{ color: props.textColor }}>
+                {props.logoText}
+              </div>
+            )}
           </div>
           <div className="hidden md:flex items-center gap-8">
             {props.links.map((link: string, idx: number) => (
@@ -560,6 +640,7 @@ export function RenderElement({
           <motion.button 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
+            {...proposalClickProps('navbar', props, previewMode, onProposalAction)}
             className="px-6 py-2.5 bg-zinc-900 text-white font-bold rounded-full shadow-md hover:shadow-lg transition-all"
           >
             {props.buttonText}
@@ -617,7 +698,7 @@ export function RenderElement({
               whileHover={{ scale: 1.02, zIndex: 10 }}
               className={`relative aspect-square overflow-hidden ${props.radius} shadow-sm group border border-black/5`}
             >
-              <img src={img} alt={`Galeria ${idx}`} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+              <SafeImg src={img} alt={`Galeria ${idx}`} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-6">
                 <div className="w-10 h-10 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center border border-black/5 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
                   <Maximize2 className="w-5 h-5 text-zinc-900" />
@@ -632,8 +713,9 @@ export function RenderElement({
       return (
         <motion.div 
           {...getAnimationProps('fade-up')}
-          className="flex flex-col items-center gap-4 w-full py-12"
+          className="flex flex-col items-center gap-4 w-full py-12 px-8"
         >
+          <SectionLabel label={props.sectionLabel} accent={theme.primaryColor} />
           {props.stages.map((stage: any, idx: number) => {
             const width = 100 - (idx * (50 / Math.max(1, props.stages.length - 1)));
             return (
@@ -732,7 +814,7 @@ export function RenderElement({
             "{props.quote}"
           </p>
           <div className="flex items-center gap-5">
-            <img src={props.avatarUrl} alt={props.author} className="w-16 h-16 rounded-full object-cover shadow-sm border-2 border-white" />
+            <SafeImg src={props.avatarUrl} alt={props.author} className="w-16 h-16 rounded-full object-cover shadow-sm border-2 border-white" />
             <div>
               <h5 className="font-bold text-zinc-900 text-xl">{props.author}</h5>
               <span className="text-zinc-500 font-medium">{props.role}</span>
@@ -801,7 +883,8 @@ export function RenderElement({
 
     case 'tabs':
       return (
-        <motion.div {...getAnimationProps('fade-up')} className="w-full">
+        <motion.div {...getAnimationProps('fade-up')} className="w-full px-8 py-6">
+          <SectionLabel label={props.sectionLabel} accent={theme.primaryColor} />
           <TabsElement
             tabs={props.tabs ?? []}
             activeColor={props.activeColor as string | undefined}
@@ -999,7 +1082,7 @@ export function RenderElement({
             className={`${previewMode ? 'fixed' : 'relative mx-auto'} z-50 flex items-center gap-4 p-5 rounded-2xl shadow-lg glass-panel border border-black/5 w-80 backdrop-blur-xl ${previewMode ? (props.position === 'bottom-left' ? 'bottom-8 left-8' : props.position === 'bottom-right' ? 'bottom-8 right-8' : props.position === 'top-left' ? 'top-8 left-8' : 'top-8 right-8') : ''}`}
             style={{ backgroundColor: props.bgColor, color: props.textColor }}
           >
-            <img src={props.avatarUrl} alt={props.name} className="w-14 h-14 rounded-full object-cover shadow-sm border-2 border-white" />
+            <SafeImg src={props.avatarUrl} alt={props.name} className="w-14 h-14 rounded-full object-cover shadow-sm border-2 border-white" />
             <div className="flex-1 min-w-0">
               <p className="text-base font-bold truncate tracking-tight">{props.name}</p>
               <p className="text-sm opacity-90 truncate">{props.action}</p>

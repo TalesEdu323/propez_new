@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, ShieldCheck, ChevronLeft, CheckCircle2, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../../lib/apiClient';
 import { bootstrapSession } from '../../lib/authSession';
 import { APP_BASE_PATH } from '../../lib/appPaths';
 import { PropezLogo } from '../PropezLogo';
+import { GoogleAuthSection } from './GoogleAuthSection';
 
 export type AuthMode =
   | 'login'
@@ -29,6 +30,7 @@ export function AuthForm({
   showBrandingPanel = true,
 }: AuthFormProps) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<AuthMode>(resetToken ? 'reset-password' : initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,6 +41,22 @@ export function AuthForm({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [googleLoginEnabled, setGoogleLoginEnabled] = useState(false);
+
+  useEffect(() => {
+    void api.get<{ enabled: boolean }>('/api/auth/google/status')
+      .then((data) => setGoogleLoginEnabled(Boolean(data.enabled)))
+      .catch(() => setGoogleLoginEnabled(false));
+  }, []);
+
+  useEffect(() => {
+    const oauthError = searchParams.get('error');
+    if (oauthError === 'oauth_not_configured') {
+      setErrorMsg('Login com Google não está configurado no servidor.');
+    } else if (oauthError === 'oauth_failed') {
+      setErrorMsg('Não foi possível entrar com Google. Tente novamente.');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     setErrorMsg(null);
@@ -225,6 +243,9 @@ export function AuthForm({
                 {!isLoading && <ArrowRight className="w-4 h-4" />}
               </button>
             </form>
+            {googleLoginEnabled && (
+              <GoogleAuthSection label="Entrar com Google" redirect="/app" />
+            )}
             <p className="mt-8 text-center text-xs text-zinc-400">
               Não tem conta?{' '}
               <button type="button" onClick={() => navigate('/cadastro')} className="font-bold text-zinc-900">
@@ -265,6 +286,15 @@ export function AuthForm({
                 {!isLoading && <ArrowRight className="w-4 h-4" />}
               </button>
             </form>
+            {googleLoginEnabled && (
+              <GoogleAuthSection label="Continuar com Google" redirect="/app" />
+            )}
+            <p className="mt-8 text-center text-xs text-zinc-400">
+              Já tem conta?{' '}
+              <button type="button" onClick={() => navigate('/login')} className="font-bold text-zinc-900">
+                Entrar
+              </button>
+            </p>
           </motion.div>
         )}
 

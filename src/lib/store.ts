@@ -18,6 +18,8 @@ import type { BuilderElement, BuilderPageLayout } from '../types/builder';
 import { normalizePageLayout } from './pageLayout';
 import type { ProposalFlowConfig } from '../types/proposalFlow';
 import { api } from './apiClient';
+import { normalizeUuidOrNull } from './normalizeUuid';
+import { notifyStoreSaveError } from './storeSaveFeedback';
 import {
   getSession,
   patchOrganization,
@@ -66,6 +68,10 @@ export interface ContratoTemplate {
   id: string;
   titulo: string;
   texto: string;
+  sourceType?: 'text' | 'pdf';
+  pdfFileName?: string;
+  pageCount?: number;
+  signatureConfig?: unknown;
   data_criacao: string;
 }
 
@@ -80,6 +86,7 @@ export interface ModeloProposta {
   chavePix?: string;
   linkPagamento?: string;
   fluxo?: ProposalFlowConfig;
+  signatureConfig?: unknown;
   data_criacao: string;
   tier?: PlanTier;
 }
@@ -109,10 +116,20 @@ export interface Proposta {
   pago: boolean;
   data_pagamento?: string;
   prosyncLeadId?: string;
+  contractSignDocumentId?: string;
+  contractSignStatus?: 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed';
+  contractSigningUrl?: string;
+  contractSignedPdfPath?: string;
+  contractSignLastSyncAt?: string;
+  /** @deprecated legacy alias */
   rubricaDocumentId?: string;
+  /** @deprecated legacy alias */
   rubricaStatus?: 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed';
+  /** @deprecated legacy alias */
   rubricaSigningUrl?: string;
+  /** @deprecated legacy alias */
   rubricaSignedPdfUrl?: string;
+  /** @deprecated legacy alias */
   rubricaLastSyncAt?: string;
   creatorPlan?: PlanTier;
   publicToken?: string;
@@ -236,6 +253,10 @@ interface ApiContrato {
   id: string;
   titulo: string;
   texto: string;
+  sourceType?: 'text' | 'pdf';
+  pdfFileName?: string | null;
+  pageCount?: number | null;
+  signatureConfig?: unknown;
   data_criacao: string;
 }
 interface ApiModelo {
@@ -250,6 +271,7 @@ interface ApiModelo {
   linkPagamento?: string | null;
   tier: PlanTier;
   fluxo?: ProposalFlowConfig;
+  signatureConfig?: unknown;
   data_criacao: string;
 }
 interface ApiProposta {
@@ -279,6 +301,11 @@ interface ApiProposta {
   creatorPlan?: string | null;
   publicToken?: string | null;
   prosyncLeadId?: string | null;
+  contractSignDocumentId?: string | null;
+  contractSignStatus?: 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed' | null;
+  contractSigningUrl?: string | null;
+  contractSignedPdfPath?: string | null;
+  contractSignLastSyncAt?: string | null;
   rubricaDocumentId?: string | null;
   rubricaStatus?: 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed' | null;
   rubricaSigningUrl?: string | null;
@@ -312,7 +339,16 @@ function fromApiServico(a: ApiServico): Servico {
   };
 }
 function fromApiContrato(a: ApiContrato): ContratoTemplate {
-  return { id: a.id, titulo: a.titulo, texto: a.texto ?? '', data_criacao: a.data_criacao };
+  return {
+    id: a.id,
+    titulo: a.titulo,
+    texto: a.texto ?? '',
+    sourceType: a.sourceType ?? 'text',
+    pdfFileName: a.pdfFileName ?? undefined,
+    pageCount: a.pageCount ?? undefined,
+    signatureConfig: a.signatureConfig ?? undefined,
+    data_criacao: a.data_criacao,
+  };
 }
 function fromApiModelo(a: ApiModelo): ModeloProposta {
   return {
@@ -327,6 +363,7 @@ function fromApiModelo(a: ApiModelo): ModeloProposta {
     linkPagamento: a.linkPagamento ?? undefined,
     tier: (a.tier ?? 'free') as PlanTier,
     fluxo: a.fluxo,
+    signatureConfig: a.signatureConfig ?? undefined,
     data_criacao: a.data_criacao,
   };
 }
@@ -358,11 +395,16 @@ function fromApiProposta(a: ApiProposta): Proposta {
     creatorPlan: (a.creatorPlan as PlanTier | undefined) ?? undefined,
     publicToken: a.publicToken ?? undefined,
     prosyncLeadId: a.prosyncLeadId ?? undefined,
-    rubricaDocumentId: a.rubricaDocumentId ?? undefined,
-    rubricaStatus: a.rubricaStatus ?? undefined,
-    rubricaSigningUrl: a.rubricaSigningUrl ?? undefined,
-    rubricaSignedPdfUrl: a.rubricaSignedPdfUrl ?? undefined,
-    rubricaLastSyncAt: a.rubricaLastSyncAt ?? undefined,
+    contractSignDocumentId: a.contractSignDocumentId ?? a.rubricaDocumentId ?? undefined,
+    contractSignStatus: (a.contractSignStatus ?? a.rubricaStatus) ?? undefined,
+    contractSigningUrl: a.contractSigningUrl ?? a.rubricaSigningUrl ?? undefined,
+    contractSignedPdfPath: a.contractSignedPdfPath ?? a.rubricaSignedPdfUrl ?? undefined,
+    contractSignLastSyncAt: a.contractSignLastSyncAt ?? a.rubricaLastSyncAt ?? undefined,
+    rubricaDocumentId: a.contractSignDocumentId ?? a.rubricaDocumentId ?? undefined,
+    rubricaStatus: (a.contractSignStatus ?? a.rubricaStatus) ?? undefined,
+    rubricaSigningUrl: a.contractSigningUrl ?? a.rubricaSigningUrl ?? undefined,
+    rubricaSignedPdfUrl: a.contractSignedPdfPath ?? a.rubricaSignedPdfUrl ?? undefined,
+    rubricaLastSyncAt: a.contractSignLastSyncAt ?? a.rubricaLastSyncAt ?? undefined,
     fluxo: a.fluxo,
     clienteContratoRecebidoAt: a.clienteContratoRecebidoAt ?? undefined,
     orgContratoAceitoAt: a.orgContratoAceitoAt ?? undefined,
@@ -408,7 +450,7 @@ export async function hydrateStore(force = false): Promise<void> {
       hydrateFetch<ApiCliente[]>('clientes', '/api/clientes', []),
       hydrateFetch<ApiServico[]>('servicos', '/api/servicos', []),
       hydrateFetch<ApiModelo[]>('modelos', '/api/modelos', []),
-      hydrateFetch<ApiProposta[]>('propostas', '/api/propostas', []),
+      hydrateFetch<ApiProposta[]>('propostas', '/api/propostas/summary', []),
       hydrateFetch<ApiContrato[]>('contratos', '/api/contratos', []),
       hydrateFetch<PlanUsage>('usage', '/api/usage/current', emptyUsage()),
     ]);
@@ -453,7 +495,7 @@ export async function refreshEntity(key: Exclude<StoreKey, 'propez_user_config'>
       break;
     }
     case 'propez_propostas': {
-      const list = await api.get<ApiProposta[]>('/api/propostas').catch(() => []);
+      const list = await api.get<ApiProposta[]>('/api/propostas/summary').catch(() => []);
       cache.propostas = (list ?? []).map(fromApiProposta);
       break;
     }
@@ -514,7 +556,7 @@ async function diffSave<T extends { id: string }, TPayload>(
   const ops: Promise<void>[] = [];
 
   // DELETEs
-  for (const [id] of prevById) {
+  for (const [id, deletedItem] of prevById) {
     if (!nextById.has(id)) {
       ops.push(
         impl
@@ -524,8 +566,12 @@ async function diffSave<T extends { id: string }, TPayload>(
             notify(key);
           })
           .catch((err) => {
-            console.error(`[store] ${key} delete falhou:`, err);
-            // Rollback: recoloca no cache se apagamos otimisticamente e falhou
+            notifyStoreSaveError(key, 'delete', err);
+            const current = getList();
+            if (!current.some((i) => i.id === id)) {
+              setList([deletedItem, ...current]);
+              notify(key);
+            }
           }),
       );
     }
@@ -543,7 +589,7 @@ async function diffSave<T extends { id: string }, TPayload>(
             notify(key);
           })
           .catch((err) => {
-            console.error(`[store] ${key} create falhou:`, err);
+            notifyStoreSaveError(key, 'create', err);
             setList(removeCacheItem(getList(), id));
             notify(key);
           }),
@@ -557,7 +603,9 @@ async function diffSave<T extends { id: string }, TPayload>(
             notify(key);
           })
           .catch((err) => {
-            console.error(`[store] ${key} update falhou:`, err);
+            notifyStoreSaveError(key, 'update', err);
+            setList(replaceCacheItem(getList(), id, prevItem));
+            notify(key);
           }),
       );
     }
@@ -597,7 +645,7 @@ const servicoApi: EntityApi<Servico, ServicoPayload> = {
     descricao: s.descricao,
     valor: s.valor,
     tipo: s.tipo,
-    contratoId: s.contratoId ?? null,
+    contratoId: normalizeUuidOrNull(s.contratoId),
     elementos: s.elementos ?? [],
   }),
   create: async (p) => fromApiServico(await api.post<ApiServico>('/api/servicos', p as unknown as Record<string, unknown>)),
@@ -610,9 +658,16 @@ const servicoApi: EntityApi<Servico, ServicoPayload> = {
 interface ContratoPayload {
   titulo: string;
   texto: string;
+  sourceType?: 'text' | 'pdf';
+  signatureConfig?: unknown | null;
 }
 const contratoApi: EntityApi<ContratoTemplate, ContratoPayload> = {
-  toPayload: (c) => ({ titulo: c.titulo, texto: c.texto }),
+  toPayload: (c) => ({
+    titulo: c.titulo,
+    texto: c.texto,
+    sourceType: c.sourceType ?? 'text',
+    signatureConfig: c.signatureConfig ?? null,
+  }),
   create: async (p) => fromApiContrato(await api.post<ApiContrato>('/api/contratos', p as unknown as Record<string, unknown>)),
   update: async (id, p) => fromApiContrato(await api.patch<ApiContrato>(`/api/contratos/${id}`, p as unknown as Record<string, unknown>)),
   delete: async (id) => {
@@ -631,19 +686,23 @@ interface ModeloPayload {
   linkPagamento?: string | null;
   tier: PlanTier;
   fluxo?: ProposalFlowConfig;
+  signatureConfig?: unknown;
 }
 const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
   toPayload: (m) => ({
     nome: m.nome,
     elementos: m.elementos ?? [],
     pageLayout: m.pageLayout ?? normalizePageLayout(null),
-    servicos: m.servicos ?? [],
-    contratoId: m.contratoId ?? null,
+    servicos: (m.servicos ?? [])
+      .map((sid) => normalizeUuidOrNull(sid))
+      .filter((sid): sid is string => sid !== null),
+    contratoId: normalizeUuidOrNull(m.contratoId),
     contratoTexto: m.contratoTexto ?? null,
     chavePix: m.chavePix ?? null,
     linkPagamento: m.linkPagamento ?? null,
     tier: m.tier ?? 'free',
     fluxo: m.fluxo ?? { steps: ['approve', 'sign', 'pay'] },
+    signatureConfig: m.signatureConfig ?? null,
   }),
   create: async (p) => fromApiModelo(await api.post<ApiModelo>('/api/modelos', p as unknown as Record<string, unknown>)),
   update: async (id, p) => fromApiModelo(await api.patch<ApiModelo>(`/api/modelos/${id}`, p as unknown as Record<string, unknown>)),
@@ -680,13 +739,6 @@ interface PropostaPayload {
   fluxo?: ProposalFlowConfig;
 }
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function normalizeUuidOrNull(value: string | null | undefined): string | null {
-  if (!value) return null;
-  return UUID_REGEX.test(value) ? value : null;
-}
-
 function normalizeDateTimeOrNull(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim();
@@ -711,7 +763,9 @@ function toPropostaPayload(p: Proposta): PropostaPayload {
     cliente_nome: p.cliente_nome,
     clienteEmail: p.clienteEmail?.trim() || null,
     modelo_id: normalizeUuidOrNull(p.modelo_id),
-    servicos: p.servicos ?? [],
+    servicos: (p.servicos ?? [])
+      .map((sid) => normalizeUuidOrNull(sid))
+      .filter((sid): sid is string => sid !== null),
     valor: p.valor,
     desconto: p.desconto,
     recorrente: p.recorrente,
@@ -985,6 +1039,24 @@ export async function updateProposta(id: string, patch: Partial<Proposta>): Prom
   cache.propostas = cache.propostas.map((p) => (p.id === id ? saved : p));
   notify('propez_propostas');
   return saved;
+}
+
+/** Carrega proposta completa (com elementos) e atualiza o cache. */
+export async function fetchPropostaById(id: string): Promise<Proposta | null> {
+  try {
+    const saved = fromApiProposta(await api.get<ApiProposta>(`/api/propostas/${id}`));
+    const idx = cache.propostas.findIndex((p) => p.id === id);
+    if (idx >= 0) {
+      cache.propostas = cache.propostas.map((p) => (p.id === id ? saved : p));
+    } else {
+      cache.propostas = [saved, ...cache.propostas];
+    }
+    notify('propez_propostas');
+    return saved;
+  } catch (err) {
+    console.error('[fetchPropostaById] falha:', err);
+    return null;
+  }
 }
 
 export async function generatePublicLink(

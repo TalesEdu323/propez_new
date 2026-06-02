@@ -15,7 +15,8 @@ const LoginPage = lazy(() => import('../pages/marketing/LoginPage'));
 const CadastroPage = lazy(() => import('../pages/marketing/CadastroPage'));
 const NewsletterUnsubscribePage = lazy(() => import('../pages/marketing/NewsletterUnsubscribePage'));
 const LegalPlaceholderPage = lazy(() => import('../pages/marketing/LegalPlaceholderPage'));
-const NotFoundPage = lazy(() => import('./NotFoundPage'));
+const SignContractPage = lazy(() => import('../pages/publicProposta/signing/SignContractPage'));
+const ValidityPage = lazy(() => import('../pages/validity/ValidityPage'));
 
 const loadingFallback = (
   <div className="min-h-screen flex items-center justify-center text-zinc-500 bg-white">
@@ -39,6 +40,8 @@ export default function AppRouter() {
       <Suspense fallback={loadingFallback}>
         <LegacyRedirects />
         <Routes>
+          <Route path="/p/:publicToken/assinar/:signToken" element={<SignContractPage />} />
+          <Route path="/validar/:documentId" element={<ValidityPage />} />
           <Route path="/p/:token" element={<PublicPropostaRoute />} />
           <Route path="/app/*" element={<AuthenticatedApp />} />
           <Route path="/" element={<HomeRoute />} />

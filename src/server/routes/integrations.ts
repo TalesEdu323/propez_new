@@ -1,24 +1,17 @@
-import crypto from 'crypto'
 import express from 'express'
 import type { Router, Request, Response } from 'express'
 import type { Pool } from 'pg'
 import { createProsyncClient, ProsyncHttpError } from '../clients/prosyncClient.js'
-import { createRubricaClient, RubricaHttpError } from '../clients/rubricaClient.js'
-import { generateContractPdf } from '../services/contractPdf.js'
 import type { IntegrationsConfig } from '../config.js'
 import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import {
-  getMappingByProposal,
   logIntegrationEvent,
-  upsertMapping,
 } from '../db/mappings.js'
 import type { EnsureSuiteCredential } from '../integrations/ensureSuiteCredential.js'
 import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js'
 import type { SuiteApp } from '../clients/suiteLookup.js'
 import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.js'
-import type { MailClient } from '../mail/client.js'
-import { notifyProposalEventAsync } from '../services/notificationService.js'
 import { isSecretCryptoAvailable } from '../lib/secretCrypto.js'
 import { resolveIntegrationForOrg } from '../integrations/resolveIntegrationCredential.js'
 import {
@@ -44,7 +37,6 @@ export function buildIntegrationsRouter(deps: {
   orgCredentialsRepo?: OrgIntegrationCredentialsRepo
   /** Emissor de eventos de proposta (Fase 4). */
   suiteProposalEvents?: SuiteProposalEventsClient
-  mail?: MailClient
 }): Router {
   const router = express.Router()
   const {
@@ -54,7 +46,6 @@ export function buildIntegrationsRouter(deps: {
     ensureSuiteCredential,
     orgCredentialsRepo,
     suiteProposalEvents,
-    mail,
   } = deps
 
   router.use(buildRequireAuth(envConfig.auth))
@@ -340,13 +331,8 @@ export function buildIntegrationsRouter(deps: {
     return createProsyncClient({ baseUrl, apiKey })
   }
 
-  async function rubricaFor(req: Request) {
-    const { apiKey, baseUrl } = await integrationFor(req, 'rubrica')
-    return createRubricaClient({ baseUrl, apiKey })
-  }
-
   function handleUpstreamError(res: Response, err: unknown, label: string) {
-    if (err instanceof ProsyncHttpError || err instanceof RubricaHttpError) {
+    if (err instanceof ProsyncHttpError) {
       res.status(err.status >= 400 && err.status < 600 ? err.status : 502).json({
         error: err.message,
         upstream: label,
@@ -356,6 +342,7 @@ export function buildIntegrationsRouter(deps: {
     }
     const message = err instanceof Error ? err.message : String(err)
     const code = err instanceof Error && 'code' in err ? String((err as { code?: unknown }).code ?? '') : ''
+    const isNotConfigured = /não configurado/i.test(message)
     const isDns = code === 'ENOTFOUND' || /ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(message)
     const isTimeout = code === 'ABORT_ERR' || /aborted|timeout/i.test(message)
     const userMessage = isDns
@@ -363,6 +350,15 @@ export function buildIntegrationsRouter(deps: {
       : isTimeout
         ? 'Timeout ao acessar integração externa'
         : message || 'Upstream error'
+
+    if (isNotConfigured) {
+      res.status(424).json({
+        error: userMessage,
+        upstream: label,
+        code: 'integration_not_configured',
+      })
+      return
+    }
 
     console.error(`[integrations:${label}]`, {
       message,
@@ -458,228 +454,17 @@ export function buildIntegrationsRouter(deps: {
   })
 
   // -------------------------------------------------------------------------
-  // Rubrica orquestração
+  // Rubrica — removido (assinatura nativa PropEZ)
   // -------------------------------------------------------------------------
+  const rubricaDeprecated = (_req: Request, res: Response) =>
+    res.status(410).json({
+      error: 'Integração externa Rubrica descontinuada. A assinatura é nativa no PropEZ.',
+      code: 'rubrica_deprecated',
+    })
 
-  router.post('/rubrica/send', async (req: Request, res: Response) => {
-    const body = req.body || {}
-    const proposalId: string = String(body.proposalId || '').trim()
-    if (!proposalId) {
-      return res.status(400).json({ error: 'proposalId obrigatório' })
-    }
-    const clientName: string = String(body.clientName || '').trim()
-    const clientEmail: string = String(body.clientEmail || '').trim()
-    const contractText: string = String(body.contractText || '').trim()
-    if (!clientName || !clientEmail) {
-      return res.status(400).json({ error: 'clientName e clientEmail obrigatórios' })
-    }
-    if (!contractText) {
-      return res.status(400).json({ error: 'contractText obrigatório' })
-    }
-
-    const title = String(body.contractTitle || `Contrato - ${proposalId}`).slice(0, 200)
-    const orgId = req.auth?.orgId ?? null
-
-    try {
-      // Confirma que a proposta pertence à organização atual (defense in depth).
-      const ownerCheck = await pool.query<{ id: string }>(
-        `SELECT id FROM propostas WHERE id::text = $1 AND organization_id = $2`,
-        [proposalId, orgId],
-      )
-      if (!ownerCheck.rows[0]) {
-        return res.status(404).json({ error: 'Proposta não encontrada nesta organização' })
-      }
-
-      const pdf = await generateContractPdf({
-        title,
-        body: contractText,
-        clientName,
-        clientDocument: body.clientDocument ? String(body.clientDocument) : undefined,
-        companyName: body.companyName ? String(body.companyName) : undefined,
-        companyCnpj: body.companyCnpj ? String(body.companyCnpj) : undefined,
-        value: typeof body.value === 'number' ? body.value : undefined,
-        location: body.location ? String(body.location) : undefined,
-      })
-
-      const secret = crypto.randomBytes(12).toString('hex')
-
-      await upsertMapping(pool, {
-        propez_proposal_id: proposalId,
-        organization_id: orgId,
-        prosync_lead_id: body.prosyncLeadId ? String(body.prosyncLeadId) : null,
-        webhook_secret: secret,
-        status: 'pending',
-      })
-
-      const rb = await rubricaFor(req)
-      const uploadRes = await rb.uploadDocument({
-        fileBuffer: pdf,
-        fileName: `${sanitizeFileName(title)}.pdf`,
-        title,
-      })
-      const documentId = uploadRes.document.id
-
-      const webhookUrl = `${config.appUrl.replace(/\/+$/, '')}/api/webhooks/rubrica?secret=${encodeURIComponent(secret)}`
-
-      const publicRow = await pool.query<{ public_token: string | null }>(
-        `SELECT public_token FROM propostas WHERE id::text = $1`,
-        [proposalId],
-      )
-      const publicToken = publicRow.rows[0]?.public_token
-      const redirectUrl = publicToken
-        ? `${envConfig.appUrl.replace(/\/+$/, '')}/p/${publicToken}?step=sign&rubrica=done`
-        : undefined
-
-      const sendRes = await rb.sendForSignature({
-        documentId,
-        signers: [
-          {
-            name: clientName,
-            email: clientEmail,
-            phone: body.clientPhone ? String(body.clientPhone) : undefined,
-            signatureType: 'padrao',
-            authOptions: { email: true },
-          },
-        ],
-        webhookUrl,
-        externalId: proposalId,
-        sendingMethod: 'email',
-        redirectUrl,
-      })
-
-      const signingUrl = sendRes.signatureLinks?.[0]?.link
-
-      const mapping = await upsertMapping(pool, {
-        propez_proposal_id: proposalId,
-        organization_id: orgId,
-        rubrica_document_id: documentId,
-        rubrica_signing_url: signingUrl ?? null,
-        status: 'sent',
-      })
-
-      // Reflete em propostas.rubrica_* para a UI atualizar direto do DB.
-      await pool.query(
-        `UPDATE propostas SET
-           cliente_email = COALESCE(NULLIF($5, ''), cliente_email),
-           cliente_nome = COALESCE(NULLIF($6, ''), cliente_nome),
-           rubrica_document_id = $3,
-           rubrica_signing_url = $4,
-           rubrica_status = 'sent',
-           rubrica_last_sync_at = NOW()
-         WHERE id::text = $1 AND organization_id = $2`,
-        [proposalId, orgId, documentId, signingUrl ?? null, clientEmail, clientName],
-      ).catch((err) => console.error('[integrations:rubrica/send] propostas update failed:', err))
-
-      await logIntegrationEvent(pool, {
-        source: 'internal',
-        event: 'rubrica.sent',
-        proposalId,
-        organizationId: orgId,
-        payload: { documentId, signingUrl },
-      })
-
-      if (mapping.prosync_lead_id) {
-        // Best-effort: marca o lead como contactado no ProSync. Não trava o
-        // fluxo se a credencial não existir.
-        void prosyncFor(req)
-          .then((client) =>
-            client.updateLead(mapping.prosync_lead_id as string, { status: 'contacted' }),
-          )
-          .catch((err) =>
-            console.error('[integrations:rubrica/send] updateLead contacted failed:', err),
-          )
-
-        // CRM: proposal.sent é emitido ao enviar a proposta ao cliente (e-mail / data_envio).
-        // Contrato Rubrica → proposal.signed no webhook document.signed.
-      }
-
-      if (mail) {
-        notifyProposalEventAsync({
-          pool,
-          mail,
-          config: envConfig,
-          proposalId,
-          type: 'contract_sent',
-          metadata: { documentId, signingUrl },
-        })
-      }
-
-      return res.json({
-        proposalId,
-        documentId,
-        signingUrl,
-        status: 'sent',
-      })
-    } catch (err) {
-      await upsertMapping(pool, {
-        propez_proposal_id: proposalId,
-        organization_id: orgId,
-        status: 'failed',
-        last_error: err instanceof Error ? err.message : String(err),
-      }).catch(() => {})
-      return handleUpstreamError(res, err, 'rubrica.send')
-    }
-  })
-
-  router.get('/rubrica/status/:proposalId', async (req: Request, res: Response) => {
-    try {
-      const mapping = await getMappingByProposal(pool, req.params.proposalId)
-      if (!mapping) {
-        return res.status(404).json({ error: 'Proposta sem mapping' })
-      }
-      if (mapping.organization_id && mapping.organization_id !== req.auth?.orgId) {
-        return res.status(404).json({ error: 'Proposta sem mapping' })
-      }
-
-      const result: Record<string, unknown> = {
-        proposalId: mapping.propez_proposal_id,
-        status: mapping.status,
-        documentId: mapping.rubrica_document_id,
-        signingUrl: mapping.rubrica_signing_url,
-        signedPdfUrl: mapping.rubrica_signed_pdf_url,
-      }
-
-      if (mapping.rubrica_document_id && mapping.status !== 'signed') {
-        try {
-          const client = await rubricaFor(req)
-          const live = await client.getSignatureStatus(mapping.rubrica_document_id)
-          result.live = live
-        } catch (err) {
-          result.liveError = err instanceof Error ? err.message : String(err)
-        }
-      }
-
-      return res.json(result)
-    } catch (err) {
-      return handleUpstreamError(res, err, 'rubrica.status')
-    }
-  })
-
-  router.get('/rubrica/download/:proposalId', async (req: Request, res: Response) => {
-    try {
-      const mapping = await getMappingByProposal(pool, req.params.proposalId)
-      if (!mapping || !mapping.rubrica_document_id) {
-        return res.status(404).json({ error: 'Proposta sem documento Rubrica' })
-      }
-      if (mapping.organization_id && mapping.organization_id !== req.auth?.orgId) {
-        return res.status(404).json({ error: 'Proposta sem documento Rubrica' })
-      }
-      const client = await rubricaFor(req)
-      const dl = await client.downloadDocument(mapping.rubrica_document_id, { type: 'signed' })
-      res.setHeader('Content-Type', dl.contentType)
-      res.setHeader('Content-Disposition', `attachment; filename="${dl.fileName}"`)
-      res.send(dl.buffer)
-    } catch (err) {
-      handleUpstreamError(res, err, 'rubrica.download')
-    }
-  })
+  router.post('/rubrica/send', rubricaDeprecated)
+  router.get('/rubrica/status/:proposalId', rubricaDeprecated)
+  router.get('/rubrica/download/:proposalId', rubricaDeprecated)
 
   return router
-}
-
-function sanitizeFileName(name: string): string {
-  return name
-    .replace(/[^a-zA-Z0-9\-_. ]/g, '_')
-    .replace(/\s+/g, '_')
-    .slice(0, 80) || 'contrato'
 }

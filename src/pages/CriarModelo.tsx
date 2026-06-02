@@ -10,9 +10,13 @@ import type { BuilderElement, BuilderPageLayout } from '../types/builder';
 import type { OfferType } from '../lib/layoutContext';
 import { normalizePageLayout } from '../lib/pageLayout';
 import { flowHasStep } from '../types/proposalFlow';
-import { applyStarterTemplate } from '../data/starterTemplates';
+import { applyStarterTemplate, applyOrgLogoToElements, getStarterOfferType } from '../data/starterTemplates';
+import { mergeOrgBrandIntoPageLayout } from '../lib/pageLayout';
+import { hydrateStarterImagePrompts } from '../lib/hydrateStarterImagePrompts';
 import { mergeServiceLayouts } from '../lib/mergeServiceLayouts';
 import { hasModelImageSlots } from '../lib/modelImageSlots';
+import { hasUnresolvedImagePrompts } from '../lib/modelImagePrompts';
+import { peekFluidoReturnContext } from '../lib/fluidoReturnContext';
 import type { CriarModeloStepDescriptor } from './criarModelo/types';
 import { INITIAL_CRIAR_MODELO_FORM } from './criarModelo/types';
 import { CriarModeloStepper } from './criarModelo/CriarModeloStepper';
@@ -48,6 +52,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
   const [layoutOfferType, setLayoutOfferType] = useState<OfferType>(
     userConfig.segment ?? 'generico',
   );
+  const [fromStarterId, setFromStarterId] = useState<string | null>(null);
 
   useEffect(() => {
     if (userConfig.segment) setLayoutOfferType(userConfig.segment);
@@ -65,6 +70,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
           chavePix: modelo.chavePix || '',
           linkPagamento: modelo.linkPagamento || '',
           fluxo: modelo.fluxo ?? INITIAL_CRIAR_MODELO_FORM.fluxo,
+          signatureConfig: modelo.signatureConfig,
         });
         setElementos(modelo.elementos);
         setPageLayout(normalizePageLayout(modelo.pageLayout));
@@ -73,6 +79,11 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
   }, [initialData]);
 
   const handleSave = (finalElements: BuilderElement[], finalPageLayout: BuilderPageLayout) => {
+    if (hasUnresolvedImagePrompts(finalElements)) {
+      alert('Resolva as imagens pendentes no passo "Imagens e banners" antes de salvar o modelo.');
+      return;
+    }
+
     const newModelo: ModeloProposta = {
       id: initialData?.editId || createId(),
       nome: formData.nome,
@@ -82,6 +93,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
       chavePix: formData.chavePix,
       linkPagamento: formData.linkPagamento,
       fluxo: formData.fluxo,
+      signatureConfig: formData.signatureConfig,
       elementos: finalElements,
       pageLayout: finalPageLayout,
       data_criacao: new Date().toISOString(),
@@ -94,19 +106,33 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
       store.saveModelos([newModelo, ...modelos]);
     }
 
-    navigate('modelos');
+    const returnCtx = peekFluidoReturnContext();
+    if (returnCtx && returnCtx.modeloId === newModelo.id) {
+      navigate('propez-fluido');
+    } else {
+      navigate('modelos');
+    }
   };
 
   const handleStarter = (starterId: string) => {
     const applied = applyStarterTemplate(starterId);
     if (applied) {
+      const orgLogo = userConfig.logo;
+      const pageLayoutMerged = mergeOrgBrandIntoPageLayout(applied.pageLayout, {
+        isWhiteLabel: userConfig.whitelabelEnabled === true,
+        logoUrl: orgLogo ?? null,
+        primaryColor: userConfig.primaryColor ?? null,
+        secondaryColor: userConfig.secondaryColor ?? null,
+      });
       setFormData((prev) => ({
         ...prev,
         nome: prev.nome || `Modelo — ${applied.nome}`,
         fluxo: applied.fluxo,
       }));
-      setElementos(applied.elementos);
-      setPageLayout(applied.pageLayout);
+      setElementos(applyOrgLogoToElements(applied.elementos, orgLogo));
+      setPageLayout(pageLayoutMerged);
+      setLayoutOfferType(applied.offerType ?? getStarterOfferType(starterId));
+      setFromStarterId(starterId);
     }
     setPickerDone(true);
   };
@@ -164,7 +190,14 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
     const names = formData.servicos
       .map((id) => servicosDisponiveis.find((s) => s.id === id)?.nome)
       .filter((n): n is string => !!n);
-    const merged = mergeServiceLayouts(elementos, formData.servicos, servicosDisponiveis);
+    let merged = mergeServiceLayouts(elementos, formData.servicos, servicosDisponiveis);
+    if (fromStarterId) {
+      merged = hydrateStarterImagePrompts(merged, {
+        modelName: formData.nome,
+        serviceNames: names,
+        brief: iaBrief || undefined,
+      });
+    }
     setElementos(merged);
     setImportedServicoNames(names);
     if (hasModelImageSlots(merged)) {
@@ -187,6 +220,10 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
     } else if (step === 3) {
       goToImagensOrBuilder();
     } else if (step === IMAGENS_STEP) {
+      if (hasUnresolvedImagePrompts(elementos)) {
+        alert('Gere ou resolva as imagens pendentes antes de continuar para o editor visual.');
+        return;
+      }
       setStep(BUILDER_STEP);
     }
   };
@@ -239,14 +276,19 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
               )}
               {step === 2 && <StepFluxo formData={formData} setFormData={setFormData} />}
               {step === 3 && needsContractStep && (
-                <StepContrato formData={formData} setFormData={setFormData} contratos={contratos} />
+                <StepContrato formData={formData} setFormData={setFormData} contratos={contratos} navigate={navigate} />
               )}
               {step === IMAGENS_STEP && (
                 <StepImagens
                   elementos={elementos}
                   offerType={layoutOfferType}
-                  brief={iaBrief || formData.nome}
+                  brief={iaBrief || undefined}
+                  modelName={formData.nome}
+                  serviceNames={formData.servicos
+                    .map((id) => servicosDisponiveis.find((s) => s.id === id)?.nome)
+                    .filter((n): n is string => Boolean(n))}
                   onElementosChange={setElementos}
+                  autoResolve={Boolean(fromStarterId) || hasUnresolvedImagePrompts(elementos)}
                 />
               )}
             </AnimatePresence>

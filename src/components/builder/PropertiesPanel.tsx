@@ -11,6 +11,7 @@ import { SpacingSection } from './properties/SpacingSection';
 import { IconFields } from './properties/IconFields';
 import { ProjectionCalculatorFields, MetricsTableFields } from './properties/ProjectionCalculatorFields';
 import { ImageSourceField } from './properties/ImageSourceField';
+import { MarketingVisualFields } from './properties/MarketingVisualFields';
 
 export type BuilderTab = 'properties' | 'layers';
 
@@ -89,10 +90,11 @@ export function PropertiesPanel({
 
             <div className="space-y-5">
               <ProposalActionField element={selectedElement} updateElement={updateElement} />
+              <MarketingVisualFields element={selectedElement} updateElement={updateElement} />
               <TextFields element={selectedElement} updateElement={updateElement} />
               <DateTimeFields element={selectedElement} updateElement={updateElement} />
               <DescriptionFields element={selectedElement} updateElement={updateElement} />
-              {selectedElement.type === 'image' ? (
+              {selectedElement.type === 'image' || selectedElement.type === 'marketing_hero' ? (
                 <ImageSourceField element={selectedElement} updateElement={updateElement} />
               ) : (
                 <UrlFields element={selectedElement} updateElement={updateElement} />

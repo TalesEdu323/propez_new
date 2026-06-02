@@ -1,19 +1,21 @@
 import { motion } from 'motion/react';
-import { ChevronLeft, CheckCircle, DollarSign, FileCheck, FileText, X } from 'lucide-react';
+import { ChevronLeft, CheckCircle, DollarSign, FileCheck, FileText, ShieldCheck, X } from 'lucide-react';
 import type { Proposta } from '../../lib/store';
-import { buildRubricaDownloadUrl } from '../../services/rubricaApi';
+import { buildSignedContractDownloadUrl, buildValidityPageUrl } from '../../services/contractSignApi';
 
-export type RubricaStatus = 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed' | null;
+export type ContractSignStatusUi = 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed' | null;
 
 export interface ContractViewProps {
   proposta: Proposta;
-  rubricaStatus: RubricaStatus;
+  contractSignStatus: ContractSignStatusUi;
   userConfig: { nome?: string; cnpj?: string };
   onBackToProposal: () => void;
 }
 
-export function ContractView({ proposta, rubricaStatus, userConfig, onBackToProposal }: ContractViewProps) {
+export function ContractView({ proposta, contractSignStatus, userConfig, onBackToProposal }: ContractViewProps) {
   const hasContent = proposta.contratoTexto || proposta.chavePix || proposta.linkPagamento;
+  const signStatus = contractSignStatus ?? proposta.contractSignStatus ?? proposta.rubricaStatus ?? null;
+  const documentId = proposta.contractSignDocumentId ?? proposta.rubricaDocumentId;
 
   return (
     <motion.div
@@ -72,49 +74,42 @@ export function ContractView({ proposta, rubricaStatus, userConfig, onBackToProp
                 </div>
               </div>
 
-              {rubricaStatus && (
+              {signStatus && (
                 <div className="mt-10 w-full max-w-2xl">
                   <div
                     className={`p-6 rounded-2xl border flex items-center gap-4 ${
-                      rubricaStatus === 'signed'
+                      signStatus === 'signed'
                         ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                        : rubricaStatus === 'failed' || rubricaStatus === 'cancelled'
+                        : signStatus === 'failed' || signStatus === 'cancelled'
                           ? 'bg-red-50 border-red-100 text-red-700'
                           : 'bg-zinc-50 border-black/[0.03] text-zinc-700'
                     }`}
                   >
-                    {rubricaStatus === 'signed' ? (
+                    {signStatus === 'signed' ? (
                       <CheckCircle className="w-5 h-5 shrink-0" />
-                    ) : rubricaStatus === 'failed' || rubricaStatus === 'cancelled' ? (
+                    ) : signStatus === 'failed' || signStatus === 'cancelled' ? (
                       <X className="w-5 h-5 shrink-0" />
                     ) : (
                       <FileCheck className="w-5 h-5 shrink-0 animate-pulse" />
                     )}
                     <div className="flex-1 text-left">
                       <p className="font-bold text-[10px] uppercase tracking-[0.2em] mb-1">
-                        Rubrica —{' '}
-                        {rubricaStatus === 'signed'
-                          ? 'Assinado'
-                          : rubricaStatus === 'sent'
+                        Assinado com Rubrica ·{' '}
+                        {signStatus === 'signed'
+                          ? 'Concluído'
+                          : signStatus === 'sent'
                             ? 'Aguardando assinatura'
-                            : rubricaStatus === 'pending'
+                            : signStatus === 'pending'
                               ? 'Preparando envio'
-                              : rubricaStatus === 'cancelled'
+                              : signStatus === 'cancelled'
                                 ? 'Cancelado'
                                 : 'Falha'}
                       </p>
-                      {rubricaStatus === 'sent' && proposta.rubricaSigningUrl && (
-                        <a
-                          href={proposta.rubricaSigningUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium underline"
-                        >
-                          Abrir link de assinatura
-                        </a>
+                      {signStatus === 'sent' && (proposta.contractSigningUrl || proposta.rubricaSigningUrl) && (
+                        <p className="text-sm font-medium">Link de assinatura enviado ao cliente.</p>
                       )}
-                      {rubricaStatus === 'signed' && (
-                        <p className="text-sm font-medium">O cliente assinou o contrato.</p>
+                      {signStatus === 'signed' && (
+                        <p className="text-sm font-medium">O cliente assinou o contrato digitalmente.</p>
                       )}
                     </div>
                   </div>
@@ -122,21 +117,33 @@ export function ContractView({ proposta, rubricaStatus, userConfig, onBackToProp
               )}
 
               <div className="mt-10 flex gap-3 flex-wrap justify-center">
-                {rubricaStatus === 'signed' ? (
-                  <a
-                    href={buildRubricaDownloadUrl(proposta.id)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="h-12 px-8 inline-flex items-center bg-zinc-900 text-white rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all shadow-xl shadow-black/10"
-                  >
-                    <FileText className="w-4 h-4 inline-block mr-2" /> Baixar PDF Assinado
-                  </a>
+                {signStatus === 'signed' ? (
+                  <>
+                    <a
+                      href={buildSignedContractDownloadUrl(proposta.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="h-12 px-8 inline-flex items-center bg-zinc-900 text-white rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all shadow-xl shadow-black/10"
+                    >
+                      <FileText className="w-4 h-4 inline-block mr-2" /> Baixar PDF Assinado
+                    </a>
+                    {documentId && (
+                      <a
+                        href={buildValidityPageUrl(documentId)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="h-12 px-8 inline-flex items-center bg-white border border-black/[0.05] text-zinc-900 rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] hover:bg-zinc-50 transition-all shadow-sm"
+                      >
+                        <ShieldCheck className="w-4 h-4 inline-block mr-2" /> Validar documento
+                      </a>
+                    )}
+                  </>
                 ) : (
                   <button
-                    onClick={() => alert('Aguarde a assinatura pelo Rubrica para baixar o PDF final.')}
-                    className="h-12 px-8 bg-white border border-black/[0.05] text-zinc-900 rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] hover:bg-zinc-50 transition-all shadow-sm"
+                    disabled
+                    className="h-12 px-8 bg-white border border-black/[0.05] text-zinc-400 rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] cursor-not-allowed shadow-sm"
                   >
-                    <FileText className="w-4 h-4 inline-block mr-2" /> Baixar PDF
+                    <FileText className="w-4 h-4 inline-block mr-2" /> PDF disponível após assinatura
                   </button>
                 )}
               </div>

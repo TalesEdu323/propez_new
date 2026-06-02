@@ -72,6 +72,10 @@ const resolveModelImagesSchema = z.object({
   elementos: z.array(z.custom<BuilderElement>()),
   brief: z.string().trim().max(2000).optional(),
   offerType: z.enum(OFFER_TYPES).optional(),
+  modelName: z.string().trim().max(200).optional(),
+  serviceNames: z.array(z.string().trim().max(120)).max(20).optional(),
+  globalPrompt: z.string().trim().max(500).optional(),
+  imagePrompts: z.record(z.string(), z.string().trim().max(500)).optional(),
   regenerate: z.union([z.literal('all'), z.array(z.string())]).optional(),
 });
 
@@ -228,6 +232,10 @@ export function createIaRouter(deps: { pool: Pool; config: EnvironmentConfig }):
         imageMode: 'generate',
         organizationLogoUrl: orgCtx.logoUrl,
         brief: parsed.data.brief,
+        modelName: parsed.data.modelName,
+        serviceNames: parsed.data.serviceNames,
+        globalPrompt: parsed.data.globalPrompt,
+        imagePrompts: parsed.data.imagePrompts,
         regenerate: parsed.data.regenerate,
       });
       return res.json({ elementos, offerType });

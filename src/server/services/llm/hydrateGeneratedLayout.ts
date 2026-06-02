@@ -13,6 +13,7 @@ import {
   type ImageResolveContext,
   type LayoutImageMode,
 } from '../images/imageResolver.js';
+import { buildImagePrompt } from '../images/buildImagePrompt.js';
 
 export interface HydrateLayoutOptions {
   userPrompt: string;
@@ -169,18 +170,24 @@ export async function hydrateGeneratedLayout(
   return list;
 }
 
+export interface RehydrateModelImagesOptions {
+  offerType: OfferType;
+  imageMode?: LayoutImageMode;
+  organizationLogoUrl?: string | null;
+  brief?: string;
+  modelName?: string;
+  serviceNames?: string[];
+  globalPrompt?: string;
+  imagePrompts?: Record<string, string>;
+  regenerate?: 'all' | string[];
+}
+
 /** Re-hidrata apenas imagens (sem service_stack / paleta). */
 export async function rehydrateModelImages(
   elementos: BuilderElement[],
-  options: {
-    offerType: OfferType;
-    imageMode?: LayoutImageMode;
-    organizationLogoUrl?: string | null;
-    brief?: string;
-    regenerate?: 'all' | string[];
-  },
+  options: RehydrateModelImagesOptions,
 ): Promise<BuilderElement[]> {
-  const prepared = prepareRegenerate(elementos, options.regenerate, options.brief);
+  const prepared = prepareRegenerate(elementos, options);
   const imageCtx: ImageResolveContext = {
     offerType: options.offerType,
     layoutMode: options.imageMode ?? 'generate',
@@ -201,12 +208,35 @@ export async function rehydrateModelImages(
 
 function prepareRegenerate(
   elementos: BuilderElement[],
-  regenerate: 'all' | string[] | undefined,
-  brief?: string,
+  options: RehydrateModelImagesOptions,
 ): BuilderElement[] {
+  const {
+    regenerate,
+    brief,
+    modelName,
+    serviceNames,
+    globalPrompt,
+    imagePrompts,
+  } = options;
   const regenerateAll = regenerate === 'all';
   const keys = Array.isArray(regenerate) ? new Set(regenerate) : null;
   if (!regenerateAll && (!keys || keys.size === 0)) return elementos;
+
+  function promptForSlot(
+    slotKey: string,
+    slotLabel: string,
+    elementHint?: string,
+  ): string {
+    return buildImagePrompt({
+      modelName,
+      serviceNames,
+      brief,
+      globalPrompt,
+      slotPrompt: imagePrompts?.[slotKey],
+      slotLabel,
+      elementHint,
+    });
+  }
 
   function shouldRegenerate(slotKey: string): boolean {
     if (regenerateAll) return true;
@@ -216,44 +246,52 @@ function prepareRegenerate(
   function walk(list: BuilderElement[]): BuilderElement[] {
     return list.map((el) => {
       const props = { ...(el.props ?? {}) } as Record<string, unknown>;
-      const fallbackPrompt =
-        brief?.trim() ||
-        String(props.title ?? props.text ?? props.badge ?? 'professional business scene');
+      const elementHint = String(
+        props.title ?? props.text ?? props.badge ?? '',
+      ).trim() || undefined;
 
-      if (shouldRegenerate(`${el.id}:backgroundImageUrl`) && el.type === 'marketing_hero') {
+      const heroKey = `${el.id}:backgroundImageUrl`;
+      if (shouldRegenerate(heroKey) && el.type === 'marketing_hero') {
         delete props.backgroundImageUrl;
-        props.imageGeneratePrompt = fallbackPrompt;
+        props.imageGeneratePrompt = promptForSlot(heroKey, 'Banner do hero', elementHint);
       }
-      if (shouldRegenerate(`${el.id}:url`) && el.type === 'image') {
+      const imageKey = `${el.id}:url`;
+      if (shouldRegenerate(imageKey) && el.type === 'image') {
         delete props.url;
-        props.imageGeneratePrompt = fallbackPrompt;
+        props.imageGeneratePrompt = promptForSlot(imageKey, 'Imagem', elementHint);
       }
-      if (shouldRegenerate(`${el.id}:imageUrl`) && el.type === 'card') {
+      const cardKey = `${el.id}:imageUrl`;
+      if (shouldRegenerate(cardKey) && el.type === 'card') {
         delete props.imageUrl;
-        props.imageGeneratePrompt = fallbackPrompt;
+        props.imageGeneratePrompt = promptForSlot(cardKey, 'Imagem do card', elementHint);
       }
+      const avatarKey = `${el.id}:avatarUrl`;
       if (
-        shouldRegenerate(`${el.id}:avatarUrl`) &&
+        shouldRegenerate(avatarKey) &&
         (el.type === 'testimonial' || el.type === 'toast_notification')
       ) {
         delete props.avatarUrl;
-        props.imageGeneratePrompt = `professional portrait, ${fallbackPrompt}`;
+        props.imageGeneratePrompt = `professional portrait, ${promptForSlot(avatarKey, 'Avatar', elementHint)}`;
       }
 
       if (Array.isArray(props.images)) {
         props.images = (props.images as unknown[]).map((item, i) => {
-          if (!shouldRegenerate(`${el.id}:images:${i}`)) return item;
-          return { imageGeneratePrompt: `${fallbackPrompt}, variation ${i + 1}` };
+          const slotKey = `${el.id}:images:${i}`;
+          if (!shouldRegenerate(slotKey)) return item;
+          const base = promptForSlot(slotKey, `Galeria ${i + 1}`, elementHint);
+          return { imageGeneratePrompt: `${base}, variation ${i + 1}` };
         });
       }
 
       if (Array.isArray(props.slides)) {
         props.slides = (props.slides as Record<string, unknown>[]).map((slide, i) => {
-          if (!shouldRegenerate(`${el.id}:slideImage:${i}`)) return slide;
+          const slotKey = `${el.id}:slideImage:${i}`;
+          if (!shouldRegenerate(slotKey)) return slide;
+          const slideHint = String(slide.title ?? elementHint ?? '').trim() || undefined;
           return {
             ...slide,
             image: undefined,
-            imageGeneratePrompt: String(slide.title ?? fallbackPrompt),
+            imageGeneratePrompt: promptForSlot(slotKey, `Slide ${i + 1}`, slideHint),
           };
         });
       }

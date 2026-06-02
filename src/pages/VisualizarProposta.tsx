@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FileText } from 'lucide-react';
-import { hydrateStore, isStoreHydrated, store, Proposta } from '../lib/store';
+import { hydrateStore, isStoreHydrated, store, Proposta, fetchPropostaById } from '../lib/store';
 import { RenderElement } from '../components/builder/RenderElement';
 import { PageShell } from '../components/builder/PageShell';
 import { normalizePageLayout, mergeOrgBrandIntoPageLayout } from '../lib/pageLayout';
@@ -8,20 +8,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import { updateProposalStatusInCRM } from '../services/crmApi';
 import { resolveOrgBrand } from '../lib/orgBrand';
 import { PublicOrgHeader } from './publicProposta/PublicOrgHeader';
-import {
-  sendToRubricaForSigning,
-  getRubricaStatus,
-} from '../services/rubricaApi';
+import { getContractSignStatus } from '../services/contractSignApi';
 import { usePropostas, useUserConfig } from '../hooks/useStoreEntity';
 import { ClientIdentificationModal } from './visualizarProposta/ClientIdentificationModal';
 import { ProposalHeader } from './visualizarProposta/ProposalHeader';
 import { ProposalActions } from './visualizarProposta/ProposalActions';
-import { ContractView, type RubricaStatus } from './visualizarProposta/ContractView';
+import { ContractView, type ContractSignStatusUi } from './visualizarProposta/ContractView';
 import { ContractAcceptancePanel } from './visualizarProposta/ContractAcceptancePanel';
 import { PropezWatermark } from './visualizarProposta/PropezWatermark';
 import { shouldShowWatermark } from '../lib/featureFlags';
 import { flowHasStep } from '../types/proposalFlow';
 import { api } from '../lib/apiClient';
+import { updateProposta } from '../lib/store';
 import type { NavigateFn } from '../types/navigation';
 
 export default function VisualizarProposta({ navigate, id }: { navigate: NavigateFn; id: string }) {
@@ -44,7 +42,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
     email: '',
     documento: '', // CPF/CNPJ
   });
-  const [rubricaStatus, setRubricaStatus] = useState<RubricaStatus>(null);
+  const [contractSignStatus, setContractSignStatus] = useState<ContractSignStatusUi>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,40 +71,48 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
   }, [id, proposta]);
 
   useEffect(() => {
+    if (!id || !proposta) return;
+    if (proposta.elementos.length > 0) return;
+    void fetchPropostaById(id);
+  }, [id, proposta?.id, proposta?.elementos.length]);
+
+  useEffect(() => {
     if (!proposta) return;
     const lastEmail = localStorage.getItem('propez_last_email') || '';
     setClientData(prev => ({ ...prev, nome: proposta.cliente_nome, email: prev.email || lastEmail }));
     if (proposta.status === 'aprovada' && flowHasStep(proposta.fluxo, 'sign') && proposta.contratoTexto) {
       setViewState('contract');
     }
-    if (proposta.rubricaStatus) {
-      setRubricaStatus(proposta.rubricaStatus);
+    if (proposta.contractSignStatus ?? proposta.rubricaStatus) {
+      setContractSignStatus((proposta.contractSignStatus ?? proposta.rubricaStatus) as ContractSignStatusUi);
     }
-  }, [proposta?.id, proposta?.status, proposta?.cliente_nome, proposta?.rubricaStatus]);
+  }, [proposta?.id, proposta?.status, proposta?.cliente_nome, proposta?.contractSignStatus, proposta?.rubricaStatus]);
 
-  // Polling de status do Rubrica enquanto o documento não estiver assinado.
+  // Polling de status da assinatura enquanto o documento não estiver assinado.
   useEffect(() => {
     if (!proposta) return;
     if (proposta.status !== 'aprovada') return;
     if (!proposta.contratoTexto) return;
-    if (rubricaStatus === 'signed' || rubricaStatus === 'cancelled' || rubricaStatus === 'failed') return;
+    if (contractSignStatus === 'signed' || contractSignStatus === 'cancelled' || contractSignStatus === 'failed') return;
 
     let cancelled = false;
     const tick = async () => {
-      const status = await getRubricaStatus(proposta.id);
+      const status = await getContractSignStatus(proposta.id);
       if (cancelled || !status) return;
-      setRubricaStatus(status.status);
+      setContractSignStatus(status.status);
       const all = store.getPropostas();
       store.savePropostas(
         all.map(p =>
           p.id === proposta.id
             ? {
                 ...p,
+                contractSignStatus: status.status,
+                contractSignDocumentId: status.documentId || p.contractSignDocumentId,
+                contractSigningUrl: status.signingUrl || p.contractSigningUrl,
                 rubricaStatus: status.status,
                 rubricaDocumentId: status.documentId || p.rubricaDocumentId,
                 rubricaSigningUrl: status.signingUrl || p.rubricaSigningUrl,
-                rubricaSignedPdfUrl: status.signedPdfUrl || p.rubricaSignedPdfUrl,
-                rubricaLastSyncAt: new Date().toISOString(),
+                contractSignLastSyncAt: new Date().toISOString(),
               }
             : p,
         ),
@@ -118,7 +124,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [proposta?.id, proposta?.status, rubricaStatus]);
+  }, [proposta?.id, proposta?.status, proposta?.contratoTexto, contractSignStatus]);
 
   const persistProposta = (patch: Partial<Proposta>) => {
     const all = store.getPropostas();
@@ -149,40 +155,11 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
         });
       }
 
-      let rubricaDocumentId: string | undefined
-      let rubricaSigningUrl: string | undefined
-      let rubricaInitialStatus: Proposta['rubricaStatus'] = 'pending'
-
-      if (proposta.contratoTexto && flowHasStep(proposta.fluxo, 'sign')) {
-        const result = await sendToRubricaForSigning({
-          proposalId: proposta.id,
-          clientName: clientData.nome || proposta.cliente_nome,
-          clientEmail: clientData.email,
-          clientDocument: clientData.documento,
-          contractText: proposta.contratoTexto,
-          contractTitle: `Contrato — ${proposta.cliente_nome}`,
-          companyName: userConfig.nome,
-          companyCnpj: userConfig.cnpj,
-          value: proposta.valor,
-          prosyncLeadId: proposta.prosyncLeadId,
-        });
-        if (result.success) {
-          rubricaDocumentId = result.documentId
-          rubricaSigningUrl = result.signingUrl
-          rubricaInitialStatus = 'sent'
-        } else {
-          rubricaInitialStatus = 'failed'
-          console.error('[Rubrica] envio falhou:', result.error)
-        }
-      }
-
-      persistProposta({
+      const updated = await updateProposta(proposta.id, {
         status: 'aprovada',
-        rubricaDocumentId,
-        rubricaSigningUrl,
-        rubricaStatus: rubricaInitialStatus,
+        clienteEmail: clientData.email,
       });
-      setRubricaStatus(rubricaInitialStatus);
+      setContractSignStatus(updated.contractSignStatus ?? updated.rubricaStatus ?? 'pending');
       setViewState('contract');
       setShowIdentification(false);
       localStorage.setItem('propez_last_email', clientData.email);
@@ -338,7 +315,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
               />
               <ContractView
                 proposta={proposta}
-                rubricaStatus={rubricaStatus}
+                contractSignStatus={contractSignStatus}
                 userConfig={userConfig}
                 onBackToProposal={() => setViewState('proposal')}
               />

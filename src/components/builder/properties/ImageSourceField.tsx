@@ -11,20 +11,21 @@ export interface ImageSourceFieldProps {
 }
 
 export function ImageSourceField({ element, updateElement }: ImageSourceFieldProps) {
-  const { id, props } = element;
+  const { id, props, type } = element;
+  const urlProp = type === 'marketing_hero' ? 'backgroundImageUrl' : 'url';
   const [tab, setTab] = useState<ImageSourceTab>('url');
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!('url' in props)) return null;
+  if (!(urlProp in props)) return null;
 
-  const url = String(props.url ?? '');
+  const url = String(props[urlProp] ?? '');
 
   const applyUrl = (nextUrl: string, alt?: string) => {
     updateElement(id, {
-      url: nextUrl,
-      ...(alt ? { alt: alt.slice(0, 120) } : {}),
+      [urlProp]: nextUrl,
+      ...(alt && type === 'image' ? { alt: alt.slice(0, 120) } : {}),
     });
   };
 
@@ -86,7 +87,7 @@ export function ImageSourceField({ element, updateElement }: ImageSourceFieldPro
           <input
             type="text"
             value={url}
-            onChange={(e) => updateElement(id, { url: e.target.value })}
+            onChange={(e) => updateElement(id, { [urlProp]: e.target.value })}
             className="glass-input"
             placeholder="https://image.pollinations.ai/... ou outra URL"
           />

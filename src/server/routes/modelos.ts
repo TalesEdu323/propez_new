@@ -11,7 +11,7 @@ import { fetchOrgBrand, mergePageLayoutWithOrgBrand } from '../services/orgBrand
 const builderElement = z.object({}).passthrough()
 
 const MODEL_SELECT = `id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
-              chave_pix, link_pagamento, tier, fluxo, created_at`
+              chave_pix, link_pagamento, tier, fluxo, signature_config, created_at`
 
 const pageLayoutSchema = z.object({
   widthMode: z.enum(['boxed', 'full']),
@@ -19,17 +19,23 @@ const pageLayoutSchema = z.object({
   maxContentWidth: z.number().positive().optional(),
 }).passthrough()
 
+const optionalUuid = z.preprocess(
+  (v) => (v === '' || v === undefined ? null : v),
+  z.string().uuid().nullable().optional(),
+)
+
 const bodySchema = z.object({
   nome: z.string().trim().min(1).max(200),
   elementos: z.array(builderElement).default([]),
   pageLayout: pageLayoutSchema.optional(),
   servicos: z.array(z.string().uuid()).default([]),
-  contratoId: z.string().uuid().optional().nullable(),
+  contratoId: optionalUuid,
   contratoTexto: z.string().max(200_000).optional().nullable(),
   chavePix: z.string().max(500).optional().nullable(),
   linkPagamento: z.string().max(2000).optional().nullable(),
   tier: z.enum(['free', 'pro', 'business']).default('free'),
   fluxo: proposalFlowConfigSchema.optional(),
+  signatureConfig: z.record(z.unknown()).optional(),
 })
 
 const patchSchema = bodySchema.partial()
@@ -78,8 +84,8 @@ export function createModelosRouter(deps: {
     const { rows } = await pool.query(
       `INSERT INTO modelos_propostas
          (organization_id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
-          chave_pix, link_pagamento, tier, fluxo)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::uuid[], $6, $7, $8, $9, $10, $11::jsonb)
+          chave_pix, link_pagamento, tier, fluxo, signature_config)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::uuid[], $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb)
        RETURNING ${MODEL_SELECT}`,
       [
         req.auth.orgId,
@@ -93,6 +99,7 @@ export function createModelosRouter(deps: {
         d.linkPagamento ?? null,
         d.tier,
         JSON.stringify(d.fluxo ?? { steps: ['approve', 'sign', 'pay'] }),
+        d.signatureConfig != null ? JSON.stringify(d.signatureConfig) : null,
       ],
     )
     return res.status(201).json(serializeModelo(rows[0]))
@@ -114,7 +121,8 @@ export function createModelosRouter(deps: {
          chave_pix = CASE WHEN $14::boolean THEN $15 ELSE chave_pix END,
          link_pagamento = CASE WHEN $16::boolean THEN $17 ELSE link_pagamento END,
          tier = COALESCE($18, tier),
-         fluxo = CASE WHEN $19::boolean THEN $20::jsonb ELSE fluxo END
+         fluxo = CASE WHEN $19::boolean THEN $20::jsonb ELSE fluxo END,
+         signature_config = CASE WHEN $21::boolean THEN $22::jsonb ELSE signature_config END
        WHERE organization_id = $1 AND id = $2
        RETURNING ${MODEL_SELECT}`,
       [
@@ -138,6 +146,8 @@ export function createModelosRouter(deps: {
         d.tier ?? null,
         d.fluxo !== undefined,
         d.fluxo !== undefined ? JSON.stringify(d.fluxo) : null,
+        d.signatureConfig !== undefined,
+        d.signatureConfig !== undefined ? JSON.stringify(d.signatureConfig) : null,
       ],
     )
     if (!rows[0]) return res.status(404).json({ error: 'Modelo não encontrado' })

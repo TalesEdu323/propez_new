@@ -10,23 +10,13 @@ import { notifyProposalEventAsync } from '../services/notificationService.js';
 import {
   buildJourneyPayload,
   confirmClientReceipt,
-  triggerRubricaAfterApproval,
-  syncPropostaRubricaFromMapping,
+  triggerContractSignAfterApproval,
+  readSignedPdfForProposal,
 } from '../services/proposalJourney.js';
-import { streamSignedContractByPublicToken } from '../services/rubricaSignedPdf.js';
+import { PROPOSTA_SELECT, PROPOSTA_FIELDS } from '../db/propostaColumns.js';
 import type { IntegrationsConfig } from '../config.js';
 import type { EnsureSuiteCredential } from '../integrations/ensureSuiteCredential.js';
 import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js';
-
-const PROPOSTA_SELECT = `
-  id, cliente_id, cliente_nome, cliente_email, modelo_id, servicos,
-  valor_cents, desconto_cents, recorrente, ciclo_recorrencia, duracao_recorrencia,
-  data_envio, data_validade, status, elementos, page_layout, contrato_texto, contrato_id,
-  chave_pix, link_pagamento, pago, data_pagamento, creator_plan, public_token,
-  prosync_lead_id, rubrica_document_id, rubrica_status, rubrica_signing_url,
-  rubrica_signed_pdf_url, rubrica_last_sync_at, viewed_at, created_at,
-  fluxo, cliente_contrato_recebido_at, org_contrato_aceito_at, contrato_concluido_at
-`;
 
 const approveSchema = z.object({
   action: z.enum(['approve', 'reject']),
@@ -63,20 +53,17 @@ export function createPublicPropostasRouter(deps: {
   router.get('/:token/contract-signed.pdf', async (req: Request, res: Response) => {
     const token = String(req.params.token || '').trim();
     if (!token) return res.status(400).json({ error: 'Token obrigatório' });
-    if (!integrationsConfig) {
-      return res.status(503).json({ error: 'Integrações não configuradas' });
-    }
     try {
-      const result = await streamSignedContractByPublicToken(
-        { pool, integrationsConfig, orgCredentialsRepo, ensureSuiteCredential },
-        token,
+      const { rows } = await pool.query<{ id: string }>(
+        `SELECT id FROM propostas WHERE public_token = $1`,
+        [token],
       );
-      if (!result.ok) {
-        return res.status(result.status).json({ error: result.error });
-      }
-      res.setHeader('Content-Type', result.contentType);
-      res.setHeader('Content-Disposition', `inline; filename="${result.fileName}"`);
-      return res.send(result.buffer);
+      if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' });
+      const buffer = await readSignedPdfForProposal(pool, String(rows[0].id));
+      if (!buffer) return res.status(404).json({ error: 'Contrato assinado ainda não disponível' });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline; filename="contrato-assinado.pdf"');
+      return res.send(buffer);
     } catch (err) {
       console.error('[public/contract-signed.pdf] erro:', err);
       return res.status(500).json({ error: 'Erro ao carregar contrato assinado' });
@@ -88,23 +75,15 @@ export function createPublicPropostasRouter(deps: {
     if (!token) return res.status(400).json({ error: 'Token obrigatório' });
     try {
       const { rows } = await pool.query(
-        `SELECT organization_id,
-                ${PROPOSTA_SELECT.split(',').map((c) => c.trim()).join(', ')}
+        `SELECT organization_id, ${PROPOSTA_FIELDS}
          FROM propostas WHERE public_token = $1`,
         [token],
       );
       if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' });
       const row = rows[0];
-      await syncPropostaRubricaFromMapping(pool, String(row.id), String(row.organization_id));
-      const { rows: fresh } = await pool.query(
-        `SELECT ${PROPOSTA_SELECT.split(',').map((c) => c.trim()).join(', ')}
-         FROM propostas WHERE public_token = $1`,
-        [token],
-      );
-      const propostaRow = fresh[0] ?? row;
       return res.json({
-        proposta: serializeProposta(propostaRow),
-        journey: buildJourneyPayload(propostaRow),
+        proposta: serializeProposta(row),
+        journey: buildJourneyPayload(row),
       });
     } catch (err) {
       console.error('[public/journey] erro:', err);
@@ -120,7 +99,7 @@ export function createPublicPropostasRouter(deps: {
         `SELECT p.organization_id, o.name AS org_name, o.logo_url, o.signature_url, o.cnpj, o.plan,
                 o.primary_color, o.secondary_color, o.whitelabel_enabled,
                 p.viewed_at,
-                ${PROPOSTA_SELECT.split(',').map((c) => `p.${c.trim()}`).join(', ')}
+                ${PROPOSTA_FIELDS.split(',').map((c) => `p.${c.trim()}`).join(', ')}
          FROM propostas p
          JOIN organizations o ON o.id = p.organization_id
          WHERE p.public_token = $1`,
@@ -164,13 +143,7 @@ export function createPublicPropostasRouter(deps: {
         }
       }
 
-      await syncPropostaRubricaFromMapping(pool, String(r.id), String(r.organization_id));
-      const { rows: fresh } = await pool.query(
-        `SELECT ${PROPOSTA_SELECT.split(',').map((c) => c.trim()).join(', ')}
-         FROM propostas WHERE public_token = $1`,
-        [token],
-      );
-      const propostaRow = fresh[0] ?? r;
+      const propostaRow = r;
 
       return res.json({
         proposta: serializeProposta(propostaRow),
@@ -220,37 +193,28 @@ export function createPublicPropostasRouter(deps: {
            status = $2,
            cliente_nome = COALESCE($3, cliente_nome),
            cliente_email = COALESCE(NULLIF($4, ''), cliente_email),
+           cliente_documento = COALESCE(NULLIF($5, ''), cliente_documento),
            data_envio = COALESCE(data_envio, NOW())
          WHERE public_token = $1
-         RETURNING ${PROPOSTA_SELECT}, organization_id`,
-        [token, status, clientName ?? null, emailNorm],
+         RETURNING ${PROPOSTA_FIELDS}, organization_id`,
+        [token, status, clientName ?? null, emailNorm, clientDocument ?? null],
       );
       if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' });
       const updated = rows[0];
 
-      if (status === 'aprovada' && integrationsConfig && config) {
-        await triggerRubricaAfterApproval({
+      if (status === 'aprovada' && config) {
+        await triggerContractSignAfterApproval({
           pool,
-          integrationsConfig,
           envConfig: config,
-          orgCredentialsRepo,
-          ensureSuiteCredential,
           mail,
           proposalId: String(updated.id),
           organizationId: String(updated.organization_id),
         });
-        await syncPropostaRubricaFromMapping(
-          pool,
-          String(updated.id),
-          String(updated.organization_id),
-        );
-        const { rows: afterRubrica } = await pool.query(
-          `SELECT ${PROPOSTA_SELECT} FROM propostas WHERE public_token = $1`,
+        const { rows: afterSign } = await pool.query(
+          `SELECT ${PROPOSTA_FIELDS} FROM propostas WHERE public_token = $1`,
           [token],
         );
-        if (afterRubrica[0]) {
-          Object.assign(updated, afterRubrica[0]);
-        }
+        if (afterSign[0]) Object.assign(updated, afterSign[0]);
       }
 
       if (suiteProposalEvents?.isEnabled() && updated.prosync_lead_id && config) {
@@ -285,7 +249,6 @@ export function createPublicPropostasRouter(deps: {
         });
       }
 
-      void clientDocument;
       return res.json({
         proposta: serializeProposta(updated),
         journey: buildJourneyPayload(updated),
@@ -299,8 +262,8 @@ export function createPublicPropostasRouter(deps: {
   router.post('/:token/prepare-signature', async (req: Request, res: Response) => {
     const token = String(req.params.token || '').trim();
     if (!token) return res.status(400).json({ error: 'Token obrigatório' });
-    if (!integrationsConfig || !config) {
-      return res.status(503).json({ error: 'Integrações não configuradas no servidor' });
+    if (!config) {
+      return res.status(503).json({ error: 'Servidor não configurado' });
     }
     try {
       const { rows } = await pool.query(
@@ -313,43 +276,43 @@ export function createPublicPropostasRouter(deps: {
         return res.status(409).json({ error: 'Aprovação da proposta é necessária antes da assinatura' });
       }
 
-      const rubricaResult = await triggerRubricaAfterApproval({
+      const signResult = await triggerContractSignAfterApproval({
         pool,
-        integrationsConfig,
         envConfig: config,
-        orgCredentialsRepo,
-        ensureSuiteCredential,
         mail,
         proposalId: String(row.id),
         organizationId: String(row.organization_id),
       });
 
-      await syncPropostaRubricaFromMapping(pool, String(row.id), String(row.organization_id));
-
       const { rows: fresh } = await pool.query(
-        `SELECT ${PROPOSTA_SELECT} FROM propostas WHERE public_token = $1`,
+        `SELECT ${PROPOSTA_FIELDS} FROM propostas WHERE public_token = $1`,
         [token],
       );
       if (!fresh[0]) return res.status(404).json({ error: 'Proposta não encontrada' });
 
-      if (rubricaResult.error) {
+      if (signResult.error) {
         return res.status(502).json({
-          error: rubricaResult.error,
+          error: signResult.error,
           proposta: serializeProposta(fresh[0]),
           journey: buildJourneyPayload(fresh[0]),
         });
       }
-      if (rubricaResult.skipped) {
+      if (signResult.skipped) {
         return res.status(409).json({
-          error: `Não foi possível preparar assinatura (${rubricaResult.skipped})`,
+          error: `Não foi possível preparar assinatura (${signResult.skipped})`,
           proposta: serializeProposta(fresh[0]),
           journey: buildJourneyPayload(fresh[0]),
         });
       }
 
+      const signingUrl =
+        signResult.signingUrl ??
+        fresh[0].contract_signing_url ??
+        fresh[0].rubrica_signing_url;
+
       return res.json({
         ok: true,
-        signingUrl: rubricaResult.signingUrl ?? fresh[0].rubrica_signing_url,
+        signingUrl,
         proposta: serializeProposta(fresh[0]),
         journey: buildJourneyPayload(fresh[0]),
       });
@@ -367,7 +330,7 @@ export function createPublicPropostasRouter(deps: {
       return res.status(result.status ?? 400).json({ error: result.error });
     }
     const { rows } = await pool.query(
-      `SELECT ${PROPOSTA_SELECT} FROM propostas WHERE public_token = $1`,
+      `SELECT ${PROPOSTA_FIELDS} FROM propostas WHERE public_token = $1`,
       [token],
     );
     if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' });

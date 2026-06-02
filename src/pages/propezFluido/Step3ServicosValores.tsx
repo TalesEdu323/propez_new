@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, ExternalLink } from 'lucide-react';
-import type { Servico, ContratoTemplate } from '../../lib/store';
+import { store, type Servico, type ContratoTemplate } from '../../lib/store';
 import { formatBRL } from '../../lib/format';
 import { mergeServiceLayouts } from '../../lib/mergeServiceLayouts';
 import type { PropezFluidoFormData, SetFormData } from './types';
@@ -45,11 +45,13 @@ export function Step3ServicosValores({
     }
 
     setFormData(prev => {
-      const baseElementos = prev.elementos?.length ? prev.elementos : [];
-      const mergedElementos =
-        prev.modeloId && baseElementos.length
-          ? mergeServiceLayouts(baseElementos, newServicos, servicosDisponiveis)
-          : prev.elementos;
+      const modelo = prev.modeloId
+        ? store.getModelos().find(m => m.id === prev.modeloId)
+        : undefined;
+      const baseElementos = modelo?.elementos ?? [];
+      const mergedElementos = prev.modeloId
+        ? mergeServiceLayouts(baseElementos, newServicos, servicosDisponiveis)
+        : prev.elementos;
 
       return {
         ...prev,

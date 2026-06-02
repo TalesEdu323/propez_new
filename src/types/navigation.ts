@@ -18,6 +18,7 @@ export type AppRoute =
   | 'propez-fluido'
   | 'visualizar-proposta'
   | 'configuracoes'
+  | 'agenda'
   | 'planos'
   | 'admin-dashboard'
   | 'admin-retention'

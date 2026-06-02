@@ -5,10 +5,22 @@ import type { MailConfig } from '../env.js'
 import type { EmailBranding } from './layout.js'
 import { renderResetHtml, renderVerificationHtml } from './templates/auth.js'
 
+export interface MailAttachment {
+  filename: string
+  content: Buffer
+  contentType?: string
+}
+
 export interface MailClient {
   sendVerificationEmail(input: { to: string; name: string; code: string }): Promise<void>
   sendPasswordResetEmail(input: { to: string; name: string; resetUrl: string }): Promise<void>
-  sendBusinessEmail(input: { to: string; subject: string; html: string; tag: string }): Promise<void>
+  sendBusinessEmail(input: {
+    to: string
+    subject: string
+    html: string
+    tag: string
+    attachment?: MailAttachment
+  }): Promise<void>
 }
 
 function createSmtpTransporter(config: MailConfig): Transporter | null {
@@ -41,6 +53,7 @@ export function createMailClient(config: MailConfig, branding: EmailBranding): M
     to: string,
     html: string,
     tag: string,
+    attachment?: MailAttachment,
   ): Promise<void> {
     if (config.provider === 'smtp') {
       if (!smtpTransporter) {
@@ -55,6 +68,9 @@ export function createMailClient(config: MailConfig, branding: EmailBranding): M
         subject,
         html,
         envelope: { from: envelopeFrom, to: [to] },
+        attachments: attachment
+          ? [{ filename: attachment.filename, content: attachment.content, contentType: attachment.contentType ?? 'application/pdf' }]
+          : undefined,
       })
       return
     }
@@ -63,7 +79,15 @@ export function createMailClient(config: MailConfig, branding: EmailBranding): M
       if (!resend) {
         throw new Error(`[mail:${tag}] MAIL_PROVIDER=resend mas RESEND_API_KEY é inválida ou ausente`)
       }
-      const res = await resend.emails.send({ from: config.from, to, subject, html })
+      const res = await resend.emails.send({
+        from: config.from,
+        to,
+        subject,
+        html,
+        attachments: attachment
+          ? [{ filename: attachment.filename, content: attachment.content.toString('base64'), contentType: attachment.contentType ?? 'application/pdf' }]
+          : undefined,
+      })
       if (res.error) {
         throw new Error(`[mail:${tag}] resend error: ${res.error.message}`)
       }
@@ -92,8 +116,8 @@ export function createMailClient(config: MailConfig, branding: EmailBranding): M
         'reset',
       )
     },
-    async sendBusinessEmail({ to, subject, html, tag }) {
-      await dispatch(subject, to, html, tag)
+    async sendBusinessEmail({ to, subject, html, tag, attachment }) {
+      await dispatch(subject, to, html, tag, attachment)
     },
   }
 }

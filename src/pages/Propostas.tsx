@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Plus, Search, FileText, Trash2, Eye, CheckCircle } from 'lucide-react';
+import { Plus, Search, FileText, Trash2, Eye, CheckCircle, Download } from 'lucide-react';
 import { store } from '../lib/store';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatBRL } from '../lib/format';
 import { usePropostas, useServicos } from '../hooks/useStoreEntity';
 import type { NavigateFn } from '../types/navigation';
 import { getProposalSubStatusLabel } from '../lib/proposalSubStatus';
+import { buildSignedContractDownloadUrl } from '../services/contractSignApi';
 
 export default function Propostas({ navigate }: { navigate: NavigateFn }) {
   const propostas = usePropostas();
@@ -197,6 +198,17 @@ export default function Propostas({ navigate }: { navigate: NavigateFn }) {
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
+                              {(proposta.contractSignStatus ?? proposta.rubricaStatus) === 'signed' && (
+                                <a
+                                  href={buildSignedContractDownloadUrl(proposta.id)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-2.5 text-zinc-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all"
+                                  title="Baixar contrato assinado"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </a>
+                              )}
                               <button 
                                 onClick={() => handleStatusChange(proposta.id, proposta.status === 'aprovada' ? 'pendente' : 'aprovada')}
                                 className={`p-2.5 rounded-xl transition-all ${

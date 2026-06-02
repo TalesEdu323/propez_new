@@ -188,20 +188,23 @@ export function contractInsightsInRange(propostas: Proposta[], start: Date, end:
   let awaitingClientReceipt = 0;
   let awaitingOrgAccept = 0;
   let contractsCompleted = 0;
-  let rubricaSigned = 0;
+  let contractsSigned = 0;
 
   for (const p of slice) {
+    const signStatus = p.contractSignStatus ?? p.rubricaStatus;
     const phase = getContractSignPhase({
-      rubricaStatus: p.rubricaStatus,
+      contractSignStatus: signStatus,
+      contractSignDocumentId: p.contractSignDocumentId ?? p.rubricaDocumentId,
+      rubricaStatus: signStatus,
       clienteContratoRecebidoAt: p.clienteContratoRecebidoAt,
       orgContratoAceitoAt: p.orgContratoAceitoAt,
       contratoConcluidoAt: p.contratoConcluidoAt,
     });
-    if (p.rubricaStatus === 'signed') rubricaSigned += 1;
+    if (signStatus === 'signed') contractsSigned += 1;
     if (phase === 'awaiting_client_receipt') awaitingClientReceipt += 1;
     if (phase === 'awaiting_org_accept') awaitingOrgAccept += 1;
     if (phase === 'complete') contractsCompleted += 1;
   }
 
-  return { awaitingClientReceipt, awaitingOrgAccept, contractsCompleted, rubricaSigned };
+  return { awaitingClientReceipt, awaitingOrgAccept, contractsCompleted, contractsSigned, rubricaSigned: contractsSigned };
 }

@@ -10,6 +10,7 @@ import {
   renderSummaryTable,
   statusBadge,
   wrapBusinessEmail,
+  renderRubricaSignatureNotice,
 } from './shared.js'
 import { renderCtaButton, renderSecondaryLink } from '../../layout.js'
 
@@ -131,9 +132,7 @@ export function renderContractSentOrg(branding: EmailBranding, ctx: ProposalNoti
       ),
       renderSummaryTable(baseSummaryRows(ctx)),
       orgCtas(ctx),
-      ctx.rubricaSigningUrl
-        ? renderSecondaryLink('Link de assinatura (Rubrica)', ctx.rubricaSigningUrl)
-        : '',
+      renderRubricaSignatureNotice('invite'),
     ],
   )
 }
@@ -151,10 +150,11 @@ export function renderContractSentClient(branding: EmailBranding, ctx: ProposalN
       renderParagraph(
         `Olá <strong>${ctx.clienteNome}</strong>, <strong>${ctx.orgName}</strong> enviou um contrato para sua assinatura.`,
       ),
+      renderRubricaSignatureNotice('invite'),
       renderSummaryTable(baseSummaryRows(ctx)),
       signCta,
       renderParagraph(
-        '<span style="font-size:12px;color:#a1a1aa;">O link de assinatura é exclusivo para você. Não compartilhe com terceiros.</span>',
+        '<span style="font-size:12px;color:#a1a1aa;">O PDF em anexo contém o contrato com a assinatura da empresa. O link é exclusivo para você.</span>',
       ),
     ],
   )
@@ -167,11 +167,12 @@ export function renderContractSignedOrg(branding: EmailBranding, ctx: ProposalNo
       : ''
   return wrapBusinessEmail(
     branding,
-    `Contrato assinado — ${ctx.clienteNome}`,
+    `Contrato assinado com Rubrica — ${ctx.clienteNome}`,
     'Contrato assinado',
     [
       renderHeading('Contrato assinado'),
       statusBadge('Assinado', 'success'),
+      renderRubricaSignatureNotice('signed'),
       renderParagraph(
         `O contrato da proposta de <strong>${ctx.clienteNome}</strong> foi assinado com sucesso.`,
       ),
@@ -189,10 +190,11 @@ export function renderContractSignedClient(branding: EmailBranding, ctx: Proposa
       : clientPublicCta(ctx)
   return wrapBusinessEmail(
     branding,
-    `Contrato assinado — ${ctx.orgName}`,
+    `Seu contrato assinado com Rubrica — ${ctx.orgName}`,
     'Contrato assinado com sucesso',
     [
       renderHeading('Assinatura confirmada'),
+      renderRubricaSignatureNotice('signed'),
       renderParagraph(
         `Olá <strong>${ctx.clienteNome}</strong>, sua assinatura do contrato com <strong>${ctx.orgName}</strong> foi registrada.`,
       ),

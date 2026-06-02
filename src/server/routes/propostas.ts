@@ -4,13 +4,16 @@ import type { Pool } from 'pg'
 import { z } from 'zod'
 import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
-import { serializeProposta } from '../db/serializers.js'
+import { serializeProposta, serializePropostaSummary } from '../db/serializers.js'
 import { createOpaqueToken } from '../auth/tokens.js'
 import type { SuiteProposalEventsClient } from '../clients/suiteProposalEvents.js'
 import type { MailClient } from '../mail/client.js'
 import { notifyProposalEventAsync } from '../services/notificationService.js'
 import { proposalFlowConfigSchema } from '../validation/proposalFlow.js'
-import { acceptContractByOrg } from '../services/proposalJourney.js'
+import { acceptContractByOrg, triggerContractSignAfterApproval } from '../services/proposalJourney.js'
+import { PROPOSTA_SELECT, PROPOSTA_SUMMARY_SELECT } from '../db/propostaColumns.js'
+import { loadPdfAttachmentForProposal, resolveProposalEmailAttachment } from '../services/contractSignedPdf.js'
+import { readSignedPdfForProposal } from '../services/signing/contractSigningService.js'
 import {
   loadProposalNotificationContext,
 } from '../services/proposalNotificationContext.js'
@@ -79,15 +82,19 @@ const sendEmailSchema = z.object({
     .refine((v) => v == null || v.length <= 200, { message: 'E-mail muito longo' }),
 })
 
-const PROPOSTA_SELECT = `
-  id, cliente_id, cliente_nome, cliente_email, modelo_id, servicos,
-  valor_cents, desconto_cents, recorrente, ciclo_recorrencia, duracao_recorrencia,
-  data_envio, data_validade, status, elementos, page_layout, contrato_texto, contrato_id,
-  chave_pix, link_pagamento, pago, data_pagamento, creator_plan, public_token,
-  prosync_lead_id, rubrica_document_id, rubrica_status, rubrica_signing_url,
-  rubrica_signed_pdf_url, rubrica_last_sync_at, viewed_at, created_at,
-  fluxo, cliente_contrato_recebido_at, org_contrato_aceito_at, contrato_concluido_at
-`
+function logPgError(context: string, err: unknown): void {
+  const pg = err as { code?: string; detail?: string; column?: string; constraint?: string }
+  console.error(`[propostas/${context}] erro:`, err)
+  if (pg?.code) {
+    console.error(`[propostas/${context}] pg code=${pg.code} column=${pg.column ?? '-'} constraint=${pg.constraint ?? '-'} detail=${pg.detail ?? '-'}`)
+  }
+}
+
+function pgErrorPayload(err: unknown): Record<string, unknown> | undefined {
+  const pg = err as { code?: string }
+  if (process.env.NODE_ENV === 'production' || !pg?.code) return undefined
+  return { code: pg.code }
+}
 
 export function createPropostasRouter(deps: {
   pool: Pool
@@ -134,14 +141,37 @@ export function createPropostasRouter(deps: {
     })
   }
 
+  router.get('/summary', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    try {
+      const { rows } = await pool.query(
+        `SELECT ${PROPOSTA_SUMMARY_SELECT} FROM propostas
+         WHERE organization_id = $1 ORDER BY created_at DESC`,
+        [req.auth.orgId],
+      )
+      return res.json(rows.map(serializePropostaSummary))
+    } catch (err) {
+      logPgError('list-summary', err)
+      return res.status(500).json({ error: 'Erro ao listar propostas', ...pgErrorPayload(err) })
+    }
+  })
+
   router.get('/', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
-    const { rows } = await pool.query(
-      `SELECT ${PROPOSTA_SELECT} FROM propostas
-       WHERE organization_id = $1 ORDER BY created_at DESC`,
-      [req.auth.orgId],
-    )
-    return res.json(rows.map(serializeProposta))
+    const summary = req.query.fields === 'summary'
+    try {
+      const select = summary ? PROPOSTA_SUMMARY_SELECT : PROPOSTA_SELECT
+      const { rows } = await pool.query(
+        `SELECT ${select} FROM propostas
+         WHERE organization_id = $1 ORDER BY created_at DESC`,
+        [req.auth.orgId],
+      )
+      const mapper = summary ? serializePropostaSummary : serializeProposta
+      return res.json(rows.map(mapper))
+    } catch (err) {
+      logPgError('list', err)
+      return res.status(500).json({ error: 'Erro ao listar propostas', ...pgErrorPayload(err) })
+    }
   })
 
   router.get('/:id', async (req: Request, res: Response) => {
@@ -255,8 +285,8 @@ export function createPropostasRouter(deps: {
       })
       return res.status(201).json(serializeProposta(inserted))
     } catch (err) {
-      console.error('[propostas/create] erro:', err)
-      return res.status(500).json({ error: 'Erro ao criar proposta' })
+      logPgError('create', err)
+      return res.status(500).json({ error: 'Erro ao criar proposta', ...pgErrorPayload(err) })
     }
   })
 
@@ -376,6 +406,13 @@ export function createPropostasRouter(deps: {
       const proposalId = String(updated.id)
       if (status === 'aprovada' && prevStatus !== 'aprovada') {
         notifyProposalEventAsync({ pool, mail, config, proposalId, type: 'proposal_approved' })
+        void triggerContractSignAfterApproval({
+          pool,
+          envConfig: config,
+          mail,
+          proposalId,
+          organizationId: req.auth!.orgId,
+        }).catch((err) => console.error('[propostas/approve] contract sign failed:', err))
       } else if (status === 'recusada' && prevStatus !== 'recusada') {
         notifyProposalEventAsync({ pool, mail, config, proposalId, type: 'proposal_rejected' })
       }
@@ -487,6 +524,8 @@ export function createPropostasRouter(deps: {
       const ctx = await loadProposalNotificationContext(pool, req.params.id, config.appUrl)
       if (!ctx) return res.status(404).json({ error: 'Proposta não encontrada' })
 
+      const attachment = await resolveProposalEmailAttachment(pool, req.params.id)
+
       await mail.sendBusinessEmail({
         to,
         subject: `${PROPOSAL_SENT_SUBJECT} — ${ctx.orgName}`,
@@ -495,6 +534,7 @@ export function createPropostasRouter(deps: {
           ctx,
         ),
         tag: 'proposal_sent:client',
+        attachment: attachment ?? undefined,
       })
 
       const { rows: afterSend } = await pool.query(
@@ -537,6 +577,44 @@ export function createPropostasRouter(deps: {
     )
     if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
     return res.json(serializeProposta(rows[0]))
+  })
+
+  router.get('/:id/contract-status', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    const { rows } = await pool.query<{
+      contract_sign_status: string | null
+      rubrica_status: string | null
+      contract_sign_document_id: string | null
+      rubrica_document_id: string | null
+      contract_signing_url: string | null
+      rubrica_signing_url: string | null
+      contract_signed_pdf_path: string | null
+      rubrica_signed_pdf_url: string | null
+    }>(
+      `SELECT contract_sign_status, rubrica_status, contract_sign_document_id, rubrica_document_id,
+              contract_signing_url, rubrica_signing_url, contract_signed_pdf_path, rubrica_signed_pdf_url
+       FROM propostas WHERE organization_id = $1 AND id = $2`,
+      [req.auth.orgId, req.params.id],
+    )
+    const row = rows[0]
+    if (!row) return res.status(404).json({ error: 'Proposta não encontrada' })
+    const status = row.contract_sign_status ?? row.rubrica_status ?? 'pending'
+    return res.json({
+      proposalId: req.params.id,
+      status,
+      documentId: row.contract_sign_document_id ?? row.rubrica_document_id,
+      signingUrl: row.contract_signing_url ?? row.rubrica_signing_url,
+      signedPdfUrl: status === 'signed' ? `/api/propostas/${req.params.id}/contract-signed.pdf` : null,
+    })
+  })
+
+  router.get('/:id/contract-signed.pdf', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    const buf = await readSignedPdfForProposal(pool, req.params.id)
+    if (!buf) return res.status(404).json({ error: 'PDF assinado não disponível' })
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', 'attachment; filename="contrato-assinado.pdf"')
+    return res.send(buf)
   })
 
   return router

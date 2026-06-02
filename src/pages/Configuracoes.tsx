@@ -468,21 +468,20 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
                   onProvision={() => void handleProvision('prosync')}
                   onRefresh={loadIntegrations}
                 />
-                <IntegrationProviderCard
-                  provider="rubrica"
-                  title="Rubrica Assinatura"
-                  badge="RB"
-                  badgeClass="bg-amber-50 text-amber-600"
-                  defaultBaseUrl="https://app.rubrica.com.br"
-                  keyPlaceholder="dm_live_..."
-                  credential={integrations?.rubrica}
-                  suiteEnabled={integrations?.suiteEnabled ?? false}
-                  canSaveManual={integrations?.canSaveManual ?? false}
-                  loading={integrationsLoading}
-                  provisioning={provisioning === 'rubrica'}
-                  onProvision={() => void handleProvision('rubrica')}
-                  onRefresh={loadIntegrations}
-                />
+                <div className="apple-card p-6 border-emerald-100 bg-emerald-50/40">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xs shrink-0">
+                      RB
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-zinc-900">Assinatura digital (Rubrica)</h4>
+                      <p className="text-sm text-zinc-600 mt-1">
+                        Integrada nativamente no PropEZ — não é necessário configurar chave API externa.
+                        Tecnologia Rubrica · Powered by Taggo.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </motion.div>
 

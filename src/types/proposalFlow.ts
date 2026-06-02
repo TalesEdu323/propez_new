@@ -36,22 +36,46 @@ export function flowHasStep(flow: ProposalFlowConfig | undefined | null, step: P
 
 export type ContractSignPhase =
   | 'not_started'
-  | 'rubrica_pending'
+  | 'sign_pending'
   | 'awaiting_client_receipt'
   | 'awaiting_org_accept'
   | 'complete';
 
-export function getContractSignPhase(proposta: {
+/** @deprecated use sign_pending */
+export type LegacyContractSignPhase = ContractSignPhase | 'rubrica_pending';
+
+function resolveSignStatus(proposta: {
+  contractSignStatus?: string | null;
   rubricaStatus?: string | null;
+  contractSignDocumentId?: string | null;
+  rubricaDocumentId?: string | null;
+}): string | null {
+  return proposta.contractSignStatus ?? proposta.rubricaStatus ?? null;
+}
+
+function resolveSignDocumentId(proposta: {
+  contractSignDocumentId?: string | null;
+  rubricaDocumentId?: string | null;
+}): string | null | undefined {
+  return proposta.contractSignDocumentId ?? proposta.rubricaDocumentId;
+}
+
+export function getContractSignPhase(proposta: {
+  contractSignStatus?: string | null;
+  rubricaStatus?: string | null;
+  contractSignDocumentId?: string | null;
+  rubricaDocumentId?: string | null;
   clienteContratoRecebidoAt?: string | null;
   orgContratoAceitoAt?: string | null;
   contratoConcluidoAt?: string | null;
 }): ContractSignPhase {
+  const status = resolveSignStatus(proposta);
+  const documentId = resolveSignDocumentId(proposta);
   if (proposta.contratoConcluidoAt) return 'complete';
   if (proposta.orgContratoAceitoAt) return 'complete';
   if (proposta.clienteContratoRecebidoAt) return 'awaiting_org_accept';
-  if (proposta.rubricaStatus === 'signed') return 'awaiting_client_receipt';
-  if (proposta.rubricaStatus === 'sent' || proposta.rubricaStatus === 'pending') return 'rubrica_pending';
-  if (proposta.rubricaDocumentId) return 'rubrica_pending';
+  if (status === 'signed') return 'awaiting_client_receipt';
+  if (status === 'sent' || status === 'pending') return 'sign_pending';
+  if (documentId) return 'sign_pending';
   return 'not_started';
 }

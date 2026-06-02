@@ -52,6 +52,7 @@ export interface ContractPdfInput {
   value?: number
   issuedAt?: Date
   location?: string
+  orgSignatureDataUri?: string | null
 }
 
 function fmtCurrency(n: number): string {
@@ -99,10 +100,28 @@ export async function generateContractPdf(input: ContractPdfInput): Promise<Buff
     .filter(Boolean)
     .map((p) => ({ text: p, style: 'paragraph', margin: [0, 0, 0, 10] }))
 
-  const signatureLine = {
+  const signatureBlock: Content = {
     margin: [0, 40, 0, 0] as [number, number, number, number],
     columns: [
       {
+        width: '*',
+        stack: [
+          input.orgSignatureDataUri
+            ? { image: input.orgSignatureDataUri, width: 140, alignment: 'center', margin: [0, 0, 0, 4] as [number, number, number, number] }
+            : { text: '________________________________________', alignment: 'center' },
+          {
+            text: input.companyName || 'Contratada',
+            alignment: 'center',
+            bold: true,
+            margin: [0, 4, 0, 0] as [number, number, number, number],
+          },
+          input.companyCnpj
+            ? { text: `CNPJ: ${input.companyCnpj}`, alignment: 'center', fontSize: 9 }
+            : (null as unknown as Content),
+        ].filter(Boolean) as Content[],
+      },
+      {
+        width: '*',
         stack: [
           { text: '________________________________________', alignment: 'center' },
           {
@@ -114,10 +133,11 @@ export async function generateContractPdf(input: ContractPdfInput): Promise<Buff
           input.clientDocument
             ? { text: `Doc.: ${input.clientDocument}`, alignment: 'center', fontSize: 9 }
             : (null as unknown as Content),
+          { text: '(assinatura pendente)', alignment: 'center', fontSize: 8, color: '#888888', margin: [0, 4, 0, 0] as [number, number, number, number] },
         ].filter(Boolean) as Content[],
       },
     ],
-  } as Content
+  }
 
   const valueLine: Content | null =
     typeof input.value === 'number' && !Number.isNaN(input.value)
@@ -159,7 +179,7 @@ export async function generateContractPdf(input: ContractPdfInput): Promise<Buff
         text: `${input.location || ''}${input.location ? ', ' : ''}${fmtDate(issuedAt)}.`,
         margin: [0, 20, 0, 0],
       },
-      signatureLine,
+      signatureBlock,
     ],
     footer: (currentPage: number, pageCount: number) => ({
       text: `Página ${currentPage} de ${pageCount}`,

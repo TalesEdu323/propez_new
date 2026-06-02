@@ -45,6 +45,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
   },
   animated_text: { text: 'Texto com Animação', animation: 'fade-up', color: '#dc2626', size: 'text-5xl', align: 'center', weight: 'font-extrabold' },
   funnel: {
+    sectionLabel: '',
     stages: [
       { name: 'Visitantes', value: '10.000' },
       { name: 'Leads', value: '500' },
@@ -88,6 +89,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
   },
   navbar: {
     logoText: 'Minha Marca',
+    logoUrl: '',
     links: ['Início', 'Sobre', 'Serviços', 'Contato'],
     buttonText: 'Falar com Especialista',
     bgColor: '#ffffff',
@@ -159,6 +161,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     iconColor: '#ffffff'
   },
   tabs: {
+    sectionLabel: '',
     tabs: [
       { title: 'Aba 1', content: 'Conteúdo da primeira aba.' },
       { title: 'Aba 2', content: 'Conteúdo da segunda aba.' },
@@ -226,13 +229,17 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     badge: 'Proposta Exclusiva',
     description: 'Esta proposta detalha escopo, entregáveis, cronograma e investimento para uma parceria de alto impacto.',
     buttonText: 'Aprovar proposta',
+    secondaryButtonText: '',
+    secondaryButtonAction: 'none',
     proposalAction: 'approve',
     primaryColor: '#B45309',
     secondaryColor: '#D97706',
     logoUrl: '',
     backgroundImageUrl: '',
+    dotOverlay: false,
   },
   marketing_context: {
+    sectionLabel: '',
     title: 'Entendemos o que você construiu.',
     description: 'Você não tem só um produto — tem ativos complementares que criam uma oportunidade única de escala no digital.',
     stats: [
@@ -245,6 +252,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     ]
   },
   marketing_strategy: {
+    sectionLabel: '',
     title: 'Funil completo do lead à venda.',
     steps: [
       { letra: 'T', titulo: 'Topo — Atração', desc: 'Anúncios para novos públicos que nunca ouviram falar de você.' },
@@ -260,6 +268,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     ]
   },
   marketing_pricing: {
+    sectionLabel: '',
     title: 'O que você recebe',
     price: '2.459,97',
     listIcon: 'CheckCircle2',
@@ -272,6 +281,7 @@ export const DEFAULT_PROPS: Record<BuilderElementType, Record<string, any>> = {
     ]
   },
   marketing_cta: {
+    sectionLabel: '',
     title: 'O custo de não agir é maior do que o investimento.',
     description: 'Cada semana sem anúncios é uma semana de vendas que ficaram para o concorrente.',
     buttonText: 'Aprovar proposta',

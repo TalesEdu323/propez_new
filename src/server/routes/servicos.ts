@@ -8,12 +8,17 @@ import { serializeServico } from '../db/serializers.js'
 
 const builderElement = z.object({}).passthrough()
 
+const optionalUuid = z.preprocess(
+  (v) => (v === '' || v === undefined ? null : v),
+  z.string().uuid().nullable().optional(),
+)
+
 const bodySchema = z.object({
   nome: z.string().trim().min(1).max(200),
   descricao: z.string().max(4000).default(''),
   valor: z.number().finite().min(0),
   tipo: z.enum(['unico', 'recorrente']),
-  contratoId: z.string().uuid().optional().nullable(),
+  contratoId: optionalUuid,
   elementos: z.array(builderElement).max(40).optional(),
 })
 

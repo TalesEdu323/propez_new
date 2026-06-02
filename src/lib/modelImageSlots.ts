@@ -1,4 +1,5 @@
 import type { BuilderElement } from '../types/builder';
+import { hasUnresolvedImagePrompts } from './modelImagePrompts';
 
 export interface ModelImageSlot {
   slotKey: string;
@@ -86,5 +87,5 @@ export function collectModelImageSlots(elementos: BuilderElement[]): ModelImageS
 }
 
 export function hasModelImageSlots(elementos: BuilderElement[]): boolean {
-  return collectModelImageSlots(elementos).length > 0;
+  return collectModelImageSlots(elementos).length > 0 || hasUnresolvedImagePrompts(elementos);
 }

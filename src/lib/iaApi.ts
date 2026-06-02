@@ -47,6 +47,10 @@ export interface GenerateImageOptions {
 export interface ResolveModelImagesOptions {
   brief?: string;
   offerType?: import('./layoutContext').OfferType;
+  modelName?: string;
+  serviceNames?: string[];
+  globalPrompt?: string;
+  imagePrompts?: Record<string, string>;
   regenerate?: 'all' | string[];
 }
 
@@ -112,6 +116,10 @@ export const iaApi = {
         elementos,
         brief: options?.brief,
         offerType: options?.offerType,
+        modelName: options?.modelName,
+        serviceNames: options?.serviceNames,
+        globalPrompt: options?.globalPrompt,
+        imagePrompts: options?.imagePrompts,
         regenerate: options?.regenerate,
       },
     ),

@@ -274,3 +274,53 @@ body.landing-marketing input[type="range"]::-webkit-slider-runnable-track {
   background: #e5e7eb;
   border-radius: 10px;
 }
+
+@keyframes propez-bg-drift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-24px, -24px); }
+}
+
+.propez-bg-effect {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.15;
+}
+
+.propez-bg-effect-dots {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+  background-size: 22px 22px;
+  animation: propez-bg-drift 28s linear infinite;
+}
+
+.propez-bg-effect-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 36px 36px;
+  animation: propez-bg-drift 32s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .propez-bg-effect-dots,
+  .propez-bg-effect-grid {
+    animation: none;
+  }
+}
+
+.propez-hero-dot-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.25;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.35) 1px, transparent 1px);
+  background-size: 18px 18px;
+  animation: propez-bg-drift 22s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .propez-hero-dot-overlay {
+    animation: none;
+  }
+}

@@ -39,11 +39,21 @@ export function rubricaLabel(status: string | null): string {
   const map: Record<string, string> = {
     pending: 'Aguardando envio',
     sent: 'Aguardando assinatura',
-    signed: 'Assinado',
+    signed: 'Assinado com Rubrica',
     failed: 'Falhou',
     cancelled: 'Cancelado',
   }
   return status ? map[status] ?? status : '—'
+}
+
+export function renderRubricaSignatureNotice(variant: 'invite' | 'signed' | 'default' = 'default'): string {
+  const text =
+    variant === 'invite'
+      ? 'Assinatura digital via <strong>Rubrica</strong> · Powered by Taggo. A empresa já assinou — falta sua assinatura. O PDF em anexo contém o contrato parcial.'
+      : variant === 'signed'
+        ? 'Contrato assinado eletronicamente com <strong>Rubrica</strong> · Powered by Taggo. Segue em anexo o documento assinado por ambas as partes, com relatório de validade jurídica.'
+        : 'Assinatura digital realizada com <strong>Rubrica</strong> · Powered by Taggo. Documento com validade jurídica conforme MP 2.200-2/2001 e Lei 14.063/2020.';
+  return renderParagraph(`<span style="font-size:13px;color:#52525b;">${text}</span>`)
 }
 
 export function wrapBusinessEmail(

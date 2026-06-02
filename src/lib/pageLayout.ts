@@ -21,6 +21,11 @@ export function normalizePageLayout(raw: unknown): BuilderPageLayout {
   const textColor = typeof o.textColor === 'string' ? o.textColor : undefined;
   const backgroundImage = typeof o.backgroundImage === 'string' ? o.backgroundImage : undefined;
   const logoUrl = typeof o.logoUrl === 'string' ? o.logoUrl : undefined;
+  const bgEffectRaw = o.backgroundEffect;
+  const backgroundEffect =
+    bgEffectRaw === 'dots' || bgEffectRaw === 'grid' || bgEffectRaw === 'none'
+      ? bgEffectRaw
+      : undefined;
   return {
     widthMode,
     horizontalPadding,
@@ -32,6 +37,7 @@ export function normalizePageLayout(raw: unknown): BuilderPageLayout {
     ...(textColor ? { textColor } : {}),
     ...(backgroundImage ? { backgroundImage } : {}),
     ...(logoUrl ? { logoUrl } : {}),
+    ...(backgroundEffect ? { backgroundEffect } : {}),
   };
 }
 

@@ -17,6 +17,8 @@ import { buildIntegrationsRouter } from './routes/integrations.js';
 import { buildWebhooksRouter } from './routes/webhooks.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createSsoRouter } from './routes/sso.js';
+import { createGoogleAuthRouter } from './routes/googleAuth.js';
+import { createGoogleCalendarRouter } from './routes/googleCalendar.js';
 import { createSuiteLookup } from './clients/suiteLookup.js';
 import { createSuiteServiceTokenClient } from './clients/suiteServiceToken.js';
 import { createSuiteProposalEvents } from './clients/suiteProposalEvents.js';
@@ -31,6 +33,7 @@ import { createPropostasRouter } from './routes/propostas.js';
 import { createUsageRouter } from './routes/usage.js';
 import { createIaRouter } from './routes/ia.js';
 import { createPublicPropostasRouter } from './routes/publicPropostas.js';
+import { createSigningRouter, createPublicValidityRouter } from './routes/signing.js';
 import { createHealthRouter } from './routes/health.js';
 import {
   createCheckoutRouter,
@@ -43,6 +46,7 @@ import { createBlogRouter } from './routes/blog.js';
 import { createNewsletterRouter } from './routes/newsletter.js';
 import { createNotificationsRouter } from './routes/notifications.js';
 import { createAdminRouter } from './routes/admin.js';
+import { createAdminPostsRouter } from './routes/adminPosts.js';
 import { createMarketplaceRouter, createAdminMarketplaceRouter } from './routes/marketplace.js';
 import { errorHandler } from './errorHandler.js';
 import { logStartupIntegrationDiagnostics } from './startupDiagnostics.js';
@@ -104,9 +108,6 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
       pool,
       config: integrationsConfig,
       orgCredentialsRepo,
-      suiteProposalEvents,
-      envConfig: config,
-      mail,
     }),
   );
 
@@ -117,6 +118,8 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
     const start = Date.now();
     res.on('finish', () => {
       if (res.statusCode < 500) return;
+      // Falhas de proxy de integração (upstream/config) não são bugs da aplicação
+      if (req.path.startsWith('/api/integrations')) return;
       const routePattern = req.route?.path
         ? `${req.baseUrl || ''}${req.route.path}`
         : req.path;
@@ -138,6 +141,7 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   const authLimiter = createRateLimit({ windowMs: 60_000, max: 30 });
   app.use('/api', authLimiter, createAuthRouter({ pool, config, mail, suiteLookup }));
   app.use('/api', createSsoRouter({ pool, config }));
+  app.use('/api', createGoogleAuthRouter({ pool, config }));
 
   // 5) CRUDs autenticados (todas com requireAuth internamente)
   app.use('/api/organizations', createOrganizationsRouter({ pool, config }));
@@ -151,7 +155,14 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   app.use('/api/usage', createUsageRouter({ pool, config }));
   app.use('/api/ia', createIaRouter({ pool, config }));
 
-  // 6) Integrations proxy (autenticado)
+  // 6) Google Calendar (autenticado) — antes do proxy genérico de integrações
+  app.use(
+    '/api/integrations/google-calendar',
+    integrationsLimiter,
+    createGoogleCalendarRouter({ pool, config }),
+  );
+
+  // 6b) Integrations proxy (autenticado)
   const integrationsLimiter = createRateLimit({ windowMs: 60_000, max: 120 });
   app.use(
     '/api/integrations',
@@ -163,7 +174,6 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
       ensureSuiteCredential,
       orgCredentialsRepo,
       suiteProposalEvents,
-      mail,
     }),
   );
 
@@ -181,10 +191,14 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
     }),
   );
 
+  app.use('/api/public/sign', createSigningRouter({ pool, config, mail }));
+  app.use('/api/public/validity', createPublicValidityRouter({ pool, config }));
+
   // 8) Painel admin (super-admin do SaaS) — exige requireAuth + requirePlatformAdmin
   app.use('/api/marketplace', createMarketplaceRouter({ pool, config }));
   app.use('/api/admin', createAdminRouter({ pool, config }));
   app.use('/api/admin', createAdminMarketplaceRouter({ pool, config }));
+  app.use('/api', createAdminPostsRouter({ pool, config, mail }));
 
   // 9) Utilitárias
   app.use('/api', createHealthRouter({ pool, integrationsConfig, config }));

@@ -1,11 +1,15 @@
-import { ExternalLink, FileCheck, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { FileCheck, FileText, Loader2, AlertCircle, PenLine } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { buildPublicSignedContractPdfUrl } from '../../lib/publicProposalUrls';
 import { getContractSignPhase } from '../../types/proposalFlow';
 import type { ProposalFlowConfig } from '../../types/proposalFlow';
 
 interface PropostaSignFields {
+  contractSignStatus?: string | null;
   rubricaStatus?: string | null;
+  contractSigningUrl?: string | null;
   rubricaSigningUrl?: string | null;
+  publicToken?: string | null;
   clienteContratoRecebidoAt?: string | null;
   contratoConcluidoAt?: string | null;
   orgContratoAceitoAt?: string | null;
@@ -18,6 +22,25 @@ interface Props {
   publicToken: string;
   onConfirmReceipt: () => void;
   confirming?: boolean;
+}
+
+function resolveStatus(p: PropostaSignFields): string | null | undefined {
+  return p.contractSignStatus ?? p.rubricaStatus;
+}
+
+function resolveSigningUrl(p: PropostaSignFields, publicToken: string): string | null {
+  const url = p.contractSigningUrl ?? p.rubricaSigningUrl;
+  if (!url) return null;
+  try {
+    if (url.startsWith('http')) {
+      const u = new URL(url);
+      return u.pathname + u.search;
+    }
+  } catch {
+    /* relative */
+  }
+  if (url.startsWith('/')) return url;
+  return `/p/${publicToken}/assinar/${url}`;
 }
 
 function SignedContractDownload({ publicToken }: { publicToken: string }) {
@@ -45,19 +68,22 @@ function SignedContractDownload({ publicToken }: { publicToken: string }) {
 
 export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceipt, confirming }: Props) {
   const phase = getContractSignPhase({
-    rubricaStatus: proposta.rubricaStatus,
+    contractSignStatus: resolveStatus(proposta),
+    rubricaStatus: resolveStatus(proposta),
     clienteContratoRecebidoAt: proposta.clienteContratoRecebidoAt,
     orgContratoAceitoAt: proposta.orgContratoAceitoAt,
     contratoConcluidoAt: proposta.contratoConcluidoAt,
   });
+  const signingPath = resolveSigningUrl(proposta, publicToken);
+  const status = resolveStatus(proposta);
 
   if (phase === 'complete') {
     return (
       <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-emerald-50 border border-emerald-100 text-center">
         <FileCheck className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
         <h3 className="text-xl font-bold text-emerald-900">Contrato concluído</h3>
-        <p className="text-emerald-700 mt-2 text-sm mb-4">Todas as etapas do contrato foram finalizadas.</p>
-        {proposta.rubricaStatus === 'signed' && <SignedContractDownload publicToken={publicToken} />}
+        <p className="text-emerald-700 mt-2 text-sm mb-1">Assinado com Rubrica · Powered by Taggo</p>
+        {status === 'signed' && <SignedContractDownload publicToken={publicToken} />}
       </div>
     );
   }
@@ -79,9 +105,7 @@ export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceip
       <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-white border border-black/5 shadow-lg text-center">
         <FileCheck className="w-12 h-12 text-zinc-900 mx-auto mb-4" />
         <h3 className="text-xl font-bold text-zinc-900">Assinatura registrada</h3>
-        <p className="text-zinc-500 mt-2 text-sm mb-2">
-          Você pode ver ou baixar o contrato assinado antes de confirmar o recebimento.
-        </p>
+        <p className="text-zinc-500 mt-2 text-sm mb-2">Assinado com Rubrica · Powered by Taggo</p>
         <SignedContractDownload publicToken={publicToken} />
         <button type="button" onClick={onConfirmReceipt} disabled={confirming} className="btn-primary">
           {confirming ? 'Confirmando...' : 'Confirmar recebimento'}
@@ -90,13 +114,13 @@ export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceip
     );
   }
 
-  if (proposta.rubricaStatus === 'failed' || proposta.rubricaStatus === 'cancelled') {
+  if (status === 'failed' || status === 'cancelled') {
     return (
       <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-red-50 border border-red-100 text-center">
         <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
         <h3 className="text-xl font-bold text-red-900">Assinatura indisponível</h3>
         <p className="text-red-700 mt-2 text-sm">
-          Não foi possível preparar o contrato para assinatura. Entre em contato com {orgName} para receber o link manualmente.
+          Não foi possível preparar o contrato para assinatura. Entre em contato com {orgName}.
         </p>
       </div>
     );
@@ -105,25 +129,23 @@ export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceip
   return (
     <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-zinc-900 text-white text-center">
       <h3 className="text-xl font-bold mb-2">Assinar contrato</h3>
-      <p className="text-zinc-400 text-sm mb-6">
-        Você receberá um e-mail com o link de assinatura (e-mail + assinatura na tela). Após assinar, volte aqui.
+      <p className="text-zinc-400 text-sm mb-2">
+        Assinatura digital via Rubrica · Powered by Taggo
       </p>
-      {proposta.rubricaSigningUrl ? (
-        <a
-          href={proposta.rubricaSigningUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+      <p className="text-zinc-500 text-xs mb-6">
+        {orgName} já assinou. Falta sua assinatura na tela ou pelo e-mail enviado.
+      </p>
+      {signingPath ? (
+        <Link
+          to={signingPath.startsWith('/') ? signingPath : `/p/${publicToken}/assinar/${signingPath}`}
           className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-white text-zinc-900 font-bold hover:bg-zinc-100"
         >
-          Abrir assinatura <ExternalLink className="w-4 h-4" />
-        </a>
+          <PenLine className="w-4 h-4" /> Assinar agora
+        </Link>
       ) : (
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-amber-300" />
-          <p className="text-amber-300 text-sm">
-            Preparando link de assinatura… isso pode levar alguns segundos.
-          </p>
-          <p className="text-zinc-500 text-xs">A página atualiza automaticamente.</p>
+          <p className="text-amber-300 text-sm">Preparando assinatura…</p>
         </div>
       )}
     </div>

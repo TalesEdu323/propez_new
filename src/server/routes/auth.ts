@@ -11,6 +11,7 @@ import {
   hashToken,
   signAccessToken,
 } from '../auth/tokens.js'
+import { getPrimaryMembership, issueTokensForUser as issueSessionTokens } from '../auth/issueSession.js'
 import {
   accessCookieName,
   clearAuthCookies,
@@ -85,20 +86,7 @@ export function createAuthRouter(deps: {
     userAgent: string | undefined
     ip: string | undefined
   }): Promise<void> {
-    const { res, userId, orgId, role, name, email, userAgent, ip } = input
-    const access = signAccessToken(
-      { sub: userId, org: orgId, role, name, email },
-      config.auth,
-    )
-    const { token: refresh, hash: refreshHash } = createRefreshToken()
-    const expiresAt = new Date(Date.now() + config.auth.refreshTtlSeconds * 1000)
-    await pool.query(
-      `INSERT INTO sessions (user_id, current_org_id, refresh_token_hash, user_agent, ip, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [userId, orgId, refreshHash, userAgent ?? null, ip ?? null, expiresAt],
-    )
-    setAccessCookie(res, access, config.auth)
-    setRefreshCookie(res, refresh, config.auth)
+    await issueSessionTokens({ pool, config: config.auth, ...input })
   }
 
   async function getActiveMembership(
@@ -115,21 +103,11 @@ export function createAuthRouter(deps: {
     return rows[0] ?? null
   }
 
-  async function getPrimaryMembership(userId: string): Promise<{
+  async function getPrimaryMembershipForUser(userId: string): Promise<{
     organization_id: string
     role: 'owner' | 'admin' | 'member'
   } | null> {
-    const { rows } = await pool.query<{
-      organization_id: string
-      role: 'owner' | 'admin' | 'member'
-    }>(
-      `SELECT organization_id, role FROM memberships
-       WHERE user_id = $1
-       ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, created_at ASC
-       LIMIT 1`,
-      [userId],
-    )
-    return rows[0] ?? null
+    return getPrimaryMembership(pool, userId)
   }
 
   // --------------------------------------------------------------------------
@@ -282,7 +260,7 @@ export function createAuthRouter(deps: {
         [u.id],
       )
 
-      const membership = await getPrimaryMembership(u.id)
+      const membership = await getPrimaryMembershipForUser(u.id)
       if (!membership) {
         return res.status(403).json({ error: 'Conta sem organização' })
       }
@@ -364,7 +342,7 @@ export function createAuthRouter(deps: {
         id: string
         name: string
         email: string
-        password_hash: string
+        password_hash: string | null
         email_verified_at: string | null
         is_platform_admin: boolean
       }>(
@@ -374,13 +352,16 @@ export function createAuthRouter(deps: {
       )
       const u = userRes.rows[0]
       if (!u) return res.status(401).json({ error: 'Credenciais inválidas' })
+      if (!u.password_hash) {
+        return res.status(401).json({ error: 'Use Entrar com Google para esta conta' })
+      }
       const ok = await verifyPassword(password, u.password_hash)
       if (!ok) return res.status(401).json({ error: 'Credenciais inválidas' })
       if (!u.email_verified_at) {
         return res.status(403).json({ error: 'Email não verificado', reason: 'email_not_verified' })
       }
 
-      const membership = await getPrimaryMembership(u.id)
+      const membership = await getPrimaryMembershipForUser(u.id)
       if (!membership) return res.status(403).json({ error: 'Conta sem organização' })
 
       await pool.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [u.id])
@@ -480,7 +461,7 @@ export function createAuthRouter(deps: {
         membership = await getActiveMembership(u.id, s.current_org_id)
       }
       if (!membership) {
-        membership = await getPrimaryMembership(u.id)
+        membership = await getPrimaryMembershipForUser(u.id)
       }
       if (!membership) {
         clearAuthCookies(res, config.auth)

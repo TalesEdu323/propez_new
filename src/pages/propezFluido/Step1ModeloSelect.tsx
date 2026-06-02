@@ -18,7 +18,7 @@ import type { PropezFluidoFormData } from './types';
 export interface Step1Props {
   modelos: ModeloProposta[];
   formData: PropezFluidoFormData;
-  onSelectModelo: (modeloId: string) => void;
+  onSelectModelo: (modeloId: string) => Promise<void>;
   onNext: () => void;
   onOpenModelos?: () => void;
   onOpenLoja?: () => void;
@@ -37,6 +37,7 @@ export function Step1ModeloSelect({ modelos, formData, onSelectModelo, onNext, o
     nome: '',
   });
   const [previewModelo, setPreviewModelo] = useState<ModeloProposta | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const openPreview = (m: ModeloProposta) => {
     if (!isTemplateAllowed(plan, m.tier)) {
@@ -46,11 +47,16 @@ export function Step1ModeloSelect({ modelos, formData, onSelectModelo, onNext, o
     setPreviewModelo(m);
   };
 
-  const handleConfirmModelo = () => {
-    if (!previewModelo) return;
-    onSelectModelo(previewModelo.id);
-    setPreviewModelo(null);
-    onNext();
+  const handleConfirmModelo = async () => {
+    if (!previewModelo || confirming) return;
+    setConfirming(true);
+    try {
+      await onSelectModelo(previewModelo.id);
+      setPreviewModelo(null);
+      onNext();
+    } finally {
+      setConfirming(false);
+    }
   };
 
   return (
@@ -169,8 +175,8 @@ export function Step1ModeloSelect({ modelos, formData, onSelectModelo, onNext, o
         pageLayout={normalizePageLayout(previewModelo?.pageLayout)}
         title={previewModelo ? `Preview — ${previewModelo.nome}` : 'Preview do modelo'}
         description="Revise o layout da página antes de usar este modelo na proposta."
-        acceptLabel="Usar este modelo e continuar"
-        onClose={() => setPreviewModelo(null)}
+        acceptLabel={confirming ? 'Preparando modelo...' : 'Usar este modelo e continuar'}
+        onClose={() => !confirming && setPreviewModelo(null)}
         onAccept={handleConfirmModelo}
       />
     </>

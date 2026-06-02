@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { ImageIcon, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import type { BuilderElement } from '../../types/builder';
 import type { OfferType } from '../../lib/layoutContext';
+import { suggestGlobalImagePrompt } from '../../lib/buildImagePrompt';
 import { collectModelImageSlots } from '../../lib/modelImageSlots';
+import { hasUnresolvedImagePrompts } from '../../lib/modelImagePrompts';
 import { getSegmentLabel } from '../../lib/segmentLabels';
 import { iaApi, getIaErrorMessage } from '../../lib/iaApi';
 
@@ -11,19 +13,39 @@ export interface StepImagensProps {
   elementos: BuilderElement[];
   offerType: OfferType;
   brief?: string;
+  modelName?: string;
+  serviceNames?: string[];
   onElementosChange: (elementos: BuilderElement[]) => void;
+  /** Dispara resolve automático ao montar (starters / prompts pendentes). */
+  autoResolve?: boolean;
 }
 
 export function StepImagens({
   elementos,
   offerType,
   brief,
+  modelName,
+  serviceNames,
   onElementosChange,
+  autoResolve = true,
 }: StepImagensProps) {
   const slots = collectModelImageSlots(elementos);
+  const suggestedGlobal = useMemo(
+    () => suggestGlobalImagePrompt(modelName, serviceNames, brief),
+    [modelName, serviceNames, brief],
+  );
+
+  const [globalPrompt, setGlobalPrompt] = useState(suggestedGlobal);
+  const [slotPrompts, setSlotPrompts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [regeneratingKey, setRegeneratingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoResolvedRef = useRef(false);
+
+  useEffect(() => {
+    if (!suggestedGlobal) return;
+    setGlobalPrompt((prev) => (prev.trim() ? prev : suggestedGlobal));
+  }, [suggestedGlobal]);
 
   const runResolve = async (regenerate?: 'all' | string[]) => {
     setError(null);
@@ -32,6 +54,12 @@ export function StepImagens({
       const result = await iaApi.resolveModelImages(elementos, {
         brief,
         offerType,
+        modelName,
+        serviceNames,
+        globalPrompt: globalPrompt.trim() || undefined,
+        imagePrompts: Object.fromEntries(
+          Object.entries(slotPrompts).filter(([, v]) => v.trim()),
+        ),
         regenerate,
       });
       onElementosChange(result.elementos);
@@ -43,9 +71,19 @@ export function StepImagens({
     }
   };
 
+  useEffect(() => {
+    if (!autoResolve || autoResolvedRef.current || !hasUnresolvedImagePrompts(elementos)) return;
+    autoResolvedRef.current = true;
+    void runResolve('all');
+  }, []);
+
   const handleRegenerateOne = async (slotKey: string) => {
     setRegeneratingKey(slotKey);
     await runResolve([slotKey]);
+  };
+
+  const updateSlotPrompt = (slotKey: string, value: string) => {
+    setSlotPrompts((prev) => ({ ...prev, [slotKey]: value }));
   };
 
   return (
@@ -63,8 +101,15 @@ export function StepImagens({
         <div>
           <h2 className="text-2xl font-bold text-zinc-900 tracking-tight">Imagens e banners</h2>
           <p className="text-sm text-zinc-500 mt-1">
-            Geradas com IA conforme seu brief e o nicho{' '}
-            <strong className="text-zinc-700">{getSegmentLabel(offerType)}</strong>.
+            Geradas com IA conforme sua descrição, o nicho{' '}
+            <strong className="text-zinc-700">{getSegmentLabel(offerType)}</strong>
+            {modelName ? (
+              <>
+                {' '}
+                e o modelo <strong className="text-zinc-700">{modelName}</strong>
+              </>
+            ) : null}
+            .
           </p>
         </div>
       </div>
@@ -75,6 +120,25 @@ export function StepImagens({
         </p>
       ) : (
         <>
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest">
+              Descrição para as imagens
+            </label>
+            <textarea
+              value={globalPrompt}
+              onChange={(e) => setGlobalPrompt(e.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder={suggestedGlobal || 'Descreva o visual desejado para as imagens…'}
+              className="w-full bg-zinc-50 border border-black/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/5 resize-y min-h-[80px]"
+            />
+            {serviceNames && serviceNames.length > 0 ? (
+              <p className="text-xs text-zinc-400">
+                Serviços no contexto: {serviceNames.join(', ')}
+              </p>
+            ) : null}
+          </div>
+
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
@@ -115,19 +179,31 @@ export function StepImagens({
                     </div>
                   ) : null}
                 </div>
-                <div className="p-3 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-zinc-700 truncate">{slot.label}</p>
-                    <p className="text-[10px] text-zinc-400 uppercase tracking-wider">{slot.elementType}</p>
+                <div className="p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-zinc-700 truncate">{slot.label}</p>
+                      <p className="text-[10px] text-zinc-400 uppercase tracking-wider">
+                        {slot.elementType}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => handleRegenerateOne(slot.slotKey)}
+                      className="shrink-0 text-xs font-medium text-amber-700 hover:text-amber-900 disabled:opacity-50"
+                    >
+                      Regenerar
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => handleRegenerateOne(slot.slotKey)}
-                    className="shrink-0 text-xs font-medium text-amber-700 hover:text-amber-900 disabled:opacity-50"
-                  >
-                    Regenerar
-                  </button>
+                  <textarea
+                    value={slotPrompts[slot.slotKey] ?? ''}
+                    onChange={(e) => updateSlotPrompt(slot.slotKey, e.target.value)}
+                    rows={2}
+                    maxLength={500}
+                    placeholder="Descreva esta imagem (opcional)"
+                    className="w-full text-xs bg-white border border-zinc-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-zinc-300 resize-none"
+                  />
                 </div>
               </div>
             ))}
@@ -136,7 +212,9 @@ export function StepImagens({
       )}
 
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3 border border-red-100">{error}</p>
+        <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3 border border-red-100">
+          {error}
+        </p>
       )}
     </motion.div>
   );

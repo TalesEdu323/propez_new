@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ArrowRight, Check } from 'lucide-react';
 import {
   store,
   resolvePlan,
@@ -9,7 +9,11 @@ import {
   createCliente,
   createProposta,
   updateProposta,
+  refreshEntity,
+  fetchPropostaById,
+  type Servico,
 } from '../lib/store';
+import { ApiError } from '../lib/apiClient';
 import { updateProposalStatusInCRM, type ExternalClient } from '../services/crmApi';
 import { createId } from '../lib/ids';
 import { replaceContractString, replaceVariablesInElements, type ContractContext } from '../lib/contractVariables';
@@ -23,11 +27,14 @@ import { WizardStepper } from './propezFluido/WizardStepper';
 import { Step1ModeloSelect } from './propezFluido/Step1ModeloSelect';
 import { Step2ClienteForm } from './propezFluido/Step2ClienteForm';
 import { Step3ServicosValores } from './propezFluido/Step3ServicosValores';
-import { Step4VisualBuilder } from './propezFluido/Step4VisualBuilder';
+import { Step4ModeloPreview } from './propezFluido/Step4ModeloPreview';
 import type { PropezFluidoFormData, StepDescriptor } from './propezFluido/types';
 import { INITIAL_PROPEZ_FLUIDO_FORM } from './propezFluido/types';
 import type { NavigateFn, RouteParams } from '../types/navigation';
 import { mergeServiceLayouts } from '../lib/mergeServiceLayouts';
+import { consumeFluidoReturnContext, setFluidoReturnContext } from '../lib/fluidoReturnContext';
+import { hasUnresolvedImagePrompts } from '../lib/modelImagePrompts';
+import { iaApi } from '../lib/iaApi';
 
 const TOTAL_WIZARD_STEPS = 4;
 /** Passo após o último do wizard (tela de sucesso). */
@@ -37,7 +44,7 @@ const STEPS: StepDescriptor[] = [
   { id: 1, title: 'Modelo Base', desc: 'Escolha um ponto de partida' },
   { id: 2, title: 'Cliente', desc: 'Para quem é esta proposta?' },
   { id: 3, title: 'Serviços e prazos', desc: 'Valores, datas e cobrança' },
-  { id: 4, title: 'Visual', desc: 'Personalize o layout da proposta' },
+  { id: 4, title: 'Preview', desc: 'Revise o layout antes de criar a proposta' },
 ];
 
 const INITIAL_FORM_DATA: PropezFluidoFormData = {
@@ -51,6 +58,33 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 function asUuidOrUndefined(value: string | undefined | null): string | undefined {
   if (!value) return undefined;
   return UUID_REGEX.test(value) ? value : undefined;
+}
+
+function formatSaveError(error: unknown): string {
+  if (error instanceof ApiError) {
+    const body = error.body as { error?: string; details?: { fieldErrors?: Record<string, string[]> } } | undefined;
+    if (body?.details?.fieldErrors) {
+      const first = Object.values(body.details.fieldErrors).flat()[0];
+      if (first) return first;
+    }
+    if (body?.error) return body.error;
+    return error.message;
+  }
+  if (error instanceof Error) return error.message;
+  return 'Nao foi possivel salvar a proposta. Revise os campos e tente novamente.';
+}
+
+interface ApplyModeloOptions {
+  elementosOverride?: BuilderElement[];
+  servicoIds?: string[];
+  preservePricing?: boolean;
+}
+
+function sumServicosValor(servicoIds: string[], catalog: Servico[]): number {
+  return servicoIds.reduce((acc, id) => {
+    const servico = catalog.find(s => s.id === id);
+    return acc + (servico ? servico.valor : 0);
+  }, 0);
 }
 
 export default function PropezFluido({ navigate, initialData }: { navigate: NavigateFn; initialData?: RouteParams }) {
@@ -69,10 +103,87 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
     open: false,
     requiredPlan: 'pro',
   });
+  const returnHandledRef = useRef(false);
+
+  const applyModeloToForm = useCallback(
+    (modeloId: string, options?: ApplyModeloOptions | BuilderElement[]) => {
+      const opts: ApplyModeloOptions = Array.isArray(options)
+        ? { elementosOverride: options }
+        : (options ?? {});
+
+      const modelo = store.getModelos().find(m => m.id === modeloId) ?? modelos.find(m => m.id === modeloId);
+      if (!modelo) return;
+
+      setFormData(prev => {
+        const servicoIds =
+          opts.servicoIds ??
+          (opts.preservePricing && prev.servicos.length > 0 ? prev.servicos : modelo.servicos);
+
+        const mergedElementos =
+          opts.elementosOverride ??
+          mergeServiceLayouts(modelo.elementos, servicoIds, servicosDisponiveis);
+
+        const totalValor = sumServicosValor(servicoIds, servicosDisponiveis);
+
+        return {
+          ...prev,
+          modeloId,
+          servicos: servicoIds,
+          valor: opts.preservePricing ? prev.valor : totalValor.toString(),
+          elementos: mergedElementos,
+          pageLayout: modelo.pageLayout,
+          contratoTexto: modelo.contratoTexto || '',
+          contratoId: modelo.contratoId || '',
+          chavePix: modelo.chavePix || '',
+          linkPagamento: modelo.linkPagamento || '',
+          fluxo: modelo.fluxo ?? prev.fluxo,
+        };
+      });
+    },
+    [modelos, servicosDisponiveis],
+  );
+
+  const resolveModeloElementos = useCallback(
+    async (modeloId: string): Promise<BuilderElement[]> => {
+      const modelo = store.getModelos().find(m => m.id === modeloId) ?? modelos.find(m => m.id === modeloId);
+      if (!modelo) return [];
+
+      let elementos = mergeServiceLayouts(modelo.elementos, modelo.servicos, servicosDisponiveis);
+      if (!hasUnresolvedImagePrompts(elementos)) return elementos;
+
+      const serviceNames = modelo.servicos
+        .map(id => servicosDisponiveis.find(s => s.id === id)?.nome)
+        .filter((n): n is string => Boolean(n));
+
+      try {
+        const resolved = await iaApi.resolveModelImages(elementos, {
+          modelName: modelo.nome,
+          serviceNames,
+        });
+        elementos = resolved.elementos;
+      } catch (err) {
+        console.warn('[PropezFluido] falha ao resolver imagens do modelo:', err);
+      }
+      return elementos;
+    },
+    [modelos, servicosDisponiveis],
+  );
+
+  const handleModeloSelect = useCallback(
+    async (modeloId: string) => {
+      const elementos = await resolveModeloElementos(modeloId);
+      applyModeloToForm(modeloId, elementos);
+    },
+    [applyModeloToForm, resolveModeloElementos],
+  );
 
   useEffect(() => {
-    if (initialData?.editId) {
-      const prop = store.getPropostas().find(p => p.id === initialData.editId);
+    if (!initialData?.editId) return;
+    const loadForEdit = async () => {
+      let prop = store.getPropostas().find(p => p.id === initialData.editId);
+      if (prop && !prop.elementos?.length) {
+        prop = (await fetchPropostaById(initialData.editId!)) ?? prop;
+      }
       if (prop) {
         setFormData(prev => ({
           ...prev,
@@ -97,42 +208,27 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
         }));
         setStep(2);
       }
-    }
+    };
+    void loadForEdit();
   }, [initialData]);
 
-  const handleModeloSelect = (modeloId: string) => {
-    const modelo = modelos.find(m => m.id === modeloId);
-    if (modelo) {
-      const totalValor = modelo.servicos.reduce((acc, servicoId) => {
-        const servico = servicosDisponiveis.find(s => s.id === servicoId);
-        return acc + (servico ? servico.valor : 0);
-      }, 0);
-      setFormData(prev => ({
-        ...prev,
-        modeloId,
-        servicos: modelo.servicos,
-        valor: totalValor.toString(),
-        elementos: mergeServiceLayouts(modelo.elementos, modelo.servicos, servicosDisponiveis),
-        pageLayout: modelo.pageLayout,
-        contratoTexto: modelo.contratoTexto || '',
-        contratoId: modelo.contratoId || '',
-        chavePix: modelo.chavePix || '',
-        linkPagamento: modelo.linkPagamento || '',
-        fluxo: modelo.fluxo ?? prev.fluxo,
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        modeloId: '',
-        servicos: [],
-        valor: '',
-        elementos: [],
-        contratoTexto: '',
-        contratoId: '',
-        chavePix: '',
-        linkPagamento: '',
-      }));
-    }
+  useEffect(() => {
+    if (returnHandledRef.current) return;
+    const ctx = consumeFluidoReturnContext();
+    if (!ctx) return;
+    returnHandledRef.current = true;
+
+    void (async () => {
+      await refreshEntity('propez_modelos');
+      applyModeloToForm(ctx.modeloId, { preservePricing: true });
+      setStep(ctx.returnStep);
+    })();
+  }, [applyModeloToForm]);
+
+  const handleEditModelo = () => {
+    if (!formData.modeloId) return;
+    setFluidoReturnContext({ modeloId: formData.modeloId, returnStep: 4 });
+    navigate('criar-modelo', { editId: formData.modeloId });
   };
 
   const handleSelectProSyncLead = (lead: ExternalClient) => {
@@ -168,7 +264,11 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
   const handleSave = async (finalElements: BuilderElement[], finalPageLayout?: BuilderPageLayout) => {
     const isEditing = !!initialData?.editId;
 
-    // Só checamos a cota quando é proposta NOVA — edições não consomem quota.
+    if (!finalElements.length) {
+      setSaveError('A proposta precisa de ao menos um elemento visual. Selecione um modelo no passo 1.');
+      return;
+    }
+
     if (!isEditing) {
       const freshConfig = store.ensureUsage();
       const gate = canCreateProposal(freshConfig);
@@ -267,8 +367,9 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
       setStep(SUCCESS_STEP);
     } catch (error) {
       console.error('[PropezFluido] erro ao salvar proposta:', error);
-      setSaveError('Nao foi possivel salvar a proposta. Revise os campos e tente novamente.');
-      alert('Erro ao salvar proposta. Tente novamente.');
+      const message = formatSaveError(error);
+      setSaveError(message);
+      alert(message);
     } finally {
       setIsSaving(false);
     }
@@ -316,106 +417,161 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
       setStep(4);
       return;
     }
-    if (step === 4) {
-      await handleSave(replaceVariables(formData.elementos), formData.pageLayout);
-      return;
-    }
     setStep(step + 1);
   };
 
+  const handleConfirm = async () => {
+    await handleSave(replaceVariables(formData.elementos), formData.pageLayout);
+  };
+
+  const isPreviewStep = step === 4;
+  const previewElementos = replaceVariables(formData.elementos);
+
   return (
     <div className="flex h-dvh min-h-0 w-full max-w-full bg-[#F5F5F7] overflow-hidden font-sans">
-      <WizardStepper
-        step={step}
-        steps={STEPS}
-        isEditing={!!initialData?.editId}
-        formData={formData}
-        onBack={() => navigate('propostas')}
-      />
+      {!isPreviewStep && (
+        <WizardStepper
+          step={step}
+          steps={STEPS}
+          isEditing={!!initialData?.editId}
+          formData={formData}
+          onBack={() => navigate('propostas')}
+        />
+      )}
 
       <div className="flex-1 min-h-0 min-w-0 bg-[#F5F5F7] flex flex-col overflow-hidden">
-        {/* Mobile Header */}
-        <div className="md:hidden shrink-0 p-4 border-b border-black/[0.05] flex flex-col gap-4 bg-white/80 backdrop-blur-2xl z-20">
-          <div className="flex items-center justify-between">
-            <button onClick={() => navigate('propostas')} className="p-2 -ml-2 text-zinc-500">
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
-              Passo {step} de {TOTAL_WIZARD_STEPS}
-            </span>
-            <div className="w-9" />
+        {!isPreviewStep && (
+          <div className="md:hidden shrink-0 p-4 border-b border-black/[0.05] flex flex-col gap-4 bg-white/80 backdrop-blur-2xl z-20">
+            <div className="flex items-center justify-between">
+              <button onClick={() => navigate('propostas')} className="p-2 -ml-2 text-zinc-500">
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+                Passo {step} de {TOTAL_WIZARD_STEPS}
+              </span>
+              <div className="w-9" />
+            </div>
+            <div className="w-full h-1 bg-zinc-100 rounded-full overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${(step / TOTAL_WIZARD_STEPS) * 100}%` }}
+                className="h-full bg-zinc-900"
+                transition={{ duration: 0.3 }}
+              />
+            </div>
           </div>
-          <div className="w-full h-1 bg-zinc-100 rounded-full overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(step / TOTAL_WIZARD_STEPS) * 100}%` }}
-              className="h-full bg-zinc-900"
-              transition={{ duration: 0.3 }}
-            />
-          </div>
-        </div>
+        )}
 
-        <div className="flex-1 min-h-0 w-full max-w-4xl mx-auto py-6 px-4 sm:px-6 md:py-10 md:px-12 lg:px-20 flex flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
-            <AnimatePresence mode="wait">
-              {step === 1 && (
-                <Step1ModeloSelect
-                  modelos={modelos}
-                  formData={formData}
-                  onSelectModelo={handleModeloSelect}
-                  onNext={() => setStep(2)}
-                  onOpenModelos={() => navigate('modelos')}
-                  onOpenLoja={() => navigate('modelos', { tab: 'loja' })}
-                />
-              )}
-              {step === 2 && (
-                <Step2ClienteForm
-                  clientes={clientes}
-                  formData={formData}
-                  setFormData={setFormData}
-                  onOpenLeadPicker={() => setShowLeadPicker(true)}
-                />
-              )}
-              {step === 3 && (
-                <Step3ServicosValores
-                  servicosDisponiveis={servicosDisponiveis}
-                  contratos={contratos}
-                  formData={formData}
-                  setFormData={setFormData}
-                  onOpenModelos={() => navigate('modelos')}
-                />
-              )}
-              {step === 4 && (
-                <Step4VisualBuilder formData={formData} setFormData={setFormData} />
-              )}
-            </AnimatePresence>
-          </div>
+        {isPreviewStep ? (
+          <>
+            <div className="md:hidden shrink-0 px-4 py-3 border-b border-black/[0.05] flex items-center justify-between bg-white/90 backdrop-blur-xl z-20">
+              <button
+                type="button"
+                onClick={() => setStep(3)}
+                disabled={isSaving}
+                className="p-2 -ml-2 text-zinc-500"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+                Preview da proposta
+              </span>
+              <div className="w-9" />
+            </div>
 
-          {/* Footer Actions */}
-          <div className="mt-6 md:mt-8 pt-6 shrink-0 border-t border-black/5 flex items-center justify-between gap-3">
-            <button
-              onClick={() => setStep(step - 1)}
-              disabled={step === 1 || isSaving}
-              className={`px-6 py-3 rounded-xl text-sm font-medium transition-all ${
-                step === 1 ? 'opacity-0 pointer-events-none' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
-              }`}
-            >
-              Anterior
-            </button>
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <Step4ModeloPreview
+                previewElementos={previewElementos}
+                pageLayout={formData.pageLayout}
+                modeloId={formData.modeloId}
+                onEditModelo={handleEditModelo}
+              />
+            </div>
 
-            <button
-              onClick={handleAdvance}
-              disabled={isSaving}
-              className="bg-[#0a0a0a] text-white hover:bg-zinc-800 rounded-xl px-8 py-4 text-sm font-medium transition-all active:scale-[0.98] flex items-center gap-2 shadow-lg shadow-black/10"
-            >
-              {isSaving ? 'Salvando...' : step === TOTAL_WIZARD_STEPS ? 'Gerar Proposta' : 'Próximo Passo'}
-              {step !== TOTAL_WIZARD_STEPS && <ArrowRight className="w-4 h-4" />}
-            </button>
-          </div>
-          {saveError && (
-            <p className="mt-3 text-sm text-red-600 font-medium">{saveError}</p>
-          )}
-        </div>
+            <div className="shrink-0 border-t border-black/5 bg-white/95 backdrop-blur-xl px-4 sm:px-6 py-4 flex items-center justify-between gap-3 z-20">
+              <button
+                type="button"
+                onClick={() => setStep(3)}
+                disabled={isSaving}
+                className="px-6 py-3 rounded-xl text-sm font-medium text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-all"
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirm()}
+                disabled={isSaving}
+                className="bg-[#0a0a0a] text-white hover:bg-zinc-800 rounded-xl px-8 py-4 text-sm font-medium transition-all active:scale-[0.98] flex items-center gap-2 shadow-lg shadow-black/10"
+              >
+                {isSaving ? 'Gerando proposta...' : 'Confirmar'}
+                {!isSaving && <Check className="w-4 h-4" />}
+              </button>
+            </div>
+            {saveError && (
+              <p className="shrink-0 px-4 pb-3 text-sm text-red-600 font-medium text-center">{saveError}</p>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex-1 min-h-0 w-full max-w-4xl mx-auto py-6 px-4 sm:px-6 md:py-10 md:px-12 lg:px-20 flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+                <AnimatePresence mode="wait">
+                  {step === 1 && (
+                    <Step1ModeloSelect
+                      modelos={modelos}
+                      formData={formData}
+                      onSelectModelo={handleModeloSelect}
+                      onNext={() => setStep(2)}
+                      onOpenModelos={() => navigate('modelos')}
+                      onOpenLoja={() => navigate('modelos', { tab: 'loja' })}
+                    />
+                  )}
+                  {step === 2 && (
+                    <Step2ClienteForm
+                      clientes={clientes}
+                      formData={formData}
+                      setFormData={setFormData}
+                      onOpenLeadPicker={() => setShowLeadPicker(true)}
+                    />
+                  )}
+                  {step === 3 && (
+                    <Step3ServicosValores
+                      servicosDisponiveis={servicosDisponiveis}
+                      contratos={contratos}
+                      formData={formData}
+                      setFormData={setFormData}
+                      onOpenModelos={() => navigate('modelos')}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div className="mt-6 md:mt-8 pt-6 shrink-0 border-t border-black/5 flex items-center justify-between gap-3">
+                <button
+                  onClick={() => setStep(step - 1)}
+                  disabled={step === 1 || isSaving}
+                  className={`px-6 py-3 rounded-xl text-sm font-medium transition-all ${
+                    step === 1 ? 'opacity-0 pointer-events-none' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
+                  }`}
+                >
+                  Anterior
+                </button>
+
+                <button
+                  onClick={handleAdvance}
+                  disabled={isSaving}
+                  className="bg-[#0a0a0a] text-white hover:bg-zinc-800 rounded-xl px-8 py-4 text-sm font-medium transition-all active:scale-[0.98] flex items-center gap-2 shadow-lg shadow-black/10"
+                >
+                  Próximo Passo
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+              {saveError && (
+                <p className="mt-3 text-sm text-red-600 font-medium">{saveError}</p>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <ProSyncLeadPickerModal

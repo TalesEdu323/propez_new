@@ -1,5 +1,5 @@
 import type { Pool } from 'pg'
-import type { MailClient } from '../mail/client.js'
+import type { MailAttachment, MailClient } from '../mail/client.js'
 import type { EnvironmentConfig } from '../env.js'
 import { normalizeEmailBranding } from '../mail/layout.js'
 import {
@@ -11,6 +11,7 @@ import {
   resolveClientEmail,
   type ProposalNotificationType,
 } from './proposalNotificationContext.js'
+import { loadPdfAttachmentForProposal } from './contractSignedPdf.js'
 
 const IN_APP_COPY: Record<
   ProposalNotificationType,
@@ -122,7 +123,7 @@ async function hasProposalNotification(
 
 function sendEmailsFireAndForget(
   mail: MailClient,
-  emails: Array<{ to: string; subject: string; html: string; tag: string }>,
+  emails: Array<{ to: string; subject: string; html: string; tag: string; attachment?: MailAttachment }>,
 ): void {
   for (const e of emails) {
     void mail.sendBusinessEmail(e).catch((err) => {
@@ -169,7 +170,16 @@ export async function notifyProposalEvent(deps: {
     metadata: { proposalId: ctx.proposalId, ...metadata },
   })
 
-  const emailJobs: Array<{ to: string; subject: string; html: string; tag: string }> = []
+  const emailJobs: Array<{ to: string; subject: string; html: string; tag: string; attachment?: MailAttachment }> = []
+
+  let sharedAttachment: MailAttachment | undefined
+  if (type === 'contract_sent') {
+    const att = await loadPdfAttachmentForProposal(pool, proposalId, 'partial')
+    if (att) sharedAttachment = att
+  } else if (type === 'contract_signed') {
+    const att = await loadPdfAttachmentForProposal(pool, proposalId, 'signed')
+    if (att) sharedAttachment = att
+  }
 
   const businessKey = type as keyof typeof BUSINESS_EMAIL_RENDERERS
   if (businessKey in BUSINESS_EMAIL_RENDERERS) {
@@ -186,6 +196,7 @@ export async function notifyProposalEvent(deps: {
         subject: `${subjects.org} — ${ctx.clienteNome}`,
         html: orgHtml,
         tag: `${type}:org`,
+        attachment: sharedAttachment,
       })
     }
     const clientEmail = resolveClientEmail(ctx)
@@ -196,6 +207,7 @@ export async function notifyProposalEvent(deps: {
         subject: `${clientSubject} — ${ctx.orgName}`,
         html: renderers.client!(branding, ctx),
         tag: `${type}:client`,
+        attachment: sharedAttachment,
       })
     }
   }
