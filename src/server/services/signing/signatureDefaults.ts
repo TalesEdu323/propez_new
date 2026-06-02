@@ -12,6 +12,8 @@ export {
   fieldsForSigner,
   hasClientSignatureField,
   normalizeSignatureConfig,
+  parseSavedSignatureConfig,
+  resolveSignatureConfigWithDefaults,
   getOrgSignatureFields,
   validateTemplateSignatureConfig,
   hasSignerSignatureField,
@@ -65,7 +67,7 @@ export function allFieldsFromTemplateConfig(
   org: { tempId: string; name: string; email: string },
   pageCount = 1,
 ): DbContractField[] {
-  const cfg = normalizeSignatureConfig(signatureConfig, org.name, pageCount);
+  const cfg = resolveSignatureConfigWithDefaults(signatureConfig, org.name, pageCount);
   return [
     ...fieldsForSigner(cfg, 'client', client),
     ...fieldsForSigner(cfg, 'org', org, { yOffsetPct: 0 }),

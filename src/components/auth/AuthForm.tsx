@@ -387,11 +387,11 @@ export function AuthForm({
     <div className="hidden lg:flex w-[55%] bg-[#F5F5F7] relative items-center justify-center overflow-hidden">
       <div className="absolute top-[-10%] right-[-10%] w-[70%] h-[70%] bg-gradient-to-br from-zinc-200/50 to-zinc-100/50 rounded-full blur-[120px]" />
       <div className="relative z-10 max-w-md text-center px-12">
-        <h2 className="text-2xl lg:text-3xl font-semibold text-zinc-900 tracking-tight mb-6">
-          A maneira mais elegante de fechar negócios.
+        <h2 className="text-2xl lg:text-3xl font-semibold text-zinc-900 tracking-tight mb-6 text-balance">
+          Propostas comerciais que convertem.
         </h2>
-        <p className="text-zinc-500 text-base leading-relaxed">
-          Transforme suas propostas em experiências memoráveis. Simples, rápido e profissional.
+        <p className="text-zinc-500 text-base leading-relaxed text-balance">
+          Crie, envie e acompanhe propostas com assinatura digital e pagamentos em um só lugar.
         </p>
       </div>
     </div>

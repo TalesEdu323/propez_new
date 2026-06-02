@@ -1,31 +1,32 @@
 import { Clock, CheckSquare, Eye, LayoutTemplate, Sparkles } from 'lucide-react';
 import { AnimatedSection } from './AnimatedSection';
+import { LANDING_FEATURES } from '../siteCopy';
 
 const features = [
   {
     icon: <Clock className="w-6 h-6 text-brand-600" />,
-    title: 'Lead quente esfria em 24h',
-    desc: 'Mande a proposta antes de sair da reunião. Templates de alta conversão prontos para enviar.',
+    title: 'Envio no mesmo dia',
+    desc: 'Modelos prontos e builder visual para enviar a proposta logo após a reunião com o cliente.',
   },
   {
     icon: <CheckSquare className="w-6 h-6 text-brand-600" />,
-    title: 'Eleva seu posicionamento',
-    desc: 'Sua agência entrega resultado. A proposta precisa refletir isso — não parecer que foi feita no Word às 23h.',
+    title: 'Apresentação profissional',
+    desc: 'Propostas alinhadas à sua marca, com layout consistente em cada envio.',
   },
   {
     icon: <Eye className="w-6 h-6 text-brand-600" />,
-    title: 'Pare de adivinhar (Follow-up)',
-    desc: 'Saiba exatamente quando o cliente abriu, quanto tempo ficou na proposta e onde parou de ler.',
+    title: 'Acompanhamento de leitura',
+    desc: 'Saiba quando o cliente abriu, quanto tempo permaneceu na proposta e em quais seções parou.',
   },
   {
     icon: <LayoutTemplate className="w-6 h-6 text-brand-600" />,
-    title: 'Padronize o time de CS e Vendas',
-    desc: 'Cada sócio com um formato diferente é posicionamento inconsistente. Padronize sem engessar a criatividade.',
+    title: 'Padronização da equipe',
+    desc: 'Biblioteca compartilhada de modelos para vendas e atendimento sem perder identidade visual.',
   },
   {
     icon: <Sparkles className="w-6 h-6 text-brand-600" />,
-    title: 'IA que acelera a criação',
-    desc: 'A IA monta o layout. Você ajusta o que importa. Proposta em 15 minutos, não em 3 horas gastas formatando caixas.',
+    title: 'Criação assistida por IA',
+    desc: 'A IA estrutura o rascunho; você revisa escopo, valores e detalhes antes do envio.',
   },
 ];
 
@@ -34,11 +35,11 @@ export function LandingFeatures() {
     <section id="recursos" className="py-32 bg-white relative">
       <div className="max-w-7xl mx-auto px-6">
         <AnimatedSection className="mb-20 max-w-3xl">
-          <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight font-heading">
-            Processos que grandes agências já usam
+          <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight font-heading text-balance">
+            {LANDING_FEATURES.h2}
           </h2>
-          <p className="text-xl text-gray-500 font-medium leading-relaxed">
-            Nós transformamos metodologias de fechamento de dezenas de agências parceiras em funcionalidades nativas.
+          <p className="text-xl text-gray-500 font-medium leading-relaxed text-balance">
+            {LANDING_FEATURES.subtitle}
           </p>
         </AnimatedSection>
 

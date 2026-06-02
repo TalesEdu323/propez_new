@@ -168,6 +168,7 @@ export function serializeProposta(r: AnyRow): SerializedProposta {
     duracao_recorrencia: r.duracao_recorrencia,
     data_envio: r.data_envio,
     data_validade: r.data_validade,
+    viewedAt: r.viewed_at ?? undefined,
     status: (r.status ?? 'pendente') as 'pendente' | 'aprovada' | 'recusada',
     elementos: Array.isArray(r.elementos) ? r.elementos : [],
     pageLayout: normalizePageLayout(r.page_layout),

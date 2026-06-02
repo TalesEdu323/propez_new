@@ -33,7 +33,7 @@ export default function SobreNosPage() {
     <MarketingLayout>
       <PageMeta
         title="Quem somos — Propez"
-        description={`Conheça o Propez, produto ${TAGGO_COMPANY.brandName} (${TAGGO_COMPANY.legalName}). Plataforma brasileira de propostas comerciais.`}
+        description={`Conheça o Propez, produto ${TAGGO_COMPANY.brandName} (${TAGGO_COMPANY.legalName}). Plataforma brasileira de propostas comerciais que convertem.`}
         path="/sobre-nos"
         jsonLd={organizationJsonLdForPage('/sobre-nos')}
       />

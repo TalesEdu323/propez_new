@@ -10,9 +10,11 @@ import { sha256Buffer } from './documentHash.js';
 import { resolveOrgSignatureDataUri } from './orgSignatureAsset.js';
 import {
   allFieldsFromTemplateConfig,
-  normalizeSignatureConfig,
+  parseSavedSignatureConfig,
+  resolveSignatureConfigWithDefaults,
 } from './signatureDefaults.js';
-import { hasClientSignatureField, hasSignerSignatureField } from './resolveSignatureConfig.js';
+import { hasSignerSignatureField } from './resolveSignatureConfig.js';
+import { applyPropEzPageFooters } from './pdfPageFooter.js';
 import { stampOrgSignatureOnPdf } from './stampOrgSignatureOnPdf.js';
 import { readTemplatePdf } from '../contractTemplateStorage.js';
 import {
@@ -23,6 +25,11 @@ import {
 } from './signatureStorage.js';
 import type { ContractDocumentRow, ContractFieldRow } from './types.js';
 import { buildValidityReportPayload } from './validityReportPayload.js';
+import {
+  assertJourneyReady,
+  getStoredSignatureImage,
+  loadLinkProposalContext,
+} from './signJourney.js';
 import { buildFinalSignedPdf } from './validityReportAppendix.js';
 
 function sanitizeFileName(name: string): string {
@@ -87,17 +94,21 @@ export async function sendContractForSigning(deps: {
   const sourceType = input.contractSourceType ?? 'text';
 
   try {
-    const normSig = normalizeSignatureConfig(
+    const parsedSig = parseSavedSignatureConfig(
+      input.signatureConfig,
+      input.companyName || 'Organização',
+    );
+    const normSig = resolveSignatureConfigWithDefaults(
       input.signatureConfig,
       input.companyName || 'Organização',
     );
     if (sourceType === 'pdf') {
-      if (!hasSignerSignatureField(normSig, 'client') || !hasSignerSignatureField(normSig, 'org')) {
+      if (!hasSignerSignatureField(parsedSig, 'client') || !hasSignerSignatureField(parsedSig, 'org')) {
         throw new Error(
           'Configure as posições de assinatura do Cliente e da Empresa no template de contrato (menu Contratos) antes de enviar.',
         );
       }
-    } else if (!hasClientSignatureField(input.signatureConfig)) {
+    } else if (!hasSignerSignatureField(parsedSig, 'client')) {
       throw new Error(
         'Configure a posição da assinatura do cliente no template de contrato (menu Contratos) antes de enviar para assinatura.',
       );
@@ -162,6 +173,14 @@ export async function sendContractForSigning(deps: {
     );
     const document = docRows[0];
     if (!document) throw new Error('Falha ao criar documento');
+
+    const baseUrl = envConfig.appUrl.replace(/\/+$/, '');
+    const verificationUrl = `${baseUrl}/validar/${document.id}?token=${encodeURIComponent(validationToken)}`;
+    pdf = await applyPropEzPageFooters({
+      pdfBuffer: pdf,
+      documentHash,
+      verificationUrl,
+    });
 
     const originalPath = originalPdfRelativePath(document.id);
     await writePdf(originalPath, pdf, { pool });
@@ -234,7 +253,6 @@ export async function sendContractForSigning(deps: {
       ],
     );
 
-    const baseUrl = envConfig.appUrl.replace(/\/+$/, '');
     const signingUrl = input.publicToken
       ? `${baseUrl}/p/${input.publicToken}/assinar/${token}`
       : `${baseUrl}/assinar/${token}`;
@@ -301,10 +319,27 @@ export async function completeSignature(deps: {
   envConfig: EnvironmentConfig;
   mail?: MailClient;
   token: string;
-  signatureImage: string;
+  signatureImage?: string;
   clientIp?: string;
   userAgent?: string;
 }): Promise<{ ok: boolean; error?: string; status?: number; alreadyUsed?: boolean }> {
+  const journeyCtx = await loadLinkProposalContext(deps.pool, deps.token);
+  if (!journeyCtx) return { ok: false, error: 'Link inválido', status: 404 };
+  if (journeyCtx.used) return { ok: true, alreadyUsed: true };
+
+  const journeyCheck = assertJourneyReady(journeyCtx);
+  if (!journeyCheck.ok) {
+    return { ok: false, error: journeyCheck.error, status: 409 };
+  }
+
+  const signatureImage =
+    deps.signatureImage?.startsWith('data:image')
+      ? deps.signatureImage
+      : getStoredSignatureImage(journeyCtx.authenticationData);
+  if (!signatureImage) {
+    return { ok: false, error: 'Imagem de assinatura obrigatória', status: 400 };
+  }
+
   const { rows: linkRows } = await deps.pool.query<{
     id: string;
     document_id: string;
@@ -331,7 +366,7 @@ export async function completeSignature(deps: {
   }
 
   const signatureData = {
-    signatureImage: deps.signatureImage,
+    signatureImage,
     ip: deps.clientIp ?? null,
     userAgent: deps.userAgent ?? null,
     signedAt: new Date().toISOString(),
@@ -453,10 +488,19 @@ export async function getSignatureLinkPublic(deps: {
     used: boolean;
     document_id: string;
     title: string;
+    authentication_data: unknown;
+    public_token: string | null;
+    fluxo: unknown;
+    valor_cents: number | null;
+    chave_pix: string | null;
+    link_pagamento: string | null;
   }>(
-    `SELECT sl.*, cd.title
+    `SELECT sl.token, sl.signer_email, sl.signer_name, sl.expires_at, sl.used,
+            sl.document_id, sl.authentication_data, cd.title,
+            p.public_token, p.fluxo, p.valor_cents, p.chave_pix, p.link_pagamento
      FROM signature_links sl
      JOIN contract_documents cd ON cd.id = sl.document_id
+     LEFT JOIN propostas p ON p.id = cd.proposta_id
      WHERE sl.token = $1`,
     [deps.token],
   );
@@ -480,6 +524,10 @@ export async function getSignatureLinkPublic(deps: {
     [row.document_id, emailNorm],
   );
 
+  const authData = (row.authentication_data && typeof row.authentication_data === 'object'
+    ? row.authentication_data
+    : {}) as Record<string, unknown>;
+
   return {
     ok: true,
     data: {
@@ -490,6 +538,12 @@ export async function getSignatureLinkPublic(deps: {
       used: row.used,
       expiresAt: row.expires_at.toISOString(),
       previewUrl: `/api/public/sign/${encodeURIComponent(deps.token)}/preview.pdf`,
+      publicToken: row.public_token,
+      fluxo: row.fluxo,
+      valorCents: row.valor_cents,
+      chavePix: row.chave_pix,
+      linkPagamento: row.link_pagamento,
+      identityValidated: Boolean(authData.identityValidatedAt),
       clientFields: fieldRows.map((f) => ({
         type: f.field_type,
         page: f.page,

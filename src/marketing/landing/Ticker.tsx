@@ -6,7 +6,7 @@ const items = [
   'Lendo a seção de preços',
   'Assinatura coletada',
   'Pagamento aprovado',
-  'Negócio fechado',
+  'Proposta aceita',
 ];
 
 export function Ticker() {

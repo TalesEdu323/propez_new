@@ -1,5 +1,4 @@
-import { FileCheck, FileText, Loader2, AlertCircle, PenLine } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { FileCheck, FileText, Loader2, AlertCircle } from 'lucide-react';
 import { buildPublicSignedContractPdfUrl } from '../../lib/publicProposalUrls';
 import { getContractSignPhase } from '../../types/proposalFlow';
 import type { ProposalFlowConfig } from '../../types/proposalFlow';
@@ -38,6 +37,8 @@ function resolveSigningUrl(p: PropostaSignFields, publicToken: string): string |
   if (url.startsWith('/')) return url;
   return `/p/${publicToken}/assinar/${url}`;
 }
+
+/** sign_pending: redirect automático na proposta — não renderiza card intermediário */
 
 function SignedContractDownload({ publicToken }: { publicToken: string }) {
   const pdfUrl = buildPublicSignedContractPdfUrl(publicToken);
@@ -131,26 +132,17 @@ export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceip
     );
   }
 
-  return (
-    <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-zinc-900 text-white text-center">
-      <h3 className="text-xl font-bold mb-2">Assinar contrato</h3>
-      <p className="text-zinc-400 text-sm mb-2">Assinatura digital PropEZ</p>
-      <p className="text-zinc-500 text-xs mb-6">
-        {orgName} já assinou. Falta sua assinatura na tela ou pelo e-mail enviado.
-      </p>
-      {signingPath ? (
-        <Link
-          to={signingPath.startsWith('/') ? signingPath : `/p/${publicToken}/assinar/${signingPath}`}
-          className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-white text-zinc-900 font-bold hover:bg-zinc-100"
-        >
-          <PenLine className="w-4 h-4" /> Assinar agora
-        </Link>
-      ) : (
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-amber-300" />
-          <p className="text-amber-300 text-sm">Preparando assinatura…</p>
+  if (phase === 'sign_pending') {
+    if (!signingPath) {
+      return (
+        <div className="max-w-lg mx-auto my-12 p-8 rounded-2xl bg-white border border-gray-200 text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-3" />
+          <p className="text-sm text-gray-600">Preparando assinatura…</p>
         </div>
-      )}
-    </div>
-  );
+      );
+    }
+    return null;
+  }
+
+  return null;
 }

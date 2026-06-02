@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   normalizeSignatureConfig,
+  parseSavedSignatureConfig,
+  resolveSignatureConfigWithDefaults,
   hasSignerSignatureField,
   validateTemplateSignatureConfig,
   fieldsForSigner,
@@ -9,6 +11,19 @@ import {
 } from '../signatureConfig';
 
 describe('signatureConfig', () => {
+  it('parseSavedSignatureConfig returns empty fields when no config', () => {
+    const cfg = parseSavedSignatureConfig(undefined);
+    expect(cfg.fields).toEqual([]);
+    expect(cfg.signers.length).toBe(2);
+  });
+
+  it('resolveSignatureConfigWithDefaults fills client and org when empty', () => {
+    const cfg = resolveSignatureConfigWithDefaults(undefined);
+    expect(cfg.fields.length).toBeGreaterThanOrEqual(2);
+    expect(hasSignerSignatureField(cfg, 'client')).toBe(true);
+    expect(hasSignerSignatureField(cfg, 'org')).toBe(true);
+  });
+
   it('converts legacy clientField to v2 with client and org', () => {
     const cfg = normalizeSignatureConfig({
       clientField: { page: 1, xPct: 40, yPct: 80, widthPct: 25, heightPct: 12 },

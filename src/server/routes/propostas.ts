@@ -11,9 +11,10 @@ import type { MailClient } from '../mail/client.js'
 import { notifyProposalEventAsync } from '../services/notificationService.js'
 import { proposalFlowConfigSchema } from '../validation/proposalFlow.js'
 import { acceptContractByOrg, triggerContractSignAfterApproval } from '../services/proposalJourney.js'
+import { buildProposalTimeline } from '../services/proposalTimeline.js'
 import { PROPOSTA_SELECT, PROPOSTA_SUMMARY_SELECT } from '../db/propostaColumns.js'
 import { loadPdfAttachmentForProposal, resolveProposalEmailAttachment } from '../services/contractSignedPdf.js'
-import { readSignedPdfForProposal } from '../services/signing/contractSigningService.js'
+import { readSignedPdfForProposal, readPartialPdfForProposal } from '../services/signing/contractSigningService.js'
 import {
   loadProposalNotificationContext,
 } from '../services/proposalNotificationContext.js'
@@ -171,6 +172,24 @@ export function createPropostasRouter(deps: {
     } catch (err) {
       logPgError('list', err)
       return res.status(500).json({ error: 'Erro ao listar propostas', ...pgErrorPayload(err) })
+    }
+  })
+
+  router.get('/:id/timeline', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    try {
+      const activities = await buildProposalTimeline(pool, req.auth.orgId, req.params.id)
+      if (activities.length === 0) {
+        const check = await pool.query(
+          `SELECT id FROM propostas WHERE organization_id = $1 AND id = $2`,
+          [req.auth.orgId, req.params.id],
+        )
+        if (!check.rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
+      }
+      return res.json({ activities })
+    } catch (err) {
+      logPgError('timeline', err)
+      return res.status(500).json({ error: 'Erro ao carregar histórico', ...pgErrorPayload(err) })
     }
   })
 
@@ -599,13 +618,43 @@ export function createPropostasRouter(deps: {
     const row = rows[0]
     if (!row) return res.status(404).json({ error: 'Proposta não encontrada' })
     const status = row.contract_sign_status ?? row.rubrica_status ?? 'pending'
+    const documentId = row.contract_sign_document_id ?? row.rubrica_document_id
+    let validationToken: string | null = null
+    if (documentId) {
+      const { rows: docRows } = await pool.query<{ validation_token: string | null }>(
+        `SELECT validation_token FROM contract_documents WHERE id = $1`,
+        [documentId],
+      )
+      validationToken = docRows[0]?.validation_token ?? null
+    }
+    const hasDocument = status === 'sent' || status === 'signed'
+    const validationPath = documentId
+      ? `/validar/${documentId}${validationToken ? `?token=${encodeURIComponent(validationToken)}` : ''}`
+      : null
     return res.json({
       proposalId: req.params.id,
       status,
-      documentId: row.contract_sign_document_id ?? row.rubrica_document_id,
+      documentId,
       signingUrl: row.contract_signing_url ?? row.rubrica_signing_url,
       signedPdfUrl: status === 'signed' ? `/api/propostas/${req.params.id}/contract-signed.pdf` : null,
+      originalPdfUrl: hasDocument && documentId ? `/api/propostas/${req.params.id}/contract-original.pdf` : null,
+      validationUrl: validationPath,
+      validationToken,
     })
+  })
+
+  router.get('/:id/contract-original.pdf', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    const { rows } = await pool.query<{ id: string }>(
+      `SELECT id FROM propostas WHERE organization_id = $1 AND id = $2`,
+      [req.auth.orgId, req.params.id],
+    )
+    if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
+    const buf = await readPartialPdfForProposal(pool, req.params.id)
+    if (!buf) return res.status(404).json({ error: 'PDF do contrato não disponível' })
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', 'inline; filename="contrato-original.pdf"')
+    return res.send(buf)
   })
 
   router.get('/:id/contract-signed.pdf', async (req: Request, res: Response) => {

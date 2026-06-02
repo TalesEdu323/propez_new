@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { updateProposalStatusInCRM } from '../services/crmApi';
 import { resolveOrgBrand } from '../lib/orgBrand';
 import { PublicOrgHeader } from './publicProposta/PublicOrgHeader';
-import { getContractSignStatus } from '../services/contractSignApi';
+import { getContractSignStatus, type ContractSignStatusResponse } from '../services/contractSignApi';
 import { usePropostas, useUserConfig } from '../hooks/useStoreEntity';
 import { ClientIdentificationModal } from './visualizarProposta/ClientIdentificationModal';
 import { ProposalHeader } from './visualizarProposta/ProposalHeader';
@@ -43,6 +43,10 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
     documento: '', // CPF/CNPJ
   });
   const [contractSignStatus, setContractSignStatus] = useState<ContractSignStatusUi>(null);
+  const [contractSignMeta, setContractSignMeta] = useState<Pick<
+    ContractSignStatusResponse,
+    'validationUrl' | 'validationToken' | 'originalPdfUrl' | 'signedPdfUrl'
+  > | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,6 +108,12 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
       const status = await getContractSignStatus(proposta.id);
       if (cancelled || !status) return;
       setContractSignStatus(status.status);
+      setContractSignMeta({
+        validationUrl: status.validationUrl,
+        validationToken: status.validationToken,
+        originalPdfUrl: status.originalPdfUrl,
+        signedPdfUrl: status.signedPdfUrl,
+      });
       const all = store.getPropostas();
       store.savePropostas(
         all.map(p =>
@@ -319,6 +329,10 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
                 contractSignStatus={contractSignStatus}
                 userConfig={userConfig}
                 onBackToProposal={() => setViewState('proposal')}
+                validationUrl={contractSignMeta?.validationUrl}
+                validationToken={contractSignMeta?.validationToken}
+                originalPdfUrl={contractSignMeta?.originalPdfUrl}
+                signedPdfUrl={contractSignMeta?.signedPdfUrl}
               />
             </motion.div>
           )}

@@ -23,10 +23,27 @@ function absoluteFromRelative(relativePath: string): string {
 
 function bufferFromRow(data: unknown): Buffer | null {
   if (!data) return null;
-  return Buffer.isBuffer(data) ? data : Buffer.from(data as Uint8Array);
+  if (Buffer.isBuffer(data)) return data;
+  if (typeof data === 'string') {
+    if (data.startsWith('\\x')) return Buffer.from(data.slice(2), 'hex');
+    return Buffer.from(data, 'binary');
+  }
+  return Buffer.from(data as Uint8Array);
+}
+
+function pgErrorCode(err: unknown): string {
+  return err && typeof err === 'object' && 'code' in err
+    ? String((err as { code: string }).code)
+    : '';
+}
+
+/** Garante coluna pdf_data (migration 022) mesmo se startup migrations não rodou. */
+export async function ensureContratoTemplatePdfColumn(pool: Pool): Promise<void> {
+  await pool.query(`ALTER TABLE contratos_templates ADD COLUMN IF NOT EXISTS pdf_data BYTEA`);
 }
 
 async function readTemplatePdfFromDb(ref: TemplatePdfRef): Promise<Buffer | null> {
+  await ensureContratoTemplatePdfColumn(ref.pool);
   const { rows } = await ref.pool.query<{ pdf_data: Buffer | null }>(
     `SELECT pdf_data FROM contratos_templates WHERE organization_id = $1 AND id = $2`,
     [ref.orgId, ref.contratoId],
@@ -35,13 +52,18 @@ async function readTemplatePdfFromDb(ref: TemplatePdfRef): Promise<Buffer | null
 }
 
 async function writeTemplatePdfToDb(ref: TemplatePdfRef, buffer: Buffer): Promise<void> {
-  await ref.pool.query(
+  await ensureContratoTemplatePdfColumn(ref.pool);
+  const result = await ref.pool.query(
     `UPDATE contratos_templates SET pdf_data = $3 WHERE organization_id = $1 AND id = $2`,
     [ref.orgId, ref.contratoId, buffer],
   );
+  if ((result.rowCount ?? 0) === 0) {
+    throw new Error('Contrato não encontrado para salvar o PDF');
+  }
 }
 
 export async function clearTemplatePdfData(ref: TemplatePdfRef): Promise<void> {
+  await ensureContratoTemplatePdfColumn(ref.pool);
   await ref.pool.query(
     `UPDATE contratos_templates SET pdf_data = NULL WHERE organization_id = $1 AND id = $2`,
     [ref.orgId, ref.contratoId],
@@ -103,11 +125,17 @@ export async function deleteTemplatePdf(
 }
 
 export function uploadPdfErrorMessage(err: unknown): string {
-  const code = err && typeof err === 'object' && 'code' in err ? String((err as { code: string }).code) : '';
+  const code = pgErrorCode(err);
+  if (code === '42703') {
+    return 'Banco de dados desatualizado (pdf_data). Contate o suporte ou tente novamente em alguns minutos.';
+  }
   if (code === 'ENOENT' || code === 'EROFS' || code === 'EACCES') {
     return 'Não foi possível armazenar o PDF no servidor. Tente novamente.';
   }
   const msg = err instanceof Error ? err.message : String(err);
+  if (/não encontrado para salvar/i.test(msg)) {
+    return 'Contrato não encontrado. Salve o rascunho e tente o upload novamente.';
+  }
   if (/invalid pdf|encrypted|password/i.test(msg)) {
     return 'PDF inválido, protegido por senha ou corrompido.';
   }

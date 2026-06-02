@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { Edit2, Trash2, Mail, Phone } from 'lucide-react';
 import type { Cliente } from '../../lib/store';
+import { LISTING_GRID_CLASS } from '../../components/listing/listingLayout';
 
 export interface ClientesCardsProps {
   clientes: Cliente[];
@@ -10,7 +11,7 @@ export interface ClientesCardsProps {
 
 export function ClientesCards({ clientes, onEdit, onDelete }: ClientesCardsProps) {
   return (
-    <div className="md:hidden divide-y divide-zinc-100">
+    <div className={`${LISTING_GRID_CLASS} p-6 sm:p-10`}>
       <AnimatePresence>
         {clientes.map((cliente) => (
           <motion.div
@@ -18,7 +19,7 @@ export function ClientesCards({ clientes, onEdit, onDelete }: ClientesCardsProps
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="p-6 space-y-5"
+            className="apple-card !p-6 space-y-5 h-full"
           >
             <div className="flex justify-between items-start">
               <div className="min-w-0">

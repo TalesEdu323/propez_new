@@ -7,6 +7,7 @@ import { MagneticLink } from './MagneticButton';
 import { AnimatedCounter } from './AnimatedCounter';
 import { Ticker } from './Ticker';
 import { useReducedMotion } from './useReducedMotion';
+import { LANDING_HERO } from '../siteCopy';
 
 export function LandingHero() {
   const ref = useRef(null);
@@ -29,21 +30,19 @@ export function LandingHero() {
           <AnimatedSection delay={0.1}>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-800 text-sm font-bold mb-8 shadow-sm">
               <span className="flex h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
-              O funil das agências que mais crescem
+              {LANDING_HERO.badge}
             </div>
           </AnimatedSection>
 
           <AnimatedSection delay={0.2} className="min-h-[140px] md:min-h-[200px]">
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-gray-900 max-w-5xl mb-6 leading-[1.05] font-heading">
-              <TextScramble text="Agências que fecham mais não têm melhor serviço. Têm processo comercial mais rápido." />
+            <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-gray-900 max-w-5xl mb-6 leading-[1.05] font-heading text-balance">
+              <TextScramble text={LANDING_HERO.h1} />
             </h1>
           </AnimatedSection>
 
           <AnimatedSection delay={0.3}>
-            <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mb-12 font-medium leading-relaxed">
-              Você gerencia campanha de R$ 50k para o cliente — mas sua própria proposta{' '}
-              <br className="hidden md:block" />
-              ainda é um PDF perdido no Google Drive ou anexado no WhatsApp?
+            <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mb-12 font-medium leading-relaxed text-balance">
+              {LANDING_HERO.subtitle}
             </p>
           </AnimatedSection>
 
@@ -52,14 +51,14 @@ export function LandingHero() {
               to="/cadastro"
               className="h-16 px-10 bg-black text-white rounded-full font-bold text-lg flex items-center justify-center gap-3 hover:bg-brand-600 transition-colors shadow-2xl shadow-brand-500/20 group w-full sm:w-auto hover-lift"
             >
-              Modernizar meu pipeline
+              {LANDING_HERO.ctaPrimary}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </MagneticLink>
             <a
               href="#solucao"
               className="text-lg font-bold text-gray-600 hover:text-gray-900 transition-colors underline underline-offset-4 decoration-gray-300 hover:decoration-gray-900"
             >
-              Ver o processo em ação
+              {LANDING_HERO.ctaSecondary}
             </a>
           </AnimatedSection>
 

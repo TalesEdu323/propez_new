@@ -10,6 +10,9 @@ export interface ContractSignStatusResponse {
   documentId?: string | null;
   signingUrl?: string | null;
   signedPdfUrl?: string | null;
+  originalPdfUrl?: string | null;
+  validationUrl?: string | null;
+  validationToken?: string | null;
 }
 
 export async function getContractSignStatus(proposalId: string): Promise<ContractSignStatusResponse | null> {
@@ -27,6 +30,10 @@ export async function getContractSignStatus(proposalId: string): Promise<Contrac
 
 export function buildSignedContractDownloadUrl(proposalId: string): string {
   return `/api/propostas/${encodeURIComponent(proposalId)}/contract-signed.pdf`;
+}
+
+export function buildOriginalContractDownloadUrl(proposalId: string): string {
+  return `/api/propostas/${encodeURIComponent(proposalId)}/contract-original.pdf`;
 }
 
 export function buildValidityPageUrl(documentId: string, validationToken?: string | null): string {

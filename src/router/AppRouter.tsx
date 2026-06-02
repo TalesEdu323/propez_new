@@ -45,6 +45,7 @@ export default function AppRouter() {
         <LegacyRedirects />
         <Routes>
           <Route path="/p/:publicToken/assinar/:signToken" element={<SignContractPage />} />
+          <Route path="/assinar/:signToken" element={<SignContractPage />} />
           <Route path="/validar/:documentId" element={<ValidityPage />} />
           <Route path="/p/:token" element={<PublicPropostaRoute />} />
           <Route path="/app/*" element={<AuthenticatedApp />} />

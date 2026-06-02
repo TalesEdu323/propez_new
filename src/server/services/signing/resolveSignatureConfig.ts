@@ -1,7 +1,6 @@
 import {
-  hasClientSignatureField,
-  hasSignerSignatureField,
-  normalizeSignatureConfig,
+  parseSavedSignatureConfig,
+  resolveSignatureConfigWithDefaults,
   resolveClientSignatureFieldLegacy,
 } from '../../../lib/signatureConfig.js';
 import type { SignatureFieldConfig } from './types.js';
@@ -10,6 +9,8 @@ export {
   hasClientSignatureField,
   hasSignerSignatureField,
   normalizeSignatureConfig,
+  parseSavedSignatureConfig,
+  resolveSignatureConfigWithDefaults,
   validateTemplateSignatureConfig,
 } from '../../../lib/signatureConfig.js';
 
@@ -35,8 +36,8 @@ export function resolveNormalizedSignatureConfig(
   if (contratoConfig && typeof contratoConfig === 'object') {
     const cfg = contratoConfig as { version?: number; fields?: unknown[]; clientField?: unknown };
     if (cfg.version === 2 || cfg.clientField || (cfg.fields && cfg.fields.length > 0)) {
-      return normalizeSignatureConfig(contratoConfig, orgName, pageCount);
+      return resolveSignatureConfigWithDefaults(contratoConfig, orgName, pageCount);
     }
   }
-  return normalizeSignatureConfig(modeloConfig, orgName, pageCount);
+  return resolveSignatureConfigWithDefaults(modeloConfig, orgName, pageCount);
 }

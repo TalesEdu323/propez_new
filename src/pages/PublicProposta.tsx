@@ -2,7 +2,8 @@
  * Página pública de visualização de proposta em `/p/:token`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle2, FileText, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api, apiFetch, ApiError } from '../lib/apiClient';
 import { friendlySignaturePrepareError } from '../lib/signatureErrors';
@@ -13,12 +14,12 @@ import { PropezWatermark } from './visualizarProposta/PropezWatermark';
 import { shouldShowWatermark } from '../lib/featureFlags';
 import { resolveOrgBrand } from '../lib/orgBrand';
 import { PublicOrgHeader } from './publicProposta/PublicOrgHeader';
-import { flowHasStep, parseProposalFlow } from '../types/proposalFlow';
+import { flowHasStep, getContractSignPhase, parseProposalFlow } from '../types/proposalFlow';
+import { resolveSigningPath } from '../lib/publicProposalUrls';
 import type { BuilderElement } from '../types/builder';
 import type { ProposalFlowConfig } from '../types/proposalFlow';
 import { ProposalDecisionDock } from './publicProposta/ProposalDecisionDock';
 import { PublicSignStep } from './publicProposta/PublicSignStep';
-import { PublicPayStep } from './publicProposta/PublicPayStep';
 
 interface PublicProposta {
   id: string;
@@ -38,6 +39,7 @@ interface PublicProposta {
   contractSigningUrl?: string | null;
   clienteContratoRecebidoAt?: string | null;
   contratoConcluidoAt?: string | null;
+  orgContratoAceitoAt?: string | null;
   fluxo?: ProposalFlowConfig;
   chavePix?: string | null;
   linkPagamento?: string | null;
@@ -72,6 +74,7 @@ interface Props {
 }
 
 export default function PublicProposta({ token }: Props) {
+  const navigate = useNavigate();
   const [data, setData] = useState<PublicResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,7 +98,7 @@ export default function PublicProposta({ token }: Props) {
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    if (q.get('signed') === '1' || q.get('step') === 'sign') {
+    if (q.get('signed') === '1' || q.get('step') === 'sign' || q.get('done') === '1') {
       void load();
     }
   }, [load]);
@@ -227,11 +230,24 @@ export default function PublicProposta({ token }: Props) {
     }, 8000);
     return () => window.clearInterval(interval);
   }, [awaitingSigningLink, load]);
-  const showPay =
-    isDecided &&
-    proposta?.status === 'aprovada' &&
-    flowHasStep(fluxo, 'pay') &&
-    (data?.journey?.canPay ?? (!flowHasStep(fluxo, 'sign') || !!proposta?.contratoConcluidoAt));
+
+  const signPhase = proposta
+    ? getContractSignPhase({
+        contractSignStatus: proposta.contractSignStatus,
+        clienteContratoRecebidoAt: proposta.clienteContratoRecebidoAt,
+        orgContratoAceitoAt: proposta.orgContratoAceitoAt,
+        contratoConcluidoAt: proposta.contratoConcluidoAt,
+      })
+    : 'not_started';
+
+  const signingPath = resolveSigningPath(signingUrl ?? null, token);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('done') === '1') return;
+    if (!showSign || signPhase !== 'sign_pending' || !signingPath) return;
+    navigate(signingPath);
+  }, [showSign, signPhase, signingPath, navigate]);
 
   const scrollToDecision = () => {
     anchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -271,6 +287,13 @@ export default function PublicProposta({ token }: Props) {
       );
       setData((prev) => (prev ? { ...prev, proposta: res.proposta, journey: res.journey } : prev));
       setFormOpen(false);
+      if (action === 'approve') {
+        const approvedFluxo = parseProposalFlow(res.proposta.fluxo);
+        if (flowHasStep(approvedFluxo, 'sign')) {
+          const path = resolveSigningPath(res.proposta.contractSigningUrl ?? null, token);
+          if (path) navigate(path);
+        }
+      }
     } catch (err) {
       setDecisionError(err instanceof ApiError ? err.message : 'Erro ao enviar decisão.');
     } finally {
@@ -323,6 +346,19 @@ export default function PublicProposta({ token }: Props) {
           primaryColor={org.primaryColor ?? orgBrand.primaryColor}
         />
       )}
+
+      {proposta.status === 'aprovada' && (
+        <div className="sticky top-0 z-40 w-full bg-emerald-600 text-white px-4 py-3 flex items-center justify-center gap-2 shadow-sm">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <span className="text-sm font-bold">Sim — Proposta aprovada</span>
+        </div>
+      )}
+      {proposta.status === 'recusada' && (
+        <div className="sticky top-0 z-40 w-full bg-red-600 text-white px-4 py-3 flex items-center justify-center gap-2 shadow-sm">
+          <XCircle className="w-5 h-5 shrink-0" />
+          <span className="text-sm font-bold">Não — Proposta recusada</span>
+        </div>
+      )}
       <AnimatePresence mode="wait">
         {proposta.elementos.length === 0 ? (
           <div className="min-h-screen flex items-center justify-center">
@@ -366,15 +402,8 @@ export default function PublicProposta({ token }: Props) {
                 retrying={retryingSignature}
               />
             )}
-            {showPay && (
-              <PublicPayStep
-                valor={proposta.valor}
-                chavePix={data.proposta.chavePix}
-                linkPagamento={data.proposta.linkPagamento}
-              />
-            )}
-            {!showSign && !showPay && (
-              <div className="max-w-lg mx-auto my-12 p-6 rounded-2xl bg-emerald-50 text-emerald-800 text-center font-medium">
+            {!showSign && !flowHasStep(fluxo, 'sign') && proposta.status === 'aprovada' && (
+              <div className="max-w-lg mx-auto my-12 p-6 rounded-2xl bg-emerald-50 text-emerald-800 text-center font-medium border border-emerald-100">
                 Proposta aprovada. Obrigado!
               </div>
             )}
@@ -382,8 +411,8 @@ export default function PublicProposta({ token }: Props) {
         )}
 
         {proposta.status === 'recusada' && (
-          <div className="max-w-lg mx-auto my-12 p-6 rounded-2xl bg-red-50 text-red-700 text-center font-medium">
-            Proposta recusada.
+          <div className="max-w-lg mx-auto my-12 p-6 rounded-2xl bg-red-50 text-red-700 text-center font-medium border border-red-100">
+            Sua resposta foi registrada.
           </div>
         )}
 

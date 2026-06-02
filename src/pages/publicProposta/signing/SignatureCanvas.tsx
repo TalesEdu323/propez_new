@@ -1,13 +1,15 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
-import { Eraser } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback, type PointerEvent as ReactPointerEvent } from 'react';
 
 interface Props {
   onChange: (dataUrl: string | null) => void;
   disabled?: boolean;
+  height?: number;
+  className?: string;
 }
 
-export function SignatureCanvas({ onChange, disabled }: Props) {
+export function SignatureCanvas({ onChange, disabled, height = 200, className = '' }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const drawing = useRef(false);
   const [empty, setEmpty] = useState(true);
 
@@ -24,40 +26,64 @@ export function SignatureCanvas({ onChange, disabled }: Props) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ratio = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * ratio;
-    canvas.height = rect.height * ratio;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.scale(ratio, ratio);
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#18181b';
-  }, []);
+    const container = containerRef.current;
+    if (!canvas || !container) return;
 
-  const pos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const configure = () => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const prev = !empty ? canvas.toDataURL('image/png') : null;
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#111827';
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      if (prev) {
+        const img = new Image();
+        img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
+        img.src = prev;
+      }
+    };
+
+    configure();
+    const ro = new ResizeObserver(configure);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [empty]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) canvas.style.height = `${height}px`;
+  }, [height]);
+
+  const point = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
-  const start = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const start = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     if (disabled) return;
     drawing.current = true;
     const ctx = canvasRef.current?.getContext('2d');
     if (!ctx) return;
-    const p = pos(e);
+    const p = point(e);
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
   };
 
-  const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const move = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!drawing.current || disabled) return;
     const ctx = canvasRef.current?.getContext('2d');
     if (!ctx) return;
-    const p = pos(e);
+    const p = point(e);
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
   };
@@ -73,29 +99,33 @@ export function SignatureCanvas({ onChange, disabled }: Props) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
     setEmpty(true);
     onChange(null);
   };
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-2xl border-2 border-dashed border-zinc-200 bg-white overflow-hidden">
+    <div className={`flex flex-col items-center gap-3 ${className}`}>
+      <div ref={containerRef} className="w-full">
         <canvas
           ref={canvasRef}
-          className="w-full h-40 touch-none cursor-crosshair"
+          className="w-full block rounded-lg border border-gray-300 bg-white cursor-crosshair touch-none"
+          style={{ touchAction: 'none', height }}
           onPointerDown={start}
           onPointerMove={move}
           onPointerUp={end}
           onPointerLeave={end}
         />
       </div>
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span>{empty ? 'Desenhe sua assinatura acima' : 'Assinatura capturada'}</span>
-        <button type="button" onClick={clear} disabled={disabled || empty} className="inline-flex items-center gap-1 text-zinc-600 hover:text-zinc-900 disabled:opacity-40">
-          <Eraser className="w-3.5 h-3.5" /> Limpar
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={clear}
+        disabled={disabled || empty}
+        className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+      >
+        Limpar assinatura
+      </button>
     </div>
   );
 }

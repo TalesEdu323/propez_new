@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
-import { ChevronLeft, CheckCircle, DollarSign, FileCheck, FileText, ShieldCheck, X } from 'lucide-react';
+import { ChevronLeft, CheckCircle, DollarSign, FileCheck, FileText, X } from 'lucide-react';
 import type { Proposta } from '../../lib/store';
-import { buildSignedContractDownloadUrl, buildValidityPageUrl } from '../../services/contractSignApi';
+import { ContractDocumentActions } from '../../components/contratos/ContractDocumentActions';
 
 export type ContractSignStatusUi = 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed' | null;
 
@@ -10,9 +10,22 @@ export interface ContractViewProps {
   contractSignStatus: ContractSignStatusUi;
   userConfig: { nome?: string; cnpj?: string };
   onBackToProposal: () => void;
+  validationUrl?: string | null;
+  validationToken?: string | null;
+  originalPdfUrl?: string | null;
+  signedPdfUrl?: string | null;
 }
 
-export function ContractView({ proposta, contractSignStatus, userConfig, onBackToProposal }: ContractViewProps) {
+export function ContractView({
+  proposta,
+  contractSignStatus,
+  userConfig,
+  onBackToProposal,
+  validationUrl,
+  validationToken,
+  originalPdfUrl,
+  signedPdfUrl,
+}: ContractViewProps) {
   const hasContent = proposta.contratoTexto || proposta.chavePix || proposta.linkPagamento;
   const signStatus = contractSignStatus ?? proposta.contractSignStatus ?? null;
   const documentId = proposta.contractSignDocumentId;
@@ -116,35 +129,27 @@ export function ContractView({ proposta, contractSignStatus, userConfig, onBackT
                 </div>
               )}
 
-              <div className="mt-10 flex gap-3 flex-wrap justify-center">
-                {signStatus === 'signed' ? (
-                  <>
-                    <a
-                      href={buildSignedContractDownloadUrl(proposta.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="h-12 px-8 inline-flex items-center bg-zinc-900 text-white rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all shadow-xl shadow-black/10"
-                    >
-                      <FileText className="w-4 h-4 inline-block mr-2" /> Baixar PDF Assinado
-                    </a>
-                    {documentId && (
-                      <a
-                        href={buildValidityPageUrl(documentId)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="h-12 px-8 inline-flex items-center bg-white border border-black/[0.05] text-zinc-900 rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] hover:bg-zinc-50 transition-all shadow-sm"
-                      >
-                        <ShieldCheck className="w-4 h-4 inline-block mr-2" /> Validar documento
-                      </a>
-                    )}
-                  </>
+              <div className="mt-10">
+                {(signStatus === 'sent' || signStatus === 'signed') ? (
+                  <ContractDocumentActions
+                    proposalId={proposta.id}
+                    signStatus={signStatus}
+                    documentId={documentId}
+                    validationUrl={validationUrl}
+                    validationToken={validationToken}
+                    originalPdfUrl={originalPdfUrl}
+                    signedPdfUrl={signedPdfUrl}
+                    variant="buttons"
+                  />
                 ) : (
-                  <button
-                    disabled
-                    className="h-12 px-8 bg-white border border-black/[0.05] text-zinc-400 rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] cursor-not-allowed shadow-sm"
-                  >
-                    <FileText className="w-4 h-4 inline-block mr-2" /> PDF disponível após assinatura
-                  </button>
+                  <div className="flex justify-center">
+                    <button
+                      disabled
+                      className="h-12 px-8 bg-white border border-black/[0.05] text-zinc-400 rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] cursor-not-allowed shadow-sm"
+                    >
+                      <FileText className="w-4 h-4 inline-block mr-2" /> PDF disponível após envio do contrato
+                    </button>
+                  </div>
                 )}
               </div>
             </motion.div>

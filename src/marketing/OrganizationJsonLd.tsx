@@ -1,4 +1,5 @@
 import { TAGGO_COMPANY } from './company';
+import { LANDING_SEO } from './siteCopy';
 
 type OrganizationJsonLdProps = {
   /** URL da página atual (ex.: origin + path) para @id opcional */
@@ -40,13 +41,34 @@ export function buildWebSiteJsonLd(origin: string): Record<string, unknown> {
   };
 }
 
+export function buildSoftwareApplicationJsonLd(origin: string): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Propez',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    url: origin || undefined,
+    description: LANDING_SEO.description,
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'BRL',
+    },
+  };
+}
+
 export function organizationJsonLdForPage(path: string): Record<string, unknown>[] {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const pageUrl = origin && path ? `${origin}${path}` : undefined;
-  return [
-    buildOrganizationJsonLd(pageUrl),
-    ...(origin ? [buildWebSiteJsonLd(origin)] : []),
-  ];
+  const blocks: Record<string, unknown>[] = [buildOrganizationJsonLd(pageUrl)];
+  if (origin) {
+    blocks.push(buildWebSiteJsonLd(origin));
+    if (path === '/') {
+      blocks.push(buildSoftwareApplicationJsonLd(origin));
+    }
+  }
+  return blocks;
 }
 
 /** @deprecated Use organizationJsonLdForPage via PageMeta jsonLd prop */

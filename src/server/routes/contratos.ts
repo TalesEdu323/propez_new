@@ -14,6 +14,7 @@ import {
   normalizeSignatureConfig,
   validateTemplateSignatureConfig,
 } from '../../lib/signatureConfig.js'
+import { isPdfBuffer } from '../../lib/pdfPreview.js'
 import {
   deleteTemplatePdf,
   readTemplatePdf,
@@ -155,7 +156,13 @@ export function createContratosRouter(deps: {
       res.setHeader('Content-Disposition', 'inline; filename="contrato-preview.pdf"')
       return res.send(pdf)
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
       console.error('[contratos/preview-pdf] erro:', err)
+      if (/não encontrado/i.test(msg)) {
+        return res.status(404).json({
+          error: 'PDF não encontrado. Envie o arquivo novamente na etapa de conteúdo.',
+        })
+      }
       return res.status(500).json({ error: 'Erro ao gerar preview do contrato' })
     }
   })
@@ -212,12 +219,19 @@ export function createContratosRouter(deps: {
     if (!row) return res.status(404).json({ error: 'Contrato não encontrado' })
 
     try {
-      const pdfDoc = await PDFDocument.load(file.buffer)
-      const pageCount = pdfDoc.getPageCount()
-      if (pageCount === 0) return res.status(400).json({ error: 'PDF vazio' })
+      if (!isPdfBuffer(file.buffer)) {
+        return res.status(400).json({ error: 'O arquivo enviado não é um PDF válido.' })
+      }
 
-      const ref = templatePdfRef(req.auth.orgId, req.params.id, row.pdf_path)
-      if (row.pdf_path || row.source_type === 'pdf') await deleteTemplatePdf(ref, row.pdf_path)
+      let pageCount = 1
+      try {
+        const pdfDoc = await PDFDocument.load(file.buffer, { ignoreEncryption: true })
+        pageCount = pdfDoc.getPageCount()
+        if (pageCount === 0) return res.status(400).json({ error: 'PDF vazio' })
+      } catch (parseErr) {
+        console.warn('[contratos/upload-pdf] pdf-lib não leu o arquivo; usando contagem padrão:', parseErr)
+      }
+
       const pdfPath = await writeTemplatePdf(pool, req.auth.orgId, req.params.id, file.buffer)
       const safeName = (file.originalname || 'contrato.pdf').replace(/[^\w\s.-]/g, '').slice(0, 120) || 'contrato.pdf'
 

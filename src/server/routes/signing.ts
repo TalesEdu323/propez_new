@@ -7,6 +7,14 @@ import {
   getSignatureLinkPublic,
   readSignedPdfForDocument,
 } from '../services/signing/contractSigningService.js';
+import {
+  completePaymentStep,
+  confirmIdentity,
+  getJourneyMethodsPayload,
+  requestEmailOtp,
+  saveScreenSignature,
+  verifyEmailOtp,
+} from '../services/signing/signJourney.js';
 import { buildValidityReportPayload } from '../services/signing/validityReportPayload.js';
 import { readPdf } from '../services/signing/signatureStorage.js';
 import type { ContractDocumentRow } from '../services/signing/types.js';
@@ -23,6 +31,52 @@ export function createSigningRouter(deps: {
     const result = await getSignatureLinkPublic({ pool, token: req.params.token });
     if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
     return res.json(result.data);
+  });
+
+  router.get('/:token/journey-methods', async (req: Request, res: Response) => {
+    const payload = await getJourneyMethodsPayload(pool, req.params.token);
+    if (!payload) return res.status(404).json({ error: 'Link não encontrado' });
+    return res.json({ success: true, ...payload });
+  });
+
+  router.post('/:token/auth/identity', async (req: Request, res: Response) => {
+    const name = String(req.body?.name ?? '').trim();
+    const cpf = String(req.body?.cpf ?? '').trim();
+    if (!name) return res.status(400).json({ error: 'Nome obrigatório' });
+    const result = await confirmIdentity({ pool, token: req.params.token, name, cpf: cpf || undefined });
+    if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
+    const payload = await getJourneyMethodsPayload(pool, req.params.token);
+    return res.json({ success: true, ...payload });
+  });
+
+  router.post('/:token/auth/signature', async (req: Request, res: Response) => {
+    const signatureImage = String(req.body?.signatureImage ?? '');
+    const result = await saveScreenSignature({ pool, token: req.params.token, signatureImage });
+    if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
+    const payload = await getJourneyMethodsPayload(pool, req.params.token);
+    return res.json({ success: true, ...payload });
+  });
+
+  router.post('/:token/auth/otp/request', async (req: Request, res: Response) => {
+    const result = await requestEmailOtp({ pool, mail, token: req.params.token });
+    if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
+    return res.json({ success: true });
+  });
+
+  router.post('/:token/auth/otp/verify', async (req: Request, res: Response) => {
+    const code = String(req.body?.code ?? '').trim();
+    if (!code) return res.status(400).json({ error: 'Código obrigatório' });
+    const result = await verifyEmailOtp({ pool, token: req.params.token, code });
+    if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
+    const payload = await getJourneyMethodsPayload(pool, req.params.token);
+    return res.json({ success: true, ...payload });
+  });
+
+  router.post('/:token/auth/payment/complete', async (req: Request, res: Response) => {
+    const result = await completePaymentStep({ pool, token: req.params.token });
+    if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
+    const payload = await getJourneyMethodsPayload(pool, req.params.token);
+    return res.json({ success: true, ...payload });
   });
 
   router.get('/:token/preview.pdf', async (req: Request, res: Response) => {
@@ -50,15 +104,12 @@ export function createSigningRouter(deps: {
 
   router.post('/:token/complete', async (req: Request, res: Response) => {
     const signatureImage = String(req.body?.signatureImage ?? req.body?.signatureData?.signatureImage ?? '');
-    if (!signatureImage) {
-      return res.status(400).json({ error: 'Imagem de assinatura obrigatória' });
-    }
     const result = await completeSignature({
       pool,
       envConfig: config,
       mail,
       token: req.params.token,
-      signatureImage,
+      signatureImage: signatureImage || undefined,
       clientIp: req.ip,
       userAgent: req.headers['user-agent'],
     });

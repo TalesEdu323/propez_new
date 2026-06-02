@@ -8,12 +8,18 @@ import { ClienteModal } from './clientes/ClienteModal';
 import { ClientesTable } from './clientes/ClientesTable';
 import { ClientesCards } from './clientes/ClientesCards';
 import type { NavigateFn } from '../types/navigation';
+import { ListingViewToggle, createListingViewState } from '../components/listing/ListingViewToggle';
+
+const CLIENTES_VIEW_KEY = 'propez-listing-view-clientes';
 
 export default function Clientes({ navigate: _navigate }: { navigate: NavigateFn }) {
   const clientes = useClientes();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Cliente>>({});
+  const [listView, setListView] = useState<'grid' | 'list'>(() =>
+    createListingViewState(CLIENTES_VIEW_KEY, 'grid'),
+  );
 
   const filteredClientes = clientes.filter(c => 
     c.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -101,14 +107,21 @@ export default function Clientes({ navigate: _navigate }: { navigate: NavigateFn
           className="apple-card overflow-hidden"
         >
           <div className="p-6 md:p-10 border-b border-zinc-100/50 bg-zinc-50/30">
-            <div className="relative max-w-md w-full">
-              <Search className="w-4 h-4 absolute left-6 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <input 
-                type="text"
-                placeholder="Buscar por nome, empresa ou email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white border border-zinc-200 rounded-2xl pl-14 pr-6 py-4 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-900 transition-all placeholder:text-zinc-300 shadow-sm"
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+              <div className="relative max-w-md w-full flex-1">
+                <Search className="w-4 h-4 absolute left-6 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por nome, empresa ou email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-white border border-zinc-200 rounded-2xl pl-14 pr-6 py-4 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-900 transition-all placeholder:text-zinc-300 shadow-sm"
+                />
+              </div>
+              <ListingViewToggle
+                storageKey={CLIENTES_VIEW_KEY}
+                view={listView}
+                onChange={setListView}
               />
             </div>
           </div>
@@ -128,18 +141,21 @@ export default function Clientes({ navigate: _navigate }: { navigate: NavigateFn
               </button>
             </div>
           ) : (
-            <>
+            listView === 'list' ? (
               <ClientesTable
                 clientes={filteredClientes}
                 onEdit={(cliente) => { setFormData(cliente); setIsModalOpen(true); }}
                 onDelete={handleDelete}
               />
-              <ClientesCards
-                clientes={filteredClientes}
-                onEdit={(cliente) => { setFormData(cliente); setIsModalOpen(true); }}
-                onDelete={handleDelete}
-              />
-            </>
+            ) : (
+              <div className="block">
+                <ClientesCards
+                  clientes={filteredClientes}
+                  onEdit={(cliente) => { setFormData(cliente); setIsModalOpen(true); }}
+                  onDelete={handleDelete}
+                />
+              </div>
+            )
           )}
         </motion.div>
 

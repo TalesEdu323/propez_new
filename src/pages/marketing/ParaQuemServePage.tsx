@@ -2,24 +2,23 @@ import { Link } from 'react-router-dom';
 import { Users, Building2, LineChart, ArrowRight } from 'lucide-react';
 import { MarketingLayout } from '../../marketing/MarketingLayout';
 import { PageMeta } from '../../marketing/PageMeta';
-
 const SEGMENTS = [
   {
     icon: Users,
     title: 'Autônomos e freelancers',
-    pain: 'Perder tempo montando PDFs que não convertem.',
-    solution: 'Modelos prontos, link público e pagamento na hora.',
+    pain: 'Tempo excessivo montando propostas em PDF sem padronização.',
+    solution: 'Modelos prontos, link público e pagamento integrado.',
   },
   {
     icon: Building2,
     title: 'Agências e estúdios',
-    pain: 'Cada vendedor com um formato diferente de proposta.',
+    pain: 'Formatos diferentes entre vendedores e falta de rastreio.',
     solution: 'Biblioteca de modelos, builder visual e marca consistente.',
   },
   {
     icon: LineChart,
     title: 'Consultores B2B',
-    pain: 'Proposta longa sem CTA claro nem follow-up.',
+    pain: 'Propostas longas sem CTA claro nem visibilidade de leitura.',
     solution: 'Escopo estruturado, assinatura digital e analytics de visualização.',
   },
 ];
@@ -28,15 +27,16 @@ export default function ParaQuemServePage() {
   return (
     <MarketingLayout>
       <PageMeta
-        title="Para quem serve"
-        description="Propez para autônomos, agências e consultores que vendem serviços."
+        title="Para quem serve — Propez"
+        description="Propez para autônomos, agências e consultores que precisam de propostas comerciais profissionais que convertem."
         path="/para-quem-serve"
       />
       <section className="py-16 lg:py-20 text-center">
         <div className="container mx-auto px-4 lg:px-8 max-w-3xl">
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-6">Para quem serve</h1>
-          <p className="text-lg text-zinc-500">
-            Se você vende serviços e precisa de propostas que impressionam e convertem, o Propez é para você.
+          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-6 text-balance">Para quem serve</h1>
+          <p className="text-lg text-zinc-500 text-balance">
+            Se você vende serviços e precisa de propostas comerciais claras, profissionais e fáceis de acompanhar, o
+            Propez é para você.
           </p>
         </div>
       </section>
@@ -50,7 +50,7 @@ export default function ParaQuemServePage() {
               </div>
               <div className="flex-1">
                 <h2 className="text-xl font-bold mb-2">{s.title}</h2>
-                <p className="text-sm text-red-600/80 font-medium mb-1">Desafio: {s.pain}</p>
+                <p className="text-sm text-zinc-600 font-medium mb-1">Desafio: {s.pain}</p>
                 <p className="text-zinc-600 text-sm mb-4">Com o Propez: {s.solution}</p>
                 <Link to="/cadastro" className="inline-flex items-center gap-1 text-sm font-bold text-zinc-900">
                   Criar conta grátis <ArrowRight className="w-4 h-4" />

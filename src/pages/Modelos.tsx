@@ -6,6 +6,10 @@ import { useModelos } from '../hooks/useStoreEntity';
 import { formatDateBR } from '../lib/format';
 import type { NavigateFn, ModelosTab } from '../types/navigation';
 import { LojaTemplatesPanel } from './modelos/LojaTemplatesPanel';
+import { ListingViewToggle, createListingViewState } from '../components/listing/ListingViewToggle';
+import { LISTING_GRID_CLASS, LISTING_LIST_CLASS } from '../components/listing/listingLayout';
+
+const MODELOS_VIEW_KEY = 'propez-listing-view-modelos';
 
 export default function Modelos({
   navigate,
@@ -17,6 +21,9 @@ export default function Modelos({
   const modelos = useModelos();
   const [searchTerm, setSearchTerm] = useState('');
   const [tab, setTab] = useState<ModelosTab>(initialTab);
+  const [listView, setListView] = useState<'grid' | 'list'>(() =>
+    createListingViewState(MODELOS_VIEW_KEY, 'grid'),
+  );
 
   useEffect(() => {
     setTab(initialTab);
@@ -130,14 +137,21 @@ export default function Modelos({
             className="apple-card overflow-hidden mx-0 !p-0"
           >
             <div className="p-8 md:p-10 border-b border-zinc-100/50">
-              <div className="relative max-w-md w-full">
-                <Search className="w-4 h-4 absolute left-5 top-1/2 -translate-y-1/2 text-zinc-300" />
-                <input
-                  type="text"
-                  placeholder="Buscar modelos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="glass-input pl-12 pr-6 py-4 w-full text-sm font-medium"
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                <div className="relative max-w-md w-full flex-1">
+                  <Search className="w-4 h-4 absolute left-5 top-1/2 -translate-y-1/2 text-zinc-300" />
+                  <input
+                    type="text"
+                    placeholder="Buscar modelos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="glass-input pl-12 pr-6 py-4 w-full text-sm font-medium"
+                  />
+                </div>
+                <ListingViewToggle
+                  storageKey={MODELOS_VIEW_KEY}
+                  view={listView}
+                  onChange={setListView}
                 />
               </div>
             </div>
@@ -167,9 +181,9 @@ export default function Modelos({
                   </button>
                 </div>
               </div>
-            ) : (
-              <>
-                <div className="hidden md:block overflow-x-auto">
+            ) : listView === 'list' ? (
+              <div className={`${LISTING_LIST_CLASS} p-4 sm:p-6`}>
+                <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 bg-zinc-50/30">
@@ -230,62 +244,54 @@ export default function Modelos({
                     </tbody>
                   </table>
                 </div>
-
-                <div className="md:hidden divide-y divide-zinc-100/50">
-                  <AnimatePresence>
-                    {filteredModelos.map((modelo) => (
-                      <motion.div
-                        key={modelo.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="p-8 space-y-6"
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-semibold text-zinc-900 text-xl tracking-tight leading-tight">
-                              {modelo.nome}
-                            </div>
-                            <div className="text-[9px] font-bold uppercase tracking-widest text-zinc-300 mt-2">
-                              ID: {modelo.id.slice(0, 8)}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-zinc-50/50 p-6 rounded-[2rem] border border-black/[0.02]">
-                          <div className="text-[9px] font-bold uppercase tracking-widest text-zinc-300 mb-2">
-                            Serviços inclusos
-                          </div>
-                          <div className="text-sm text-zinc-500 font-medium line-clamp-2">
-                            {modelo.servicos.length} serviço(s) inclusos
-                          </div>
-                          <div className="text-[9px] font-bold uppercase tracking-widest text-zinc-300 mt-4 mb-1">
-                            Criado em
-                          </div>
-                          <div className="text-sm text-zinc-400 font-medium">
-                            {formatDateBR(modelo.data_criacao)}
-                          </div>
-                        </div>
-
-                        <div className="flex gap-3">
-                          <button
-                            onClick={() => navigate('criar-modelo', { editId: modelo.id })}
-                            className="flex-1 bg-zinc-900 text-white py-4 rounded-2xl font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2"
-                          >
-                            <Edit2 className="w-4 h-4" /> Editar Modelo
-                          </button>
-                          <button
-                            onClick={() => handleDelete(modelo.id)}
-                            className="p-4 text-red-400 bg-red-50 rounded-2xl border border-red-50 active:scale-95 transition-all"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
-              </>
+              </div>
+            ) : (
+              <div className={`${LISTING_GRID_CLASS} p-6 sm:p-10`}>
+                <AnimatePresence mode="popLayout">
+                  {filteredModelos.map((modelo, index) => (
+                    <motion.div
+                      key={modelo.id}
+                      layout
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ delay: index * 0.04 }}
+                      className="apple-card apple-card-hover group cursor-pointer !p-6 flex flex-col h-full"
+                      onClick={() => navigate('criar-modelo', { editId: modelo.id })}
+                    >
+                      <div className="w-12 h-12 bg-zinc-50 rounded-xl flex items-center justify-center mb-4 border border-zinc-100">
+                        <FileText className="w-6 h-6 text-zinc-400" />
+                      </div>
+                      <h3 className="text-lg font-bold text-zinc-900 line-clamp-1">{modelo.nome}</h3>
+                      <p className="text-xs text-zinc-400 mt-2 flex-grow">
+                        {modelo.servicos.length} serviço(s) · {formatDateBR(modelo.data_criacao)}
+                      </p>
+                      <div className="flex gap-2 mt-4 pt-4 border-t border-zinc-100">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('criar-modelo', { editId: modelo.id });
+                          }}
+                          className="flex-1 text-[9px] font-bold uppercase tracking-widest text-zinc-600"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(modelo.id);
+                          }}
+                          className="p-2 text-red-400 hover:bg-red-50 rounded-lg"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
             )}
           </motion.div>
         )}

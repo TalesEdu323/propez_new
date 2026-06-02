@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { LANDING_SEO } from './src/marketing/siteCopy';
 
 export default defineConfig(() => {
   return {
@@ -13,9 +14,9 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['icone.svg', 'logo.svg'],
         manifest: {
-          name: 'Propez — Propostas memoráveis',
+          name: LANDING_SEO.title,
           short_name: 'Propez',
-          description: 'Transforme suas propostas em experiências memoráveis. Simples, rápido e profissional.',
+          description: LANDING_SEO.description,
           theme_color: '#09090b',
           background_color: '#F5F5F7',
           display: 'standalone',

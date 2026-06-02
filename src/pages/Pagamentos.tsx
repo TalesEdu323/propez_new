@@ -5,12 +5,19 @@ import { motion, AnimatePresence } from 'motion/react';
 import { formatBRL } from '../lib/format';
 import { usePropostas } from '../hooks/useStoreEntity';
 import type { NavigateFn } from '../types/navigation';
+import { ListingViewToggle, createListingViewState } from '../components/listing/ListingViewToggle';
+import { LISTING_GRID_CLASS, LISTING_LIST_CLASS } from '../components/listing/listingLayout';
+
+const PAGAMENTOS_VIEW_KEY = 'propez-listing-view-pagamentos';
 
 export default function Pagamentos({ navigate }: { navigate: NavigateFn }) {
   const allPropostas = usePropostas();
   const propostas = useMemo(() => allPropostas.filter(p => p.status === 'aprovada'), [allPropostas]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'todos' | 'pagos' | 'pendentes'>('todos');
+  const [listView, setListView] = useState<'grid' | 'list'>(() =>
+    createListingViewState(PAGAMENTOS_VIEW_KEY, 'list'),
+  );
 
   const toggleStatus = (id: string) => {
     const updated = allPropostas.map(p => {
@@ -62,7 +69,7 @@ export default function Pagamentos({ navigate }: { navigate: NavigateFn }) {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-6">
+      <div className="flex flex-col md:flex-row gap-6 md:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
           <input 
@@ -73,6 +80,11 @@ export default function Pagamentos({ navigate }: { navigate: NavigateFn }) {
             className="glass-input pl-14 py-4"
           />
         </div>
+        <ListingViewToggle
+          storageKey={PAGAMENTOS_VIEW_KEY}
+          view={listView}
+          onChange={setListView}
+        />
         <div className="flex bg-white/50 backdrop-blur-3xl p-1.5 rounded-2xl border border-black/[0.05] shadow-sm">
           {(['todos', 'pagos', 'pendentes'] as const).map((f) => (
             <button
@@ -90,7 +102,7 @@ export default function Pagamentos({ navigate }: { navigate: NavigateFn }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
+      <div className={listView === 'grid' ? LISTING_GRID_CLASS : LISTING_LIST_CLASS}>
         <AnimatePresence mode="popLayout">
           {filteredPropostas.map((p) => (
             <motion.div

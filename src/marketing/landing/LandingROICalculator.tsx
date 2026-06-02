@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Calculator, Clock, DollarSign } from 'lucide-react';
 import { AnimatedSection } from './AnimatedSection';
+import { LANDING_ROI } from '../siteCopy';
 
 export function LandingROICalculator() {
   const [proposals, setProposals] = useState(15);
@@ -18,11 +19,11 @@ export function LandingROICalculator() {
         <AnimatedSection className="text-center mb-16">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-50 text-brand-700 text-sm font-bold mb-6">
             <Calculator className="w-4 h-4" aria-hidden />
-            Calculadora de Custo Real
+            {LANDING_ROI.badge}
           </div>
-          <h2 className="text-4xl md:text-5xl font-bold mb-6 font-heading">Quanto custa fazer proposta na mão?</h2>
-          <p className="text-xl text-gray-500 max-w-2xl mx-auto font-medium">
-            Descubra quanto tempo e dinheiro sua agência perde montando PDFs do zero em vez de usar um builder dedicado.
+          <h2 className="text-4xl md:text-5xl font-bold mb-6 font-heading text-balance">{LANDING_ROI.h2}</h2>
+          <p className="text-xl text-gray-500 max-w-2xl mx-auto font-medium text-balance">
+            {LANDING_ROI.subtitle}
           </p>
         </AnimatedSection>
 
@@ -117,7 +118,7 @@ export function LandingROICalculator() {
                 <div>
                   <p className="text-gray-400 font-bold mb-3 flex items-center gap-3 text-lg">
                     <Clock className="w-6 h-6 text-brand-500" aria-hidden />
-                    Tempo inútil evitado mensalmente
+                    Tempo economizado mensalmente
                   </p>
                   <div className="text-5xl md:text-6xl font-black text-white">
                     {savedHours} <span className="text-3xl text-gray-500 font-bold">horas</span>
@@ -131,7 +132,7 @@ export function LandingROICalculator() {
                 <div>
                   <p className="text-gray-400 font-bold mb-3 flex items-center gap-3 text-lg">
                     <DollarSign className="w-6 h-6 text-brand-500" aria-hidden />
-                    Dinheiro jogado fora (por ano)
+                    {LANDING_ROI.savedMoneyLabel}
                   </p>
                   <div
                     className="text-6xl md:text-7xl font-black text-brand-500 tracking-tight"
@@ -139,9 +140,8 @@ export function LandingROICalculator() {
                   >
                     R$ {savedMoneyYear.toLocaleString('pt-BR')}
                   </div>
-                  <p className="text-base text-gray-400 mt-6 leading-relaxed font-medium">
-                    Isso é o que você gasta pagando sua equipe (ou queimando seu próprio tempo de dono) para realizar
-                    trabalho braçal que o Propez automatiza.
+                  <p className="text-base text-gray-400 mt-6 leading-relaxed font-medium text-balance">
+                    {LANDING_ROI.savedMoneyNote}
                   </p>
                 </div>
               </div>

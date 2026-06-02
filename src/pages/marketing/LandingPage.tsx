@@ -10,8 +10,8 @@ import { LandingAudience } from '../../marketing/landing/LandingAudience';
 import { LandingROICalculator } from '../../marketing/landing/LandingROICalculator';
 import { LandingPricing } from '../../marketing/landing/LandingPricing';
 import { LandingFinalCTA } from '../../marketing/landing/LandingFinalCTA';
-import { LandingTaggoTrust } from '../../marketing/landing/LandingTaggoTrust';
 import { organizationJsonLdForPage } from '../../marketing/OrganizationJsonLd';
+import { LANDING_SEO } from '../../marketing/siteCopy';
 
 export default function LandingPage() {
   useLayoutEffect(() => {
@@ -24,9 +24,10 @@ export default function LandingPage() {
   return (
     <MarketingLayout variant="studio">
       <PageMeta
-        title="Propez — Propostas que fecham negócios"
-        description="Plataforma de criação e gestão de propostas comerciais. Builder visual, link público, assinatura e pagamentos."
+        title={LANDING_SEO.title}
+        description={LANDING_SEO.description}
         path="/"
+        jsonLd={organizationJsonLdForPage('/')}
       />
       <CustomCursor enabled />
       <LandingHero />
@@ -36,7 +37,6 @@ export default function LandingPage() {
       <LandingROICalculator />
       <LandingPricing />
       <LandingFinalCTA />
-      <LandingTaggoTrust />
       <section className="py-16 bg-gray-50 border-t border-gray-100">
         <div className="max-w-lg mx-auto px-6 text-center">
           <h2 className="text-xl font-bold mb-4 font-heading">Newsletter</h2>

@@ -10,7 +10,7 @@ export interface ClientesTableProps {
 
 export function ClientesTable({ clientes, onEdit, onDelete }: ClientesTableProps) {
   return (
-    <div className="hidden md:block overflow-x-auto">
+    <div className="overflow-x-auto">
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="text-[10px] uppercase tracking-[0.25em] text-zinc-400 border-b border-zinc-100">
