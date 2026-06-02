@@ -49,7 +49,7 @@ export async function appendValidityReportAppendix(
   };
 
   draw('Relatório de Validade Jurídica', 16, bold);
-  draw('PropEZ · Assinado com Rubrica · Powered by Taggo', 9, font, rgb(0.45, 0.45, 0.45));
+  draw('PropEZ · Assinatura digital', 9, font, rgb(0.45, 0.45, 0.45));
   y -= 8;
   draw(`Documento: ${payload.document.title}`, 11, bold);
   draw(`ID: ${payload.document.id}`, 9, mono);

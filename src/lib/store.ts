@@ -121,16 +121,6 @@ export interface Proposta {
   contractSigningUrl?: string;
   contractSignedPdfPath?: string;
   contractSignLastSyncAt?: string;
-  /** @deprecated legacy alias */
-  rubricaDocumentId?: string;
-  /** @deprecated legacy alias */
-  rubricaStatus?: 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed';
-  /** @deprecated legacy alias */
-  rubricaSigningUrl?: string;
-  /** @deprecated legacy alias */
-  rubricaSignedPdfUrl?: string;
-  /** @deprecated legacy alias */
-  rubricaLastSyncAt?: string;
   creatorPlan?: PlanTier;
   publicToken?: string;
   fluxo?: ProposalFlowConfig;
@@ -395,16 +385,11 @@ function fromApiProposta(a: ApiProposta): Proposta {
     creatorPlan: (a.creatorPlan as PlanTier | undefined) ?? undefined,
     publicToken: a.publicToken ?? undefined,
     prosyncLeadId: a.prosyncLeadId ?? undefined,
-    contractSignDocumentId: a.contractSignDocumentId ?? a.rubricaDocumentId ?? undefined,
-    contractSignStatus: (a.contractSignStatus ?? a.rubricaStatus) ?? undefined,
-    contractSigningUrl: a.contractSigningUrl ?? a.rubricaSigningUrl ?? undefined,
-    contractSignedPdfPath: a.contractSignedPdfPath ?? a.rubricaSignedPdfUrl ?? undefined,
-    contractSignLastSyncAt: a.contractSignLastSyncAt ?? a.rubricaLastSyncAt ?? undefined,
-    rubricaDocumentId: a.contractSignDocumentId ?? a.rubricaDocumentId ?? undefined,
-    rubricaStatus: (a.contractSignStatus ?? a.rubricaStatus) ?? undefined,
-    rubricaSigningUrl: a.contractSigningUrl ?? a.rubricaSigningUrl ?? undefined,
-    rubricaSignedPdfUrl: a.contractSignedPdfPath ?? a.rubricaSignedPdfUrl ?? undefined,
-    rubricaLastSyncAt: a.contractSignLastSyncAt ?? a.rubricaLastSyncAt ?? undefined,
+    contractSignDocumentId: a.contractSignDocumentId ?? undefined,
+    contractSignStatus: a.contractSignStatus ?? undefined,
+    contractSigningUrl: a.contractSigningUrl ?? undefined,
+    contractSignedPdfPath: a.contractSignedPdfPath ?? undefined,
+    contractSignLastSyncAt: a.contractSignLastSyncAt ?? undefined,
     fluxo: a.fluxo,
     clienteContratoRecebidoAt: a.clienteContratoRecebidoAt ?? undefined,
     orgContratoAceitoAt: a.orgContratoAceitoAt ?? undefined,

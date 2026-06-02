@@ -9,12 +9,9 @@ export function normalizeBaseUrl(url: string | undefined | null, fallback: strin
   return raw
 }
 
-export function validateApiKeyFormat(provider: SuiteApp, apiKey: string): string | null {
+export function validateApiKeyFormat(_provider: SuiteApp, apiKey: string): string | null {
   const key = apiKey.trim()
   if (!key) return 'Chave API obrigatória'
-  if (provider === 'rubrica') {
-    return 'Integração externa Rubrica descontinuada — assinatura nativa no PropEZ'
-  }
   if (!/^ps_(live|test)_[a-zA-Z0-9_-]+$/.test(key)) {
     return 'Chave ProSync inválida (esperado ps_live_... ou ps_test_...)'
   }
@@ -27,13 +24,10 @@ export function keyPrefixFrom(apiKey: string): string {
 
 /** Testa credenciais contra o upstream antes de persistir. */
 export async function verifyUpstreamCredential(
-  provider: SuiteApp,
+  _provider: SuiteApp,
   apiKey: string,
   baseUrl: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (provider === 'rubrica') {
-    return { ok: false, error: 'Integração externa Rubrica descontinuada — assinatura nativa no PropEZ' }
-  }
   try {
     const client = createProsyncClient({ baseUrl, apiKey })
     await client.listLeads({ limit: 1 })

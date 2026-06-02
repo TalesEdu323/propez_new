@@ -8,6 +8,7 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import type { TDocumentDefinitions, Content } from 'pdfmake/interfaces'
 import { getPropezLogoDataUri } from './propezLogoAsset.js'
+import { toPdfMakeImageDataUri } from './signing/pdfImageDataUri.js'
 
 type PdfMakeInstance = {
   fonts?: Record<string, Record<string, string>>
@@ -68,6 +69,7 @@ export async function generateContractPdf(input: ContractPdfInput): Promise<Buff
   const issuedAt = input.issuedAt ?? new Date()
 
   const logoUri = getPropezLogoDataUri()
+  const orgSigUri = toPdfMakeImageDataUri(input.orgSignatureDataUri)
   const headerLines: Content[] = []
 
   const brandHeader: Content = logoUri
@@ -106,8 +108,8 @@ export async function generateContractPdf(input: ContractPdfInput): Promise<Buff
       {
         width: '*',
         stack: [
-          input.orgSignatureDataUri
-            ? { image: input.orgSignatureDataUri, width: 140, alignment: 'center', margin: [0, 0, 0, 4] as [number, number, number, number] }
+          orgSigUri
+            ? { image: orgSigUri, width: 140, alignment: 'center', margin: [0, 0, 0, 4] as [number, number, number, number] }
             : { text: '________________________________________', alignment: 'center' },
           {
             text: input.companyName || 'Contratada',

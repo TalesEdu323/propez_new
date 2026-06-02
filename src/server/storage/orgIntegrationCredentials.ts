@@ -109,7 +109,7 @@ export function createOrgIntegrationCredentialsRepo(
     if (stored) return stored
 
     const fallback =
-      provider === 'prosync' ? integrations.prosync.apiKey : integrations.rubrica.apiKey
+      integrations.prosync.apiKey
     if (fallback && !isPlaceholderKey(fallback)) {
       return {
         organizationId,

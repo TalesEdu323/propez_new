@@ -6,7 +6,7 @@ import type { CriarModeloFormData, SetCriarModeloFormData } from './types';
 
 const STEP_META: Record<ProposalFlowStep, { label: string; desc: string }> = {
   approve: { label: 'Aprovar proposta', desc: 'Cliente confirma interesse na proposta' },
-  sign: { label: 'Assinar contrato', desc: 'Assinatura digital integrada (Rubrica · Powered by Taggo)' },
+  sign: { label: 'Assinar contrato', desc: 'Assinatura digital integrada na PropEZ (PDF + link)' },
   pay: { label: 'Pagar', desc: 'PIX ou link de pagamento após contrato' },
 };
 

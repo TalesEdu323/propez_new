@@ -16,7 +16,6 @@ export function logStartupIntegrationDiagnostics(
 
   const prosyncKey = Boolean(integrations.prosync.apiKey);
   const prosyncSecret = Boolean(integrations.prosync.webhookSecret);
-  const rubricaKey = Boolean(integrations.rubrica.apiKey);
 
   if (appUrl.includes('<PREENCHER>')) {
     console.warn(
@@ -42,16 +41,10 @@ export function logStartupIntegrationDiagnostics(
     console.info('[startup] ProSync: API key carregada; baseUrl=', integrations.prosync.baseUrl);
   }
 
-  if (!rubricaKey) {
-    console.info('[startup] Rubrica: desligada (RUBRICA_API_KEY ausente).');
-  } else {
-    console.info('[startup] Rubrica: API key carregada; baseUrl=', integrations.rubrica.baseUrl);
-  }
-
   // Suíte Taggo (descoberta cross-app + service tokens).
   if (!integrations.suiteSecret) {
     console.info(
-      '[startup] Suíte Taggo: desligada (TAGGO_SUITE_SECRET ausente). Sem lookup automático em ProSync/Rubrica.',
+      '[startup] Suíte Taggo: desligada (TAGGO_SUITE_SECRET ausente). Sem lookup automático em ProSync.',
     );
   } else if (integrations.suiteSecret.length < 32) {
     console.warn(

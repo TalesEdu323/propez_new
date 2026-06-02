@@ -22,7 +22,7 @@ export function baseSummaryRows(ctx: ProposalNotificationContext): SummaryRow[] 
   ]
   if (ctx.contratoTitulo) rows.push({ label: 'Contrato', value: ctx.contratoTitulo })
   if (ctx.dataValidade) rows.push({ label: 'Validade', value: fmtDatePt(ctx.dataValidade) })
-  if (ctx.rubricaStatus) rows.push({ label: 'Assinatura', value: rubricaLabel(ctx.rubricaStatus) })
+  if (ctx.rubricaStatus) rows.push({ label: 'Assinatura', value: contractSignLabel(ctx.rubricaStatus) })
   return rows
 }
 
@@ -35,24 +35,27 @@ export function statusLabel(status: string): string {
   return map[status] ?? status
 }
 
-export function rubricaLabel(status: string | null): string {
+export function contractSignLabel(status: string | null): string {
   const map: Record<string, string> = {
     pending: 'Aguardando envio',
     sent: 'Aguardando assinatura',
-    signed: 'Assinado com Rubrica',
+    signed: 'Assinado',
     failed: 'Falhou',
     cancelled: 'Cancelado',
   }
   return status ? map[status] ?? status : '—'
 }
 
-export function renderRubricaSignatureNotice(variant: 'invite' | 'signed' | 'default' = 'default'): string {
+/** @deprecated use renderContractSignatureNotice */
+export const renderRubricaSignatureNotice = renderContractSignatureNotice
+
+export function renderContractSignatureNotice(variant: 'invite' | 'signed' | 'default' = 'default'): string {
   const text =
     variant === 'invite'
-      ? 'Assinatura digital via <strong>Rubrica</strong> · Powered by Taggo. A empresa já assinou — falta sua assinatura. O PDF em anexo contém o contrato parcial.'
+      ? 'Assinatura digital na <strong>PropEZ</strong>. A empresa já assinou — falta sua assinatura. O PDF em anexo contém o contrato parcial.'
       : variant === 'signed'
-        ? 'Contrato assinado eletronicamente com <strong>Rubrica</strong> · Powered by Taggo. Segue em anexo o documento assinado por ambas as partes, com relatório de validade jurídica.'
-        : 'Assinatura digital realizada com <strong>Rubrica</strong> · Powered by Taggo. Documento com validade jurídica conforme MP 2.200-2/2001 e Lei 14.063/2020.';
+        ? 'Contrato assinado eletronicamente na <strong>PropEZ</strong>. Segue em anexo o documento assinado por ambas as partes, com relatório de validade jurídica.'
+        : 'Assinatura digital na PropEZ. Documento com validade jurídica conforme MP 2.200-2/2001 e Lei 14.063/2020.';
   return renderParagraph(`<span style="font-size:13px;color:#52525b;">${text}</span>`)
 }
 

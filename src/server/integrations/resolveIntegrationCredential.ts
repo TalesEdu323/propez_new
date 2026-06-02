@@ -1,5 +1,5 @@
 /**
- * Resolve API key + base URL por organização (ProSync / Rubrica).
+ * Resolve API key + base URL por organização (ProSync).
  * Ordem: credencial no DB → suíte Taggo → fallback global `.env`.
  */
 import type { IntegrationsConfig } from '../config.js'
@@ -18,8 +18,8 @@ function isPlaceholderKey(value: string | null | undefined): boolean {
   return value.includes('<PREENCHER>') || value.endsWith('_PREENCHER')
 }
 
-function defaultBaseUrl(config: IntegrationsConfig, provider: SuiteApp): string {
-  return provider === 'prosync' ? config.prosync.baseUrl : config.rubrica.baseUrl
+function defaultBaseUrl(config: IntegrationsConfig): string {
+  return config.prosync.baseUrl
 }
 
 export async function resolveIntegrationForOrg(deps: {
@@ -30,22 +30,21 @@ export async function resolveIntegrationForOrg(deps: {
   orgCredentialsRepo?: OrgIntegrationCredentialsRepo
   ensureSuiteCredential?: EnsureSuiteCredential
 }): Promise<ResolvedIntegration | null> {
-  const { provider, organizationId, ownerEmail, config, orgCredentialsRepo, ensureSuiteCredential } =
-    deps
+  const { organizationId, ownerEmail, config, orgCredentialsRepo, ensureSuiteCredential } = deps
 
   if (orgCredentialsRepo) {
-    const stored = await orgCredentialsRepo.getStoredCredential(organizationId, provider).catch(() => null)
+    const stored = await orgCredentialsRepo.getStoredCredential(organizationId, 'prosync').catch(() => null)
     if (stored?.apiKey && !isPlaceholderKey(stored.apiKey)) {
       return {
         apiKey: stored.apiKey,
-        baseUrl: stored.apiBaseUrl?.trim() || defaultBaseUrl(config, provider),
+        baseUrl: stored.apiBaseUrl?.trim() || defaultBaseUrl(config),
         source: stored.source === 'manual' || stored.source === 'suite_token' ? stored.source : 'manual',
       }
     }
   }
 
   if (ensureSuiteCredential && ownerEmail) {
-    const result = await ensureSuiteCredential(provider, {
+    const result = await ensureSuiteCredential('prosync', {
       organizationId,
       ownerEmail,
       createIfMissing: false,
@@ -54,18 +53,17 @@ export async function resolveIntegrationForOrg(deps: {
       const cred = result.credential
       return {
         apiKey: cred.apiKey,
-        baseUrl: cred.apiBaseUrl?.trim() || defaultBaseUrl(config, provider),
+        baseUrl: cred.apiBaseUrl?.trim() || defaultBaseUrl(config),
         source: 'suite_token',
       }
     }
   }
 
-  const fallbackKey =
-    provider === 'prosync' ? config.prosync.apiKey : config.rubrica.apiKey
+  const fallbackKey = config.prosync.apiKey
   if (fallbackKey && !isPlaceholderKey(fallbackKey)) {
     return {
       apiKey: fallbackKey,
-      baseUrl: defaultBaseUrl(config, provider),
+      baseUrl: defaultBaseUrl(config),
       source: 'env_fallback',
     }
   }

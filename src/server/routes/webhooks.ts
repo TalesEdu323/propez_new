@@ -10,10 +10,7 @@ import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCre
 
 /**
  * Inbound webhooks dos integradores. Rotas públicas (sem auth) — protegidas
- * por HMAC (ProSync) ou secret em query string (Rubrica).
- *
- * Quando o webhook chega, a organization_id é recuperada do mapping existente
- * (criado pelo Propez quando disparou `/api/integrations/rubrica/send`).
+ * por HMAC (ProSync).
  */
 export function buildWebhooksRouter(deps: {
   pool: Pool
@@ -22,12 +19,6 @@ export function buildWebhooksRouter(deps: {
 }): Router {
   const router = express.Router()
   const { pool, config } = deps
-  router.post('/rubrica', express.json({ limit: '256kb' }), (_req: Request, res: Response) => {
-    return res.status(410).json({
-      error: 'Webhook Rubrica descontinuado. Assinaturas são processadas nativamente no PropEZ.',
-      code: 'rubrica_webhook_deprecated',
-    })
-  })
 
   // --- ProSync: inbound (HMAC) --------------------------------------------
   router.post(

@@ -134,7 +134,6 @@ async function call(
 export function createSuiteServiceTokenClient(config: IntegrationsConfig) {
   const secret = config.suiteSecret
   const prosyncBase = config.prosync.baseUrl
-  const rubricaBase = config.rubrica.baseUrl
 
   function isEnabled(): boolean {
     return Boolean(secret && secret.length >= 32)
@@ -147,8 +146,7 @@ export function createSuiteServiceTokenClient(config: IntegrationsConfig) {
     if (!isEnabled()) {
       return { ok: false, app, status: 0, error: 'TAGGO_SUITE_SECRET ausente' }
     }
-    const baseUrl = app === 'prosync' ? prosyncBase : rubricaBase
-    return call(app, baseUrl, secret as string, payload)
+    return call(app, prosyncBase, secret as string, payload)
   }
 
   return { isEnabled, request }

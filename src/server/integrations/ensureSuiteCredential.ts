@@ -1,6 +1,6 @@
 /**
  * Orquestrador: garante que a organização atual tem uma credencial válida para
- * um provider da suíte (ProSync ou Rubrica).
+ * um provider da suíte (ProSync).
  *
  * Fluxo:
  *   1. Tenta carregar credencial cifrada da `org_integration_credentials`.

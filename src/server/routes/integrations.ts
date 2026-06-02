@@ -23,7 +23,7 @@ import {
 
 /**
  * Router de `/api/integrations/*`. Todas as rotas requerem auth e fazem proxy
- * para ProSync/Rubrica carregando as API keys apenas no servidor.
+ * para ProSync carregando as API keys apenas no servidor.
  * Cada mapping criado passa a carregar `organization_id`, permitindo filtrar
  * por tenant em relatórios e resolver webhooks.
  */
@@ -52,16 +52,13 @@ export function buildIntegrationsRouter(deps: {
 
   function parseProvider(param: string): SuiteApp | null {
     const p = param.toLowerCase()
-    if (p === 'prosync' || p === 'rubrica') return p
+    if (p === 'prosync') return p
     return null
   }
 
-  function displayBaseUrl(
-    provider: SuiteApp,
-    cred: Awaited<ReturnType<OrgIntegrationCredentialsRepo['getCredential']>>,
-  ): string {
+  function displayBaseUrl(cred: Awaited<ReturnType<OrgIntegrationCredentialsRepo['getCredential']>>): string {
     if (cred?.apiBaseUrl) return cred.apiBaseUrl.replace(/\/+$/, '')
-    return provider === 'prosync' ? config.prosync.baseUrl : config.rubrica.baseUrl
+    return config.prosync.baseUrl
   }
 
   // --------------------------------------------------------------------------
@@ -79,20 +76,14 @@ export function buildIntegrationsRouter(deps: {
     }
     const orgId = req.auth.orgId
     try {
-      const [prosync, rubrica] = await Promise.all([
-        orgCredentialsRepo.getCredential(orgId, 'prosync'),
-        orgCredentialsRepo.getCredential(orgId, 'rubrica'),
-      ])
-      const summarize = (
-        provider: SuiteApp,
-        c: Awaited<ReturnType<typeof orgCredentialsRepo.getCredential>>,
-      ) =>
+      const prosync = await orgCredentialsRepo.getCredential(orgId, 'prosync')
+      const summarize = (c: Awaited<ReturnType<typeof orgCredentialsRepo.getCredential>>) =>
         c
           ? {
               configured: true,
               source: c.source,
               keyPrefix: c.keyPrefix,
-              apiBaseUrl: displayBaseUrl(provider, c),
+              apiBaseUrl: displayBaseUrl(c),
               externalUserId: c.externalUserId,
               externalOrgId: c.externalOrgId,
               scopes: c.scopes,
@@ -102,8 +93,7 @@ export function buildIntegrationsRouter(deps: {
       return res.json({
         suiteEnabled: Boolean(config.suiteSecret),
         canSaveManual: isSecretCryptoAvailable(),
-        prosync: summarize('prosync', prosync),
-        rubrica: summarize('rubrica', rubrica),
+        prosync: summarize(prosync),
       })
     } catch (err) {
       console.error('[integrations/credentials] list erro:', err)
@@ -128,14 +118,14 @@ export function buildIntegrationsRouter(deps: {
 
     const provider = parseProvider(String(req.params.provider || ''))
     if (!provider) {
-      return res.status(400).json({ error: 'provider deve ser prosync ou rubrica' })
+      return res.status(400).json({ error: 'provider deve ser prosync' })
     }
 
     const apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : ''
     const formatErr = validateApiKeyFormat(provider, apiKey)
     if (formatErr) return res.status(400).json({ error: formatErr })
 
-    const defaultUrl = provider === 'prosync' ? config.prosync.baseUrl : config.rubrica.baseUrl
+    const defaultUrl = config.prosync.baseUrl
     let baseUrl: string
     try {
       baseUrl = normalizeBaseUrl(
@@ -182,10 +172,10 @@ export function buildIntegrationsRouter(deps: {
     if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
     const provider = parseProvider(String(req.params.provider || ''))
     if (!provider) {
-      return res.status(400).json({ error: 'provider deve ser prosync ou rubrica' })
+      return res.status(400).json({ error: 'provider deve ser prosync' })
     }
 
-    const defaultUrl = provider === 'prosync' ? config.prosync.baseUrl : config.rubrica.baseUrl
+    const defaultUrl = config.prosync.baseUrl
     let apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : ''
     let baseUrl: string
 
@@ -235,7 +225,7 @@ export function buildIntegrationsRouter(deps: {
     }
     const provider = parseProvider(String(req.params.provider || ''))
     if (!provider) {
-      return res.status(400).json({ error: 'provider deve ser prosync ou rubrica' })
+      return res.status(400).json({ error: 'provider deve ser prosync' })
     }
     try {
       await orgCredentialsRepo.deleteCredential(req.auth.orgId, provider)
@@ -258,8 +248,8 @@ export function buildIntegrationsRouter(deps: {
         .json({ error: 'Provisionamento da suíte indisponível neste ambiente' })
     }
     const provider = String(req.params.provider || '').toLowerCase()
-    if (provider !== 'prosync' && provider !== 'rubrica') {
-      return res.status(400).json({ error: 'provider deve ser prosync ou rubrica' })
+    if (provider !== 'prosync') {
+      return res.status(400).json({ error: 'provider deve ser prosync' })
     }
 
     const createIfMissing = Boolean(req.body?.createIfMissing ?? true)
@@ -452,19 +442,6 @@ export function buildIntegrationsRouter(deps: {
       handleUpstreamError(res, err, 'prosync.listProducts')
     }
   })
-
-  // -------------------------------------------------------------------------
-  // Rubrica — removido (assinatura nativa PropEZ)
-  // -------------------------------------------------------------------------
-  const rubricaDeprecated = (_req: Request, res: Response) =>
-    res.status(410).json({
-      error: 'Integração externa Rubrica descontinuada. A assinatura é nativa no PropEZ.',
-      code: 'rubrica_deprecated',
-    })
-
-  router.post('/rubrica/send', rubricaDeprecated)
-  router.get('/rubrica/status/:proposalId', rubricaDeprecated)
-  router.get('/rubrica/download/:proposalId', rubricaDeprecated)
 
   return router
 }

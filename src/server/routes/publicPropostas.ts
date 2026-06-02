@@ -297,8 +297,13 @@ export function createPublicPropostasRouter(deps: {
       if (!fresh[0]) return res.status(404).json({ error: 'Proposta não encontrada' });
 
       if (signResult.error) {
+        const raw = signResult.error;
+        const friendly = /unknown image format|invalid image|images dictionary/i.test(raw)
+          ? 'Não foi possível gerar o PDF do contrato. Tente novamente ou contate o remetente.'
+          : raw;
+        console.error('[public/prepare-signature] falha:', raw);
         return res.status(502).json({
-          error: signResult.error,
+          error: friendly,
           proposta: serializeProposta(fresh[0]),
           journey: buildJourneyPayload(fresh[0]),
         });

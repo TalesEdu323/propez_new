@@ -55,7 +55,7 @@ export default function ValidityPage() {
           <ShieldCheck className="w-8 h-8 text-emerald-600" />
           <div>
             <h1 className="text-xl font-bold">Validade jurídica</h1>
-            <p className="text-xs text-zinc-500">PropEZ · Assinado com Rubrica · Powered by Taggo</p>
+            <p className="text-xs text-zinc-500">PropEZ · Assinatura digital</p>
           </div>
         </div>
         <p className="font-semibold text-zinc-900">{data.document.title}</p>

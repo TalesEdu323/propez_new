@@ -4,7 +4,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { api, ApiError } from '../lib/apiClient';
+import { api, apiFetch, ApiError } from '../lib/apiClient';
+import { friendlySignaturePrepareError } from '../lib/signatureErrors';
 import { RenderElement } from '../components/builder/RenderElement';
 import { PageShell } from '../components/builder/PageShell';
 import { normalizePageLayout, mergeOrgBrandIntoPageLayout } from '../lib/pageLayout';
@@ -33,8 +34,6 @@ interface PublicProposta {
   creatorPlan?: string | null;
   pago: boolean;
   data_criacao: string;
-  rubricaStatus?: string | null;
-  rubricaSigningUrl?: string | null;
   contractSignStatus?: string | null;
   contractSigningUrl?: string | null;
   clienteContratoRecebidoAt?: string | null;
@@ -96,7 +95,7 @@ export default function PublicProposta({ token }: Props) {
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    if (q.get('rubrica') === 'done') {
+    if (q.get('signed') === '1' || q.get('step') === 'sign') {
       void load();
     }
   }, [load]);
@@ -153,38 +152,56 @@ export default function PublicProposta({ token }: Props) {
 
   const [retryingSignature, setRetryingSignature] = useState(false);
 
-  const signStatus = proposta?.contractSignStatus ?? proposta?.rubricaStatus;
-  const signingUrl = proposta?.contractSigningUrl ?? proposta?.rubricaSigningUrl;
+  const signStatus = proposta?.contractSignStatus;
+  const signingUrl = proposta?.contractSigningUrl;
 
-  const awaitingRubricaLink =
+  const awaitingSigningLink =
     showSign &&
     !signingUrl &&
-    signStatus !== 'signed';
+    signStatus !== 'signed' &&
+    signStatus !== 'failed' &&
+    signStatus !== 'cancelled';
 
   const prepareSignatureRef = useRef(false);
 
   const callPrepareSignature = useCallback(async () => {
-    const res = await api.post<{ proposta: PublicProposta; journey?: JourneyInfo; error?: string }>(
-      `/api/public/propostas/${encodeURIComponent(token)}/prepare-signature`,
-      {},
-      { skipRefresh: true },
-    );
-    setData((prev) => (prev ? { ...prev, proposta: res.proposta, journey: res.journey } : prev));
-    return res;
+    const url = `/api/public/propostas/${encodeURIComponent(token)}/prepare-signature`;
+    const res = await apiFetch(url, {
+      method: 'POST',
+      body: '{}',
+      headers: { 'Content-Type': 'application/json' },
+      skipRefresh: true,
+    });
+    let json: { proposta?: PublicProposta; journey?: JourneyInfo; error?: string } = {};
+    try {
+      json = (await res.json()) as typeof json;
+    } catch {
+      /* empty */
+    }
+    if (json.proposta) {
+      setData((prev) =>
+        prev ? { ...prev, proposta: json.proposta!, journey: json.journey ?? prev.journey } : prev,
+      );
+    }
+    if (!res.ok) {
+      const raw = json.error ?? res.statusText;
+      throw new ApiError(res.status, friendlySignaturePrepareError(raw), json);
+    }
+    return json;
   }, [token]);
 
   useEffect(() => {
-    if (!awaitingRubricaLink || prepareSignatureRef.current) return;
-    if (signStatus === 'failed' || signStatus === 'cancelled') return;
+    if (!awaitingSigningLink || prepareSignatureRef.current) return;
     prepareSignatureRef.current = true;
     (async () => {
       try {
         await callPrepareSignature();
-      } catch {
+      } catch (err) {
+        console.error('[PublicProposta] prepare-signature:', err);
         prepareSignatureRef.current = false;
       }
     })();
-  }, [awaitingRubricaLink, signStatus, callPrepareSignature]);
+  }, [awaitingSigningLink, callPrepareSignature]);
 
   const retrySignature = async () => {
     setRetryingSignature(true);
@@ -193,19 +210,23 @@ export default function PublicProposta({ token }: Props) {
       await callPrepareSignature();
     } catch (err) {
       prepareSignatureRef.current = false;
-      alert(err instanceof ApiError ? err.message : 'Não foi possível preparar a assinatura.');
+      const msg =
+        err instanceof ApiError
+          ? friendlySignaturePrepareError(err.message)
+          : 'Não foi possível preparar a assinatura.';
+      alert(msg);
     } finally {
       setRetryingSignature(false);
     }
   };
 
   useEffect(() => {
-    if (!awaitingRubricaLink) return;
+    if (!awaitingSigningLink) return;
     const interval = window.setInterval(() => {
       void load();
     }, 8000);
     return () => window.clearInterval(interval);
-  }, [awaitingRubricaLink, load]);
+  }, [awaitingSigningLink, load]);
   const showPay =
     isDecided &&
     proposta?.status === 'aprovada' &&

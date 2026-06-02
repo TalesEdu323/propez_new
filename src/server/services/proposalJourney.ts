@@ -274,6 +274,3 @@ export function buildJourneyPayload(proposta: Record<string, unknown>) {
 }
 
 export { completeSignature, readSignedPdfForProposal };
-
-/** @deprecated */
-export const triggerRubricaAfterApproval = triggerContractSignAfterApproval;

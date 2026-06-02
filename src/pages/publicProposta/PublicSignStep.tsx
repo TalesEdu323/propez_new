@@ -6,9 +6,7 @@ import type { ProposalFlowConfig } from '../../types/proposalFlow';
 
 interface PropostaSignFields {
   contractSignStatus?: string | null;
-  rubricaStatus?: string | null;
   contractSigningUrl?: string | null;
-  rubricaSigningUrl?: string | null;
   publicToken?: string | null;
   clienteContratoRecebidoAt?: string | null;
   contratoConcluidoAt?: string | null;
@@ -26,12 +24,8 @@ interface Props {
   retrying?: boolean;
 }
 
-function resolveStatus(p: PropostaSignFields): string | null | undefined {
-  return p.contractSignStatus ?? p.rubricaStatus;
-}
-
 function resolveSigningUrl(p: PropostaSignFields, publicToken: string): string | null {
-  const url = p.contractSigningUrl ?? p.rubricaSigningUrl;
+  const url = p.contractSigningUrl;
   if (!url) return null;
   try {
     if (url.startsWith('http')) {
@@ -70,21 +64,20 @@ function SignedContractDownload({ publicToken }: { publicToken: string }) {
 
 export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceipt, onRetrySignature, confirming, retrying }: Props) {
   const phase = getContractSignPhase({
-    contractSignStatus: resolveStatus(proposta),
-    rubricaStatus: resolveStatus(proposta),
+    contractSignStatus: proposta.contractSignStatus,
     clienteContratoRecebidoAt: proposta.clienteContratoRecebidoAt,
     orgContratoAceitoAt: proposta.orgContratoAceitoAt,
     contratoConcluidoAt: proposta.contratoConcluidoAt,
   });
   const signingPath = resolveSigningUrl(proposta, publicToken);
-  const status = resolveStatus(proposta);
+  const status = proposta.contractSignStatus;
 
   if (phase === 'complete') {
     return (
       <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-emerald-50 border border-emerald-100 text-center">
         <FileCheck className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
         <h3 className="text-xl font-bold text-emerald-900">Contrato concluído</h3>
-        <p className="text-emerald-700 mt-2 text-sm mb-1">Assinado com Rubrica · Powered by Taggo</p>
+        <p className="text-emerald-700 mt-2 text-sm mb-1">Assinatura digital PropEZ</p>
         {status === 'signed' && <SignedContractDownload publicToken={publicToken} />}
       </div>
     );
@@ -107,7 +100,7 @@ export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceip
       <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-white border border-black/5 shadow-lg text-center">
         <FileCheck className="w-12 h-12 text-zinc-900 mx-auto mb-4" />
         <h3 className="text-xl font-bold text-zinc-900">Assinatura registrada</h3>
-        <p className="text-zinc-500 mt-2 text-sm mb-2">Assinado com Rubrica · Powered by Taggo</p>
+        <p className="text-zinc-500 mt-2 text-sm mb-2">Assinatura digital PropEZ</p>
         <SignedContractDownload publicToken={publicToken} />
         <button type="button" onClick={onConfirmReceipt} disabled={confirming} className="btn-primary">
           {confirming ? 'Confirmando...' : 'Confirmar recebimento'}
@@ -141,9 +134,7 @@ export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceip
   return (
     <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-zinc-900 text-white text-center">
       <h3 className="text-xl font-bold mb-2">Assinar contrato</h3>
-      <p className="text-zinc-400 text-sm mb-2">
-        Assinatura digital via Rubrica · Powered by Taggo
-      </p>
+      <p className="text-zinc-400 text-sm mb-2">Assinatura digital PropEZ</p>
       <p className="text-zinc-500 text-xs mb-6">
         {orgName} já assinou. Falta sua assinatura na tela ou pelo e-mail enviado.
       </p>

@@ -10,13 +10,13 @@ interface Props {
 
 export function ContractAcceptancePanel({ proposta, onAccept, accepting }: Props) {
   const phase = getContractSignPhase({
-    rubricaStatus: proposta.rubricaStatus,
+    contractSignStatus: proposta.contractSignStatus,
     clienteContratoRecebidoAt: proposta.clienteContratoRecebidoAt,
     orgContratoAceitoAt: proposta.orgContratoAceitoAt,
     contratoConcluidoAt: proposta.contratoConcluidoAt,
   });
 
-  if (phase === 'complete' || phase === 'not_started' || phase === 'rubrica_pending') {
+  if (phase === 'complete' || phase === 'not_started') {
     return null;
   }
 
@@ -28,7 +28,7 @@ export function ContractAcceptancePanel({ proposta, onAccept, accepting }: Props
           <div>
             <h3 className="font-bold text-amber-900">Aguardando cliente</h3>
             <p className="text-sm text-amber-800 mt-1">
-              O contrato foi assinado no Rubrica. Aguardando o cliente confirmar o recebimento no link público.
+              O contrato foi assinado. Aguardando o cliente confirmar o recebimento no link público.
             </p>
           </div>
         </div>

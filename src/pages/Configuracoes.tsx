@@ -36,7 +36,6 @@ interface IntegrationsCredentialsResponse {
   suiteEnabled: boolean;
   canSaveManual: boolean;
   prosync: IntegrationCredentialSummary;
-  rubrica: IntegrationCredentialSummary;
 }
 
 interface ConfiguracoesProps {
@@ -50,7 +49,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
   const { items: notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const [integrations, setIntegrations] = useState<IntegrationsCredentialsResponse | null>(null);
   const [integrationsLoading, setIntegrationsLoading] = useState(true);
-  const [provisioning, setProvisioning] = useState<'prosync' | 'rubrica' | null>(null);
+  const [provisioning, setProvisioning] = useState<'prosync' | null>(null);
   const plan = resolvePlan(userConfig);
   const planMeta = PLAN_META[plan];
   const whiteLabelEnabled = hasWhiteLabel(userConfig);
@@ -89,7 +88,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
     void loadIntegrations();
   }, [loadIntegrations]);
 
-  const handleProvision = async (provider: 'prosync' | 'rubrica') => {
+  const handleProvision = async (provider: 'prosync') => {
     setProvisioning(provider);
     try {
       await api.post(`/api/integrations/credentials/${provider}/provision`, {
@@ -451,8 +450,12 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
               </div>
 
               <p className="text-sm text-zinc-500 mb-4">
-                Cada organização usa sua própria chave API. Gere a chave no painel do ProSync ou
-                Rubrica e cole abaixo — não é necessário configurar no servidor (Vercel).
+                Cada organização usa sua própria chave API do ProSync. Gere a chave no painel do ProSync
+                e cole abaixo — não é necessário configurar no servidor (Vercel).
+              </p>
+              <p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 mb-4">
+                A assinatura digital de contratos é nativa no PropEZ (PDF + link de assinatura). Não é
+                necessário integrar serviço externo.
               </p>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <IntegrationProviderCard
@@ -470,20 +473,6 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
                   onProvision={() => void handleProvision('prosync')}
                   onRefresh={loadIntegrations}
                 />
-                <div className="apple-card p-6 border-emerald-100 bg-emerald-50/40">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xs shrink-0">
-                      RB
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-zinc-900">Assinatura digital (Rubrica)</h4>
-                      <p className="text-sm text-zinc-600 mt-1">
-                        Integrada nativamente no PropEZ — não é necessário configurar chave API externa.
-                        Tecnologia Rubrica · Powered by Taggo.
-                      </p>
-                    </div>
-                  </div>
-                </div>
               </div>
             </motion.div>
 

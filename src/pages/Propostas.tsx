@@ -198,7 +198,7 @@ export default function Propostas({ navigate }: { navigate: NavigateFn }) {
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
-                              {(proposta.contractSignStatus ?? proposta.rubricaStatus) === 'signed' && (
+                              {proposta.contractSignStatus === 'signed' && (
                                 <a
                                   href={buildSignedContractDownloadUrl(proposta.id)}
                                   target="_blank"

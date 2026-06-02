@@ -14,8 +14,8 @@ export interface ContractViewProps {
 
 export function ContractView({ proposta, contractSignStatus, userConfig, onBackToProposal }: ContractViewProps) {
   const hasContent = proposta.contratoTexto || proposta.chavePix || proposta.linkPagamento;
-  const signStatus = contractSignStatus ?? proposta.contractSignStatus ?? proposta.rubricaStatus ?? null;
-  const documentId = proposta.contractSignDocumentId ?? proposta.rubricaDocumentId;
+  const signStatus = contractSignStatus ?? proposta.contractSignStatus ?? null;
+  const documentId = proposta.contractSignDocumentId;
 
   return (
     <motion.div
@@ -94,7 +94,7 @@ export function ContractView({ proposta, contractSignStatus, userConfig, onBackT
                     )}
                     <div className="flex-1 text-left">
                       <p className="font-bold text-[10px] uppercase tracking-[0.2em] mb-1">
-                        Assinado com Rubrica ·{' '}
+                        Assinatura digital ·{' '}
                         {signStatus === 'signed'
                           ? 'Concluído'
                           : signStatus === 'sent'
@@ -105,7 +105,7 @@ export function ContractView({ proposta, contractSignStatus, userConfig, onBackT
                                 ? 'Cancelado'
                                 : 'Falha'}
                       </p>
-                      {signStatus === 'sent' && (proposta.contractSigningUrl || proposta.rubricaSigningUrl) && (
+                      {signStatus === 'sent' && proposta.contractSigningUrl && (
                         <p className="text-sm font-medium">Link de assinatura enviado ao cliente.</p>
                       )}
                       {signStatus === 'signed' && (

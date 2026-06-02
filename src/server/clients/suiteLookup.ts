@@ -17,7 +17,7 @@
 import crypto from 'node:crypto'
 import type { IntegrationsConfig } from '../config'
 
-export type SuiteApp = 'prosync' | 'rubrica'
+export type SuiteApp = 'prosync'
 
 export interface SuiteLookupRequest {
   email: string
@@ -142,70 +142,38 @@ async function callLookup(
 export function createSuiteLookup(config: IntegrationsConfig) {
   const secret = config.suiteSecret
   const prosyncBase = config.prosync.baseUrl
-  const rubricaBase = config.rubrica.baseUrl
 
   function isEnabled(): boolean {
     return Boolean(secret && secret.length >= 32)
   }
 
+  const disabledResult = (): SuiteLookupResult => ({
+    app: 'prosync',
+    ok: false,
+    exists: false,
+    userId: null,
+    organizationId: null,
+    plan: null,
+    hasApiKey: false,
+    status: 0,
+    error: 'TAGGO_SUITE_SECRET ausente',
+  })
+
   async function lookupApp(
-    app: SuiteApp,
+    _app: SuiteApp,
     payload: SuiteLookupRequest,
   ): Promise<SuiteLookupResult> {
-    if (!isEnabled()) {
-      return {
-        app,
-        ok: false,
-        exists: false,
-        userId: null,
-        organizationId: null,
-        plan: null,
-        hasApiKey: false,
-        status: 0,
-        error: 'TAGGO_SUITE_SECRET ausente',
-      }
-    }
-    const baseUrl = app === 'prosync' ? prosyncBase : rubricaBase
-    return callLookup(app, baseUrl, secret as string, payload)
+    if (!isEnabled()) return disabledResult()
+    return callLookup('prosync', prosyncBase, secret as string, payload)
   }
 
   return {
     isEnabled,
-    /** Consulta um único app da suíte. */
     lookupApp,
-    /** Consulta os dois apps em paralelo. */
     async lookupAll(payload: SuiteLookupRequest): Promise<SuiteLookupResult[]> {
-      if (!isEnabled()) {
-        return [
-          {
-            app: 'prosync',
-            ok: false,
-            exists: false,
-            userId: null,
-            organizationId: null,
-            plan: null,
-            hasApiKey: false,
-            status: 0,
-            error: 'TAGGO_SUITE_SECRET ausente',
-          },
-          {
-            app: 'rubrica',
-            ok: false,
-            exists: false,
-            userId: null,
-            organizationId: null,
-            plan: null,
-            hasApiKey: false,
-            status: 0,
-            error: 'TAGGO_SUITE_SECRET ausente',
-          },
-        ]
-      }
-      const [prosync, rubrica] = await Promise.all([
-        callLookup('prosync', prosyncBase, secret as string, payload),
-        callLookup('rubrica', rubricaBase, secret as string, payload),
-      ])
-      return [prosync, rubrica]
+      if (!isEnabled()) return [disabledResult()]
+      const prosync = await callLookup('prosync', prosyncBase, secret as string, payload)
+      return [prosync]
     },
   }
 }

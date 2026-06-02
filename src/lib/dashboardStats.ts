@@ -191,11 +191,10 @@ export function contractInsightsInRange(propostas: Proposta[], start: Date, end:
   let contractsSigned = 0;
 
   for (const p of slice) {
-    const signStatus = p.contractSignStatus ?? p.rubricaStatus;
+    const signStatus = p.contractSignStatus;
     const phase = getContractSignPhase({
       contractSignStatus: signStatus,
-      contractSignDocumentId: p.contractSignDocumentId ?? p.rubricaDocumentId,
-      rubricaStatus: signStatus,
+      contractSignDocumentId: p.contractSignDocumentId,
       clienteContratoRecebidoAt: p.clienteContratoRecebidoAt,
       orgContratoAceitoAt: p.orgContratoAceitoAt,
       contratoConcluidoAt: p.contratoConcluidoAt,

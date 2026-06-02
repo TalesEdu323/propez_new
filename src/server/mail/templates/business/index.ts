@@ -167,7 +167,7 @@ export function renderContractSignedOrg(branding: EmailBranding, ctx: ProposalNo
       : ''
   return wrapBusinessEmail(
     branding,
-    `Contrato assinado com Rubrica — ${ctx.clienteNome}`,
+    `Contrato assinado — ${ctx.clienteNome}`,
     'Contrato assinado',
     [
       renderHeading('Contrato assinado'),
@@ -190,7 +190,7 @@ export function renderContractSignedClient(branding: EmailBranding, ctx: Proposa
       : clientPublicCta(ctx)
   return wrapBusinessEmail(
     branding,
-    `Seu contrato assinado com Rubrica — ${ctx.orgName}`,
+    `Seu contrato assinado — ${ctx.orgName}`,
     'Contrato assinado com sucesso',
     [
       renderHeading('Assinatura confirmada'),

@@ -298,7 +298,7 @@ export function canUseRubrica(config: UserConfig | null | undefined): GateResult
   if (limit === 0) {
     return {
       allowed: false,
-      reason: 'Assinatura eletrônica (Rubrica) está disponível a partir do Pro.',
+      reason: 'Assinatura digital de contratos está disponível a partir do Pro.',
       requiredPlan: 'pro',
     };
   }

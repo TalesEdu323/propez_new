@@ -86,16 +86,6 @@ export interface SerializedProposta {
   contractSigningUrl?: string | null
   contractSignedPdfPath?: string | null
   contractSignLastSyncAt?: string | null
-  /** @deprecated legacy alias */
-  rubricaDocumentId?: string | null
-  /** @deprecated legacy alias */
-  rubricaStatus?: string | null
-  /** @deprecated legacy alias */
-  rubricaSigningUrl?: string | null
-  /** @deprecated legacy alias */
-  rubricaSignedPdfUrl?: string | null
-  /** @deprecated legacy alias */
-  rubricaLastSyncAt?: string | null
   fluxo: ProposalFlowConfig
   clienteContratoRecebidoAt?: string | null
   orgContratoAceitoAt?: string | null
@@ -196,11 +186,6 @@ export function serializeProposta(r: AnyRow): SerializedProposta {
     contractSigningUrl: r.contract_signing_url ?? r.rubrica_signing_url ?? undefined,
     contractSignedPdfPath: r.contract_signed_pdf_path ?? r.rubrica_signed_pdf_url ?? undefined,
     contractSignLastSyncAt: r.contract_sign_last_sync_at ?? r.rubrica_last_sync_at ?? undefined,
-    rubricaDocumentId: r.contract_sign_document_id ?? r.rubrica_document_id ?? undefined,
-    rubricaStatus: r.contract_sign_status ?? r.rubrica_status ?? undefined,
-    rubricaSigningUrl: r.contract_signing_url ?? r.rubrica_signing_url ?? undefined,
-    rubricaSignedPdfUrl: r.contract_signed_pdf_path ?? r.rubrica_signed_pdf_url ?? undefined,
-    rubricaLastSyncAt: r.contract_sign_last_sync_at ?? r.rubrica_last_sync_at ?? undefined,
     fluxo: parseProposalFlow(r.fluxo),
     clienteContratoRecebidoAt: r.cliente_contrato_recebido_at ?? undefined,
     orgContratoAceitoAt: r.org_contrato_aceito_at ?? undefined,

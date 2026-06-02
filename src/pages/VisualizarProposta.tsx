@@ -87,10 +87,10 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
     if (proposta.status === 'aprovada' && flowHasStep(proposta.fluxo, 'sign') && proposta.contratoTexto) {
       setViewState('contract');
     }
-    if (proposta.contractSignStatus ?? proposta.rubricaStatus) {
-      setContractSignStatus((proposta.contractSignStatus ?? proposta.rubricaStatus) as ContractSignStatusUi);
+    if (proposta.contractSignStatus) {
+      setContractSignStatus(proposta.contractSignStatus as ContractSignStatusUi);
     }
-  }, [proposta?.id, proposta?.status, proposta?.cliente_nome, proposta?.contractSignStatus, proposta?.rubricaStatus]);
+  }, [proposta?.id, proposta?.status, proposta?.cliente_nome, proposta?.contractSignStatus]);
 
   // Polling de status da assinatura enquanto o documento não estiver assinado.
   useEffect(() => {
@@ -113,9 +113,6 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
                 contractSignStatus: status.status,
                 contractSignDocumentId: status.documentId || p.contractSignDocumentId,
                 contractSigningUrl: status.signingUrl || p.contractSigningUrl,
-                rubricaStatus: status.status,
-                rubricaDocumentId: status.documentId || p.rubricaDocumentId,
-                rubricaSigningUrl: status.signingUrl || p.rubricaSigningUrl,
                 contractSignLastSyncAt: new Date().toISOString(),
               }
             : p,
@@ -163,7 +160,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
         status: 'aprovada',
         clienteEmail: clientData.email,
       });
-      setContractSignStatus(updated.contractSignStatus ?? updated.rubricaStatus ?? 'pending');
+      setContractSignStatus(updated.contractSignStatus ?? 'pending');
       setViewState('contract');
       setShowIdentification(false);
       localStorage.setItem('propez_last_email', clientData.email);

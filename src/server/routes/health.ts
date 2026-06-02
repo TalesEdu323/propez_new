@@ -75,7 +75,6 @@ export function createHealthRouter({ pool, integrationsConfig, config }: HealthR
     }
 
     const prosyncState = classifyIntegrationKey(integrationsConfig.prosync.apiKey);
-    const rubricaState = classifyIntegrationKey(integrationsConfig.rubrica.apiKey);
     const prosyncSecretState = classifyIntegrationKey(integrationsConfig.prosync.webhookSecret);
     const appUrlPublic = !isLocalUrl(integrationsConfig.appUrl);
     const suiteEnabled = Boolean(integrationsConfig.suiteSecret && integrationsConfig.suiteSecret.length >= 32);
@@ -85,14 +84,11 @@ export function createHealthRouter({ pool, integrationsConfig, config }: HealthR
     if (prosyncState === 'placeholder') {
       warnings.push('PROSYNC_API_KEY ainda contém <PREENCHER>; substitua por uma chave ps_live_... real.');
     }
-    if (rubricaState === 'placeholder') {
-      warnings.push('RUBRICA_API_KEY ainda contém <PREENCHER>; substitua por uma chave dm_live_... real.');
-    }
     if (prosyncState === 'configured' && prosyncSecretState !== 'configured') {
       warnings.push('PROSYNC_WEBHOOK_SECRET ausente — webhooks inbound do ProSync retornarão 401.');
     }
-    if ((prosyncState === 'configured' || rubricaState === 'configured') && !appUrlPublic) {
-      warnings.push('APP_URL é local — ProSync/Rubrica na nuvem não conseguem entregar webhooks. Use ngrok/Cloudflare Tunnel ou deploy.');
+    if (prosyncState === 'configured' && !appUrlPublic) {
+      warnings.push('APP_URL é local — ProSync na nuvem não consegue entregar webhooks. Use ngrok/Cloudflare Tunnel ou deploy.');
     }
     if (!suiteEnabled) {
       warnings.push('TAGGO_SUITE_SECRET ausente — sem provisionamento automático cross-app. Defina o mesmo segredo nos 3 apps da suíte.');
@@ -120,7 +116,6 @@ export function createHealthRouter({ pool, integrationsConfig, config }: HealthR
       },
       integrations: {
         prosync: prosyncState === 'configured',
-        rubrica: rubricaState === 'configured',
       },
       suite: {
         enabled: suiteEnabled,
@@ -131,10 +126,6 @@ export function createHealthRouter({ pool, integrationsConfig, config }: HealthR
           apiKey: prosyncState,
           webhookSecret: prosyncSecretState,
           baseUrl: integrationsConfig.prosync.baseUrl,
-        },
-        rubrica: {
-          apiKey: rubricaState,
-          baseUrl: integrationsConfig.rubrica.baseUrl,
         },
       },
       warnings,

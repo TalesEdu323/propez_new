@@ -41,36 +41,15 @@ export type ContractSignPhase =
   | 'awaiting_org_accept'
   | 'complete';
 
-/** @deprecated use sign_pending */
-export type LegacyContractSignPhase = ContractSignPhase | 'rubrica_pending';
-
-function resolveSignStatus(proposta: {
-  contractSignStatus?: string | null;
-  rubricaStatus?: string | null;
-  contractSignDocumentId?: string | null;
-  rubricaDocumentId?: string | null;
-}): string | null {
-  return proposta.contractSignStatus ?? proposta.rubricaStatus ?? null;
-}
-
-function resolveSignDocumentId(proposta: {
-  contractSignDocumentId?: string | null;
-  rubricaDocumentId?: string | null;
-}): string | null | undefined {
-  return proposta.contractSignDocumentId ?? proposta.rubricaDocumentId;
-}
-
 export function getContractSignPhase(proposta: {
   contractSignStatus?: string | null;
-  rubricaStatus?: string | null;
   contractSignDocumentId?: string | null;
-  rubricaDocumentId?: string | null;
   clienteContratoRecebidoAt?: string | null;
   orgContratoAceitoAt?: string | null;
   contratoConcluidoAt?: string | null;
 }): ContractSignPhase {
-  const status = resolveSignStatus(proposta);
-  const documentId = resolveSignDocumentId(proposta);
+  const status = proposta.contractSignStatus;
+  const documentId = proposta.contractSignDocumentId;
   if (proposta.contratoConcluidoAt) return 'complete';
   if (proposta.orgContratoAceitoAt) return 'complete';
   if (proposta.clienteContratoRecebidoAt) return 'awaiting_org_accept';

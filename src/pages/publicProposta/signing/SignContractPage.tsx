@@ -109,11 +109,9 @@ export default function SignContractPage() {
           <div className="rounded-3xl bg-emerald-50 border border-emerald-100 p-8 text-center">
             <FileCheck className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
             <h1 className="text-xl font-bold text-emerald-900">Assinatura registrada</h1>
-            <p className="text-emerald-800 text-sm mt-2 mb-6">
-              Contrato assinado com Rubrica · Powered by Taggo
-            </p>
+            <p className="text-emerald-800 text-sm mt-2 mb-6">Contrato assinado digitalmente na PropEZ</p>
             {publicToken && (
-              <button type="button" className="btn-primary" onClick={() => navigate(`/p/${publicToken}?step=sign`)}>
+              <button type="button" className="btn-primary" onClick={() => navigate(`/p/${publicToken}?signed=1`)}>
                 Voltar à proposta
               </button>
             )}
@@ -123,7 +121,7 @@ export default function SignContractPage() {
             <h1 className="text-xl font-bold text-zinc-900 mb-1">Assinar contrato</h1>
             <p className="text-sm text-zinc-500 mb-2">{meta?.title}</p>
             <p className="text-xs text-zinc-400 mb-6">
-              Assinatura digital via Rubrica · Powered by Taggo · {meta?.signerEmail}
+              Assinatura digital PropEZ · {meta?.signerEmail}
             </p>
             {meta?.previewUrl && (
               <iframe
