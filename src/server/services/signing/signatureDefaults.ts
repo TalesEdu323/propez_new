@@ -1,19 +1,30 @@
+import {
+  fieldsForSigner,
+  hasClientSignatureField,
+  normalizeSignatureConfig,
+  resolveClientSignatureFieldLegacy,
+  type DbContractField,
+} from '../../../lib/signatureConfig.js';
 import type { SignatureFieldConfig } from './types.js';
 import { DEFAULT_CLIENT_FIELD } from './types.js';
 
-export function resolveClientSignatureField(
-  signatureConfig: unknown,
-): SignatureFieldConfig {
-  if (!signatureConfig || typeof signatureConfig !== 'object') return DEFAULT_CLIENT_FIELD;
-  const cfg = signatureConfig as { clientField?: Partial<SignatureFieldConfig> };
-  const f = cfg.clientField;
-  if (!f) return DEFAULT_CLIENT_FIELD;
+export {
+  fieldsForSigner,
+  hasClientSignatureField,
+  normalizeSignatureConfig,
+  getOrgSignatureFields,
+  validateTemplateSignatureConfig,
+  hasSignerSignatureField,
+} from '../../../lib/signatureConfig.js';
+
+export function resolveClientSignatureField(signatureConfig: unknown): SignatureFieldConfig {
+  const legacy = resolveClientSignatureFieldLegacy(signatureConfig);
   return {
-    page: f.page ?? DEFAULT_CLIENT_FIELD.page,
-    xPct: f.xPct ?? DEFAULT_CLIENT_FIELD.xPct,
-    yPct: f.yPct ?? DEFAULT_CLIENT_FIELD.yPct,
-    widthPct: f.widthPct ?? DEFAULT_CLIENT_FIELD.widthPct,
-    heightPct: f.heightPct ?? DEFAULT_CLIENT_FIELD.heightPct,
+    page: legacy.page,
+    xPct: legacy.xPct,
+    yPct: legacy.yPct,
+    widthPct: legacy.widthPct,
+    heightPct: legacy.heightPct,
   };
 }
 
@@ -22,17 +33,16 @@ export function defaultFieldsForSigner(input: {
   name: string;
   email: string;
   field?: SignatureFieldConfig;
-}): Array<{
-  signerTempId: string;
-  signerName: string;
-  signerEmail: string;
-  fieldType: 'SIGNATURE';
-  page: number;
-  xPct: number;
-  yPct: number;
-  widthPct: number;
-  heightPct: number;
-}> {
+  signatureConfig?: unknown;
+}): DbContractField[] {
+  if (input.signatureConfig) {
+    const cfg = normalizeSignatureConfig(input.signatureConfig);
+    return fieldsForSigner(cfg, 'client', {
+      tempId: input.tempId,
+      name: input.name,
+      email: input.email,
+    });
+  }
   const field = input.field ?? DEFAULT_CLIENT_FIELD;
   return [
     {
@@ -46,5 +56,18 @@ export function defaultFieldsForSigner(input: {
       widthPct: field.widthPct,
       heightPct: field.heightPct,
     },
+  ];
+}
+
+export function allFieldsFromTemplateConfig(
+  signatureConfig: unknown,
+  client: { tempId: string; name: string; email: string },
+  org: { tempId: string; name: string; email: string },
+  pageCount = 1,
+): DbContractField[] {
+  const cfg = normalizeSignatureConfig(signatureConfig, org.name, pageCount);
+  return [
+    ...fieldsForSigner(cfg, 'client', client),
+    ...fieldsForSigner(cfg, 'org', org, { yOffsetPct: 0 }),
   ];
 }

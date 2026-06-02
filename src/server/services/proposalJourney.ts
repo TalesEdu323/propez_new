@@ -11,7 +11,8 @@ import {
 } from './signing/contractSigningService.js';
 import { replaceContractString } from '../../lib/contractVariables.js';
 import {
-  hasClientSignatureField,
+  hasSignerSignatureField,
+  normalizeSignatureConfig,
   resolveSignatureConfigFromSources,
 } from './signing/resolveSignatureConfig.js';
 
@@ -105,12 +106,15 @@ export async function triggerContractSignAfterApproval(deps: {
     return { ok: false, skipped: 'sem_email' };
   }
 
-  if (sourceType === 'pdf' && !hasClientSignatureField(row.contrato_signature_config)) {
-    return {
-      ok: false,
-      error:
-        'Configure a posição da assinatura do cliente no template de contrato (menu Contratos) antes de enviar para assinatura.',
-    };
+  if (sourceType === 'pdf') {
+    const norm = normalizeSignatureConfig(row.contrato_signature_config);
+    if (!hasSignerSignatureField(norm, 'client') || !hasSignerSignatureField(norm, 'org')) {
+      return {
+        ok: false,
+        error:
+          'Configure as assinaturas do Cliente e da Empresa no template de contrato (menu Contratos) antes de enviar.',
+      };
+    }
   }
 
   const signatureField = resolveSignatureConfigFromSources(

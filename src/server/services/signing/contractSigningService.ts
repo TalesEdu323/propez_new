@@ -8,8 +8,11 @@ import { notifyProposalEventAsync } from '../notificationService.js';
 import { applyClientSignatureToPdf } from './applySignatureToPdf.js';
 import { sha256Buffer } from './documentHash.js';
 import { resolveOrgSignatureDataUri } from './orgSignatureAsset.js';
-import { defaultFieldsForSigner, resolveClientSignatureField } from './signatureDefaults.js';
-import { hasClientSignatureField } from './resolveSignatureConfig.js';
+import {
+  allFieldsFromTemplateConfig,
+  normalizeSignatureConfig,
+} from './signatureDefaults.js';
+import { hasClientSignatureField, hasSignerSignatureField } from './resolveSignatureConfig.js';
 import { stampOrgSignatureOnPdf } from './stampOrgSignatureOnPdf.js';
 import { readTemplatePdf } from '../contractTemplateStorage.js';
 import {
@@ -83,7 +86,17 @@ export async function sendContractForSigning(deps: {
   const sourceType = input.contractSourceType ?? 'text';
 
   try {
-    if (sourceType === 'pdf' && !hasClientSignatureField(input.signatureConfig)) {
+    const normSig = normalizeSignatureConfig(
+      input.signatureConfig,
+      input.companyName || 'Organização',
+    );
+    if (sourceType === 'pdf') {
+      if (!hasSignerSignatureField(normSig, 'client') || !hasSignerSignatureField(normSig, 'org')) {
+        throw new Error(
+          'Configure as posições de assinatura do Cliente e da Empresa no template de contrato (menu Contratos) antes de enviar.',
+        );
+      }
+    } else if (!hasClientSignatureField(input.signatureConfig)) {
       throw new Error(
         'Configure a posição da assinatura do cliente no template de contrato (menu Contratos) antes de enviar para assinatura.',
       );
@@ -95,12 +108,14 @@ export async function sendContractForSigning(deps: {
       orgName: input.companyName || 'Organização',
     });
 
+    const orgFields = normSig.fields.filter((f) => f.signerId === 'org');
     let pdf: Buffer;
     if (sourceType === 'pdf' && input.templatePdfPath) {
       const templateBuffer = await readTemplatePdf(input.templatePdfPath);
       pdf = await stampOrgSignatureOnPdf(templateBuffer, {
         orgName: input.companyName || 'Organização',
         orgSignatureDataUri,
+        orgFields,
       });
     } else {
       if (!input.contractText?.trim()) {
@@ -116,6 +131,11 @@ export async function sendContractForSigning(deps: {
         value: input.value,
         location: input.location,
         orgSignatureDataUri,
+      });
+      pdf = await stampOrgSignatureOnPdf(pdf, {
+        orgName: input.companyName || 'Organização',
+        orgSignatureDataUri,
+        orgFields,
       });
     }
 
@@ -141,28 +161,36 @@ export async function sendContractForSigning(deps: {
       [document.id, originalPath],
     );
 
-    const signerTempId = `signer_${Date.now()}`;
+    const clientTempId = `signer_client_${Date.now()}`;
+    const orgTempId = `signer_org_${Date.now()}`;
+    const clientEmail = input.clientEmail.trim().toLowerCase();
+    const orgEmail = `org@${input.organizationId.slice(0, 8)}.internal`;
+
     const { rows: signerRows } = await pool.query<{ id: string }>(
       `INSERT INTO contract_signers (document_id, temp_id, name, email, signer_order, status)
        VALUES ($1, $2, $3, $4, 0, 'PENDING') RETURNING id`,
-      [document.id, signerTempId, input.clientName, input.clientEmail.trim().toLowerCase()],
+      [document.id, clientTempId, input.clientName, clientEmail],
     );
     const signerId = signerRows[0]?.id;
 
-    const fieldConfig = resolveClientSignatureField(input.signatureConfig);
-    const fields = defaultFieldsForSigner({
-      tempId: signerTempId,
-      name: input.clientName,
-      email: input.clientEmail.trim().toLowerCase(),
-      field: fieldConfig,
-    });
+    await pool.query(
+      `INSERT INTO contract_signers (document_id, temp_id, name, email, signer_order, status)
+       VALUES ($1, $2, $3, $4, 1, 'SIGNED')`,
+      [document.id, orgTempId, input.companyName || 'Organização', orgEmail],
+    );
+
+    const fields = allFieldsFromTemplateConfig(
+      input.signatureConfig,
+      { tempId: clientTempId, name: input.clientName, email: clientEmail },
+      { tempId: orgTempId, name: input.companyName || 'Organização', email: orgEmail },
+    );
 
     for (const f of fields) {
       await pool.query(
         `INSERT INTO contract_fields (
            document_id, signer_temp_id, signer_name, signer_email, field_type,
-           page, x_pct, y_pct, width_pct, height_pct, required
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE)`,
+           page, x_pct, y_pct, width_pct, height_pct, required, content
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11)`,
         [
           document.id,
           f.signerTempId,
@@ -174,6 +202,7 @@ export async function sendContractForSigning(deps: {
           f.yPct,
           f.widthPct,
           f.heightPct,
+          f.content ?? null,
         ],
       );
     }
@@ -397,6 +426,14 @@ export async function getSignatureLinkPublic(deps: {
     used: boolean;
     expiresAt: string;
     previewUrl: string;
+    clientFields: Array<{
+      type: string;
+      page: number;
+      xPct: number;
+      yPct: number;
+      widthPct: number;
+      heightPct: number;
+    }>;
   };
 }> {
   const { rows } = await deps.pool.query<{
@@ -418,6 +455,22 @@ export async function getSignatureLinkPublic(deps: {
   if (!row) return { ok: false, error: 'Link não encontrado', status: 404 };
   if (new Date(row.expires_at) < new Date()) return { ok: false, error: 'Link expirado', status: 410 };
 
+  const emailNorm = row.signer_email.trim().toLowerCase();
+  const { rows: fieldRows } = await deps.pool.query<{
+    field_type: string;
+    page: number;
+    x_pct: number;
+    y_pct: number;
+    width_pct: number;
+    height_pct: number;
+  }>(
+    `SELECT field_type, page, x_pct, y_pct, width_pct, height_pct
+     FROM contract_fields
+     WHERE document_id = $1 AND LOWER(TRIM(signer_email)) = $2
+     ORDER BY page ASC`,
+    [row.document_id, emailNorm],
+  );
+
   return {
     ok: true,
     data: {
@@ -428,6 +481,14 @@ export async function getSignatureLinkPublic(deps: {
       used: row.used,
       expiresAt: row.expires_at.toISOString(),
       previewUrl: `/api/public/sign/${encodeURIComponent(deps.token)}/preview.pdf`,
+      clientFields: fieldRows.map((f) => ({
+        type: f.field_type,
+        page: f.page,
+        xPct: f.x_pct <= 1 ? f.x_pct * 100 : f.x_pct,
+        yPct: f.y_pct <= 1 ? f.y_pct * 100 : f.y_pct,
+        widthPct: f.width_pct <= 1 ? f.width_pct * 100 : f.width_pct,
+        heightPct: f.height_pct <= 1 ? f.height_pct * 100 : f.height_pct,
+      })),
     },
   };
 }

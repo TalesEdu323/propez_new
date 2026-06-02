@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2, FileCheck, AlertCircle } from 'lucide-react';
 import { PublicOrgHeader } from '../PublicOrgHeader';
 import { SignatureCanvas } from './SignatureCanvas';
+import { SignFieldOverlays, type SignFieldOverlay } from './SignFieldOverlays';
 
 interface SignMeta {
   documentId: string;
@@ -12,6 +13,7 @@ interface SignMeta {
   used: boolean;
   expiresAt: string;
   previewUrl: string;
+  clientFields?: SignFieldOverlay[];
 }
 
 interface OrgInfo {
@@ -124,11 +126,16 @@ export default function SignContractPage() {
               Assinatura digital PropEZ · {meta?.signerEmail}
             </p>
             {meta?.previewUrl && (
-              <iframe
-                title="Contrato"
-                src={meta.previewUrl}
-                className="w-full h-72 rounded-xl border border-zinc-200 mb-6"
-              />
+              <div className="relative w-full rounded-xl border border-zinc-200 mb-6 overflow-hidden aspect-[794/1123] max-h-80">
+                <iframe
+                  title="Contrato"
+                  src={meta.previewUrl}
+                  className="w-full h-full border-0"
+                />
+                {meta.clientFields && meta.clientFields.length > 0 && (
+                  <SignFieldOverlays fields={meta.clientFields} />
+                )}
+              </div>
             )}
             <SignatureCanvas onChange={setSignature} disabled={submitting} />
             {error && <p className="text-sm text-red-600 mt-4">{error}</p>}

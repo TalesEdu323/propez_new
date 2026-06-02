@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Building2, ChevronLeft, ChevronRight, PenLine } from 'lucide-react';
+import { hasSignerSignatureField, normalizeSignatureConfig } from '../../lib/signatureConfig';
 
 export interface SignatureFieldConfig {
   page: number;
@@ -243,9 +244,8 @@ export function resolveSignatureField(config: unknown): SignatureFieldConfig {
 }
 
 export function hasConfiguredSignatureField(config: unknown): boolean {
-  if (!config || typeof config !== 'object') return false;
-  const cfg = config as { clientField?: Partial<SignatureFieldConfig> };
-  return cfg.clientField != null && typeof cfg.clientField.xPct === 'number';
+  const norm = normalizeSignatureConfig(config);
+  return hasSignerSignatureField(norm, 'client') && hasSignerSignatureField(norm, 'org');
 }
 
 export { DEFAULT_FIELD as DEFAULT_SIGNATURE_FIELD };

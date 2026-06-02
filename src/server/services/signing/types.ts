@@ -16,7 +16,24 @@ export interface SignatureFieldConfig {
 }
 
 export interface ModelSignatureConfig {
+  version?: 2;
+  signers?: Array<{ id: string; name: string; role: 'client' | 'org' }>;
+  fields?: Array<{
+    id: string;
+    signerId: string;
+    type: 'signature' | 'initials' | 'text';
+    page: number;
+    xPct: number;
+    yPct: number;
+    widthPct: number;
+    heightPct: number;
+    rotation?: number;
+    groupId?: string;
+    content?: string;
+    fontKey?: string;
+  }>;
   clientField?: SignatureFieldConfig;
+  orgField?: SignatureFieldConfig;
 }
 
 export interface ContractFieldRow {

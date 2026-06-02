@@ -10,6 +10,11 @@ import { serializeContrato } from '../db/serializers.js'
 import { generateContractPdf } from '../services/contractPdf.js'
 import { resolveOrgSignatureDataUri } from '../services/signing/orgSignatureAsset.js'
 import {
+  hasSignerSignatureField,
+  normalizeSignatureConfig,
+  validateTemplateSignatureConfig,
+} from '../../lib/signatureConfig.js'
+import {
   deleteTemplatePdf,
   readTemplatePdf,
   writeTemplatePdf,
@@ -17,7 +22,34 @@ import {
 
 const CONTRATO_SELECT = `id, titulo, texto, source_type, pdf_path, pdf_file_name, page_count, signature_config, created_at`
 
-const signatureFieldSchema = z.object({
+const marcadorSchema = z.object({
+  id: z.string().min(1),
+  signerId: z.string().min(1),
+  type: z.enum(['signature', 'initials', 'text']),
+  page: z.number().int().min(1).max(500),
+  xPct: z.number().min(0).max(1),
+  yPct: z.number().min(0).max(1),
+  widthPct: z.number().min(0.01).max(1),
+  heightPct: z.number().min(0.01).max(1),
+  rotation: z.number().optional(),
+  groupId: z.string().optional(),
+  content: z.string().max(2000).optional(),
+  fontKey: z.enum(['aletheia', 'authentic']).optional(),
+})
+
+const signatureConfigV2Schema = z.object({
+  version: z.literal(2),
+  signers: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      role: z.enum(['client', 'org']),
+    }),
+  ),
+  fields: z.array(marcadorSchema).min(1),
+})
+
+const signatureFieldLegacySchema = z.object({
   page: z.number().int().min(1).max(500),
   xPct: z.number().min(0).max(100),
   yPct: z.number().min(0).max(100),
@@ -25,9 +57,10 @@ const signatureFieldSchema = z.object({
   heightPct: z.number().min(1).max(100),
 })
 
-const signatureConfigSchema = z.object({
-  clientField: signatureFieldSchema,
-})
+const signatureConfigSchema = z.union([
+  signatureConfigV2Schema,
+  z.object({ clientField: signatureFieldLegacySchema }),
+])
 
 const bodySchema = z.object({
   titulo: z.string().trim().min(1).max(200),
@@ -203,6 +236,22 @@ export function createContratosRouter(deps: {
 
     const existing = await loadContratoRow(pool, req.auth.orgId, req.params.id)
     if (!existing) return res.status(404).json({ error: 'Contrato não encontrado' })
+
+    if (d.signatureConfig != null) {
+      const { org } = await getOrgContext(pool, req.auth.orgId)
+      const norm = normalizeSignatureConfig(
+        d.signatureConfig,
+        org?.name || 'Empresa',
+        existing.page_count ?? 1,
+      )
+      const err = validateTemplateSignatureConfig(norm)
+      if (err) return res.status(400).json({ error: err })
+      if (!hasSignerSignatureField(norm, 'client') || !hasSignerSignatureField(norm, 'org')) {
+        return res.status(400).json({
+          error: 'Configure marcadores de assinatura para Cliente e Empresa.',
+        })
+      }
+    }
 
     if (d.sourceType === 'text' && existing.source_type === 'pdf' && existing.pdf_path) {
       await deleteTemplatePdf(existing.pdf_path)

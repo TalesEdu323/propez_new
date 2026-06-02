@@ -43,11 +43,16 @@ export async function applyClientSignatureToPdf(input: {
   const image = await embedImageFromDataUrl(pdfDoc, input.signatureImageDataUrl);
   const emailNorm = input.signerEmail.trim().toLowerCase();
   const signerFields = input.fields.filter(
-    (f) => f.field_type === 'SIGNATURE' && f.signer_email.trim().toLowerCase() === emailNorm,
+    (f) => f.signer_email.trim().toLowerCase() === emailNorm,
   );
+
+  const signatureFields = signerFields.filter((f) => f.field_type === 'SIGNATURE');
+  const initialsFields = signerFields.filter((f) => f.field_type === 'INITIALS');
+  const textFields = signerFields.filter((f) => f.field_type === 'TEXT');
+
   const fieldsToUse =
-    signerFields.length > 0
-      ? signerFields
+    signatureFields.length > 0
+      ? signatureFields
       : [
           {
             page: 1,
@@ -58,9 +63,11 @@ export async function applyClientSignatureToPdf(input: {
           } as Pick<ContractFieldRow, 'page' | 'x_pct' | 'y_pct' | 'width_pct' | 'height_pct'>,
         ];
 
-  for (const field of fieldsToUse) {
+  const drawImageInField = (
+    field: Pick<ContractFieldRow, 'page' | 'x_pct' | 'y_pct' | 'width_pct' | 'height_pct'>,
+  ) => {
     const pageIndex = Math.max(0, (field.page || 1) - 1);
-    if (pageIndex >= pdfDoc.getPageCount()) continue;
+    if (pageIndex >= pdfDoc.getPageCount()) return;
     const page = pdfDoc.getPage(pageIndex);
     const { width, height } = page.getSize();
     const coords = markToPdfCoords(width, height, field.x_pct, field.y_pct, field.width_pct, field.height_pct);
@@ -89,7 +96,15 @@ export async function applyClientSignatureToPdf(input: {
         color: rgb(0.3, 0.3, 0.3),
       });
     }
+  };
 
+  for (const field of fieldsToUse) {
+    drawImageInField(field);
+    const pageIndex = Math.max(0, (field.page || 1) - 1);
+    if (pageIndex >= pdfDoc.getPageCount()) continue;
+    const page = pdfDoc.getPage(pageIndex);
+    const { width, height } = page.getSize();
+    const coords = markToPdfCoords(width, height, field.x_pct, field.y_pct, field.width_pct, field.height_pct);
     page.drawText(
       `Assinado em ${input.signedAt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
       {
@@ -100,6 +115,28 @@ export async function applyClientSignatureToPdf(input: {
         color: rgb(0.45, 0.45, 0.45),
       },
     );
+  }
+
+  for (const field of initialsFields) {
+    drawImageInField(field);
+  }
+
+  for (const field of textFields) {
+    const pageIndex = Math.max(0, (field.page || 1) - 1);
+    if (pageIndex >= pdfDoc.getPageCount()) continue;
+    const page = pdfDoc.getPage(pageIndex);
+    const { width, height } = page.getSize();
+    const coords = markToPdfCoords(width, height, field.x_pct, field.y_pct, field.width_pct, field.height_pct);
+    const text = (field.content || '').trim().slice(0, 500);
+    if (!text) continue;
+    page.drawText(text, {
+      x: coords.x + 4,
+      y: coords.y + coords.height / 2 - 4,
+      size: Math.min(10, Math.max(7, coords.height * 0.35)),
+      font,
+      color: rgb(0.2, 0.2, 0.2),
+      maxWidth: coords.width - 8,
+    });
   }
 
   const out = Buffer.from(await pdfDoc.save());
