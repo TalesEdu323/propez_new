@@ -7,7 +7,7 @@
   "functions": {
     "api/index.ts": {
       "maxDuration": 60,
-      "includeFiles": "sql/**,node_modules/pdfmake/**,node_modules/pdf-lib/**"
+      "includeFiles": "sql/**,node_modules/pdfmake/**,node_modules/pdf-lib/**,node_modules/qrcode/**"
     }
   },
   "rewrites": [

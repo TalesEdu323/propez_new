@@ -5,7 +5,7 @@
  * pública da proposta, evitando divergência de placeholders entre telas.
  */
 
-import { formatBRL, formatDateBR } from './format';
+import { formatBRL, formatDateBR } from './format.js';
 import type { BuilderElement } from '../types/builder';
 
 export interface ContractContext {

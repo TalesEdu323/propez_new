@@ -4,6 +4,7 @@ import { LoggedInRedirect } from '../marketing/LoggedInRedirect';
 import { LegacyRedirects } from './LegacyRedirects';
 import { RouteErrorBoundary } from './RouteErrorBoundary';
 import HomeRoute from './HomeRoute';
+import NotFoundPage from './NotFoundPage';
 
 const PublicProposta = lazy(() => import('../pages/PublicProposta'));
 const AuthenticatedApp = lazy(() => import('../AuthenticatedApp'));
