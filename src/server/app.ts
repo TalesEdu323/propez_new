@@ -155,6 +155,8 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   app.use('/api/usage', createUsageRouter({ pool, config }));
   app.use('/api/ia', createIaRouter({ pool, config }));
 
+  const integrationsLimiter = createRateLimit({ windowMs: 60_000, max: 120 });
+
   // 6) Google Calendar (autenticado) — antes do proxy genérico de integrações
   app.use(
     '/api/integrations/google-calendar',
@@ -163,7 +165,6 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   );
 
   // 6b) Integrations proxy (autenticado)
-  const integrationsLimiter = createRateLimit({ windowMs: 60_000, max: 120 });
   app.use(
     '/api/integrations',
     integrationsLimiter,
