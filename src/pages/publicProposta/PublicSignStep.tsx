@@ -21,7 +21,9 @@ interface Props {
   orgName: string;
   publicToken: string;
   onConfirmReceipt: () => void;
+  onRetrySignature?: () => void;
   confirming?: boolean;
+  retrying?: boolean;
 }
 
 function resolveStatus(p: PropostaSignFields): string | null | undefined {
@@ -66,7 +68,7 @@ function SignedContractDownload({ publicToken }: { publicToken: string }) {
   );
 }
 
-export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceipt, confirming }: Props) {
+export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceipt, onRetrySignature, confirming, retrying }: Props) {
   const phase = getContractSignPhase({
     contractSignStatus: resolveStatus(proposta),
     rubricaStatus: resolveStatus(proposta),
@@ -122,6 +124,16 @@ export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceip
         <p className="text-red-700 mt-2 text-sm">
           Não foi possível preparar o contrato para assinatura. Entre em contato com {orgName}.
         </p>
+        {onRetrySignature && (
+          <button
+            type="button"
+            onClick={onRetrySignature}
+            disabled={retrying}
+            className="mt-6 inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-red-900 text-white font-semibold text-sm hover:bg-red-800 disabled:opacity-60"
+          >
+            {retrying ? 'Tentando novamente…' : 'Tentar novamente'}
+          </button>
+        )}
       </div>
     );
   }

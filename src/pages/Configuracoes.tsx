@@ -22,6 +22,7 @@ import {
   IntegrationProviderCard,
   type IntegrationCredentialSummary,
 } from './configuracoes/IntegrationProviderCard';
+import SecuritySettingsPanel from '../components/settings/SecuritySettingsPanel';
 
 interface ServiceRequestItem {
   id: string;
@@ -54,6 +55,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
   const planMeta = PLAN_META[plan];
   const whiteLabelEnabled = hasWhiteLabel(userConfig);
   const [myRequests, setMyRequests] = useState<ServiceRequestItem[]>([]);
+  const [showSecurity, setShowSecurity] = useState(false);
 
   const loadMyRequests = useCallback(async () => {
     try {
@@ -488,7 +490,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
             {/* Other Settings Sections */}
             <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[
-                { icon: <Shield className="w-5 h-5" />, title: 'Segurança', desc: 'Senha e autenticação', onClick: undefined as (() => void) | undefined },
+                { icon: <Shield className="w-5 h-5" />, title: 'Segurança', desc: 'Senha e autenticação', onClick: () => setShowSecurity(true) },
                 { icon: <Bell className="w-5 h-5" />, title: 'Notificações', desc: 'Alertas de propostas', onClick: undefined },
                 { icon: <CreditCard className="w-5 h-5" />, title: 'Faturamento', desc: 'Planos e pagamentos', onClick: handleGoToPlans },
                 { icon: <HelpCircle className="w-5 h-5" />, title: 'Suporte', desc: 'Central de ajuda', onClick: undefined },
@@ -511,6 +513,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
         </motion.div>
 
       </div>
+      {showSecurity && <SecuritySettingsPanel onClose={() => setShowSecurity(false)} />}
     </div>
   );
 }

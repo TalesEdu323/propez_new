@@ -1,6 +1,7 @@
 import express from 'express'
 import type { Request, Response, Router } from 'express'
 import type { Pool } from 'pg'
+import Stripe from 'stripe'
 import { z } from 'zod'
 import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
@@ -8,6 +9,13 @@ import { buildRequirePlatformAdmin } from '../auth/platformAdmin.js'
 import { registerAdminServiceRequestRoutes, adminOrgBrandPatchSchema, applyAdminOrgBrandPatch } from './adminServiceRequests.js'
 import { registerAdminAnalyticsRoutes, enrichOrgDetail } from './adminAnalytics.js'
 import { isOrgActiveForMrr, mrrBrlForPlan } from '../services/mrrPricing.js'
+import type { MailClient } from '../mail/client.js'
+import { isAuthMailFailure, respondAuthMailFailure } from '../mail/authMail.js'
+import {
+  issueEmailVerification,
+  issuePasswordReset,
+} from '../services/authMailService.js'
+import { canDeleteUser } from '../services/adminUserSafeguards.js'
 function monthlyEquivalent(plan: string | null | undefined, cycle: string | null | undefined): number {
   return mrrBrlForPlan(plan, cycle)
 }
@@ -24,15 +32,21 @@ const updateOrgSchema = z.object({
   csNotes: z.string().max(10000).optional(),
 }).merge(adminOrgBrandPatchSchema)
 
-const updateUserSchema = z.object({
-  isPlatformAdmin: z.boolean(),
-})
+const updateUserSchema = z
+  .object({
+    isPlatformAdmin: z.boolean().optional(),
+    email: z.string().trim().toLowerCase().email().optional(),
+    name: z.string().trim().min(1).max(120).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, { message: 'Nenhum campo para atualizar' })
 
 export function createAdminRouter(deps: {
   pool: Pool
   config: EnvironmentConfig
+  mail: MailClient
+  stripe: Stripe
 }): Router {
-  const { pool, config } = deps
+  const { pool, config, mail, stripe } = deps
   const router = express.Router()
   const requireAuth = buildRequireAuth(config.auth)
   const requirePlatformAdmin = buildRequirePlatformAdmin({ pool, config })
@@ -436,29 +450,203 @@ export function createAdminRouter(deps: {
   })
 
   // ==========================================================================
-  // PATCH /api/admin/users/:id — togglar is_platform_admin (sem auto lock-out)
+  // PATCH /api/admin/users/:id — admin altera usuário
   // ==========================================================================
   router.patch('/users/:id', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
     const parsed = updateUserSchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' })
 
-    if (req.params.id === req.auth.userId && parsed.data.isPlatformAdmin === false) {
+    const patch = parsed.data
+    if (
+      req.params.id === req.auth.userId &&
+      patch.isPlatformAdmin === false
+    ) {
       return res.status(400).json({
         error: 'Você não pode remover a si mesmo da lista de platform admins.',
       })
     }
 
     try {
+      if (patch.email) {
+        const taken = await pool.query<{ id: string }>(
+          `SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND id <> $2 LIMIT 1`,
+          [patch.email, req.params.id],
+        )
+        if (taken.rows.length > 0) {
+          return res.status(409).json({ error: 'Este e-mail já está em uso' })
+        }
+      }
+
+      const sets: string[] = []
+      const values: unknown[] = [req.params.id]
+      let idx = 2
+
+      if (patch.isPlatformAdmin !== undefined) {
+        sets.push(`is_platform_admin = $${idx++}`)
+        values.push(patch.isPlatformAdmin)
+      }
+      if (patch.email !== undefined) {
+        sets.push(`email = $${idx++}`)
+        values.push(patch.email)
+        sets.push(`email_verified_at = NULL`)
+      }
+      if (patch.name !== undefined) {
+        sets.push(`name = $${idx++}`)
+        values.push(patch.name)
+      }
+
       const { rowCount } = await pool.query(
-        `UPDATE users SET is_platform_admin = $2 WHERE id = $1`,
-        [req.params.id, parsed.data.isPlatformAdmin],
+        `UPDATE users SET ${sets.join(', ')} WHERE id = $1`,
+        values,
       )
       if (rowCount === 0) return res.status(404).json({ error: 'Usuário não encontrado' })
       return res.json({ ok: true })
     } catch (err) {
       console.error('[admin/users/update] erro:', err)
       return res.status(500).json({ error: 'Erro ao atualizar usuário' })
+    }
+  })
+
+  // ==========================================================================
+  // POST /api/admin/users/:id/send-password-reset
+  // ==========================================================================
+  router.post('/users/:id/send-password-reset', async (req: Request, res: Response) => {
+    try {
+      const exists = await pool.query<{ id: string }>(
+        `SELECT id FROM users WHERE id = $1`,
+        [req.params.id],
+      )
+      if (exists.rows.length === 0) {
+        return res.status(404).json({ error: 'Usuário não encontrado' })
+      }
+
+      const mailResult = await issuePasswordReset(pool, config, mail, req.params.id)
+      if (isAuthMailFailure(mailResult)) {
+        if (config.mail.required) {
+          return respondAuthMailFailure(res, config, mailResult)
+        }
+        return res.json({ sent: false, reason: mailResult.reason })
+      }
+      return res.json({
+        sent: true,
+        ...(config.nodeEnv !== 'production' && mailResult.devResetUrl
+          ? { devResetUrl: mailResult.devResetUrl }
+          : {}),
+      })
+    } catch (err) {
+      console.error('[admin/users/send-password-reset] erro:', err)
+      return res.status(500).json({ error: 'Erro ao enviar e-mail' })
+    }
+  })
+
+  // ==========================================================================
+  // POST /api/admin/users/:id/send-verification
+  // ==========================================================================
+  router.post('/users/:id/send-verification', async (req: Request, res: Response) => {
+    try {
+      const exists = await pool.query<{ id: string }>(
+        `SELECT id FROM users WHERE id = $1`,
+        [req.params.id],
+      )
+      if (exists.rows.length === 0) {
+        return res.status(404).json({ error: 'Usuário não encontrado' })
+      }
+
+      const mailResult = await issueEmailVerification(pool, config, mail, req.params.id)
+      if (mailResult.alreadyVerified) return res.json({ alreadyVerified: true })
+      if (isAuthMailFailure(mailResult)) {
+        if (config.mail.required) {
+          return respondAuthMailFailure(res, config, mailResult)
+        }
+        return res.json({
+          sent: false,
+          reason: mailResult.reason,
+          ...(config.nodeEnv !== 'production' && mailResult.devVerificationCode
+            ? { devVerificationCode: mailResult.devVerificationCode }
+            : {}),
+        })
+      }
+      return res.json({
+        sent: true,
+        ...(config.nodeEnv !== 'production' && mailResult.devVerificationCode
+          ? { devVerificationCode: mailResult.devVerificationCode }
+          : {}),
+      })
+    } catch (err) {
+      console.error('[admin/users/send-verification] erro:', err)
+      return res.status(500).json({ error: 'Erro ao enviar verificação' })
+    }
+  })
+
+  // ==========================================================================
+  // DELETE /api/admin/users/:id
+  // ==========================================================================
+  router.delete('/users/:id', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    try {
+      const { rows } = await pool.query<{
+        id: string
+        is_platform_admin: boolean
+      }>(
+        `SELECT id, is_platform_admin FROM users WHERE id = $1`,
+        [req.params.id],
+      )
+      const target = rows[0]
+      if (!target) return res.status(404).json({ error: 'Usuário não encontrado' })
+
+      const adminCountRes = await pool.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM users WHERE is_platform_admin = true`,
+      )
+      const platformAdminCount = Number(adminCountRes.rows[0]?.count ?? 0)
+
+      const check = canDeleteUser({
+        targetUserId: target.id,
+        actingUserId: req.auth.userId,
+        targetIsPlatformAdmin: target.is_platform_admin,
+        platformAdminCount,
+      })
+      if (!check.ok) return res.status(400).json({ error: check.error })
+
+      await pool.query(`DELETE FROM users WHERE id = $1`, [req.params.id])
+      return res.json({ ok: true })
+    } catch (err) {
+      console.error('[admin/users/delete] erro:', err)
+      return res.status(500).json({ error: 'Erro ao excluir usuário' })
+    }
+  })
+
+  // ==========================================================================
+  // DELETE /api/admin/organizations/:id
+  // ==========================================================================
+  router.delete('/organizations/:id', async (req: Request, res: Response) => {
+    try {
+      const { rows } = await pool.query<{
+        id: string
+        stripe_subscription_id: string | null
+      }>(
+        `SELECT id, stripe_subscription_id FROM organizations WHERE id = $1`,
+        [req.params.id],
+      )
+      const org = rows[0]
+      if (!org) return res.status(404).json({ error: 'Organização não encontrada' })
+
+      if (org.stripe_subscription_id) {
+        try {
+          await stripe.subscriptions.cancel(org.stripe_subscription_id)
+        } catch (err) {
+          console.error('[admin/orgs/delete] stripe cancel falhou:', err)
+          return res.status(502).json({
+            error: 'Não foi possível cancelar a assinatura Stripe. Tente novamente ou cancele manualmente.',
+          })
+        }
+      }
+
+      await pool.query(`DELETE FROM organizations WHERE id = $1`, [req.params.id])
+      return res.json({ ok: true })
+    } catch (err) {
+      console.error('[admin/orgs/delete] erro:', err)
+      return res.status(500).json({ error: 'Erro ao excluir organização' })
     }
   })
 

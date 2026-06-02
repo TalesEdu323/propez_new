@@ -6,6 +6,8 @@ import { useUserConfig } from '../hooks/useStoreEntity';
 import { PLAN_META, type PlanTier } from '../lib/featureFlags';
 import { PricingEnterpriseCta } from '../components/PricingEnterpriseCta';
 import type { NavigateFn } from '../types/navigation';
+import { useSession } from '../lib/authSession';
+import { captureCouponFromUrl, validateCouponCode } from '../lib/affiliateTracking';
 
 interface StripePlanApi {
   id: 'pro' | 'business';
@@ -57,6 +59,7 @@ interface PlanosProps {
 }
 
 export default function Planos({ navigate, targetPlan }: PlanosProps) {
+  const session = useSession();
   const userConfig = useUserConfig();
   const currentPlan = resolvePlan(userConfig);
   const [cycle, setCycle] = useState<'monthly' | 'yearly'>('yearly');
@@ -64,6 +67,20 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
   const [plansError, setPlansError] = useState<string | null>(null);
   const [loadingPlan, setLoadingPlan] = useState<PlanTier | null>(null);
   const [returnInfo, setReturnInfo] = useState<{ type: 'success' | 'canceled'; message: string } | null>(null);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponHint, setCouponHint] = useState<string | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fromUrl = captureCouponFromUrl();
+    if (fromUrl) {
+      setCouponCode(fromUrl);
+      void validateCouponCode(fromUrl).then((r) => {
+        if (r.valid) setCouponHint(r.description ?? 'Cupom aplicado');
+        else setCouponError(r.error ?? 'Cupom inválido');
+      });
+    }
+  }, []);
 
   useEffect(() => {
     fetch('/api/stripe/plans')
@@ -151,17 +168,28 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
       return;
     }
 
+    if (couponCode.trim()) {
+      const validation = await validateCouponCode(couponCode.trim(), planId);
+      if (!validation.valid) {
+        setCouponError(validation.error ?? 'Cupom inválido');
+        return;
+      }
+      setCouponHint(validation.description ?? null);
+      setCouponError(null);
+    }
+
     setLoadingPlan(planId);
     try {
-      const clientReferenceId = userConfig.stripeCustomerId
-        || `${userConfig.cnpj || 'anon'}-${Date.now()}`;
+      const organizationId = session?.organization.id;
 
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           priceId,
-          clientReferenceId,
+          organizationId,
+          clientReferenceId: organizationId,
+          couponCode: couponCode.trim() || undefined,
           successPath: '/app?route=planos&success=true&session_id={CHECKOUT_SESSION_ID}',
           cancelPath: '/app?route=planos&canceled=true',
         }),
@@ -218,6 +246,46 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
         )}
 
         {/* Toggle mensal / anual */}
+        <div className="mb-6 flex flex-col items-center gap-4">
+          <div className="w-full max-w-md">
+            <label className="block text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">
+              Cupom promocional
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={couponCode}
+                onChange={(e) => {
+                  setCouponCode(e.target.value.toUpperCase());
+                  setCouponHint(null);
+                  setCouponError(null);
+                }}
+                placeholder="EX: LAUNCH50"
+                className="flex-1 h-11 px-4 rounded-xl border border-black/10 bg-white text-sm font-medium uppercase"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!couponCode.trim()) return;
+                  const r = await validateCouponCode(couponCode.trim());
+                  if (r.valid) {
+                    setCouponHint(r.description ?? 'Cupom válido');
+                    setCouponError(null);
+                  } else {
+                    setCouponError(r.error ?? 'Cupom inválido');
+                    setCouponHint(null);
+                  }
+                }}
+                className="h-11 px-4 rounded-xl bg-zinc-100 text-zinc-700 text-xs font-bold uppercase tracking-widest hover:bg-zinc-200"
+              >
+                Validar
+              </button>
+            </div>
+            {couponHint && <p className="text-xs text-emerald-600 font-medium mt-2">{couponHint}</p>}
+            {couponError && <p className="text-xs text-red-600 font-medium mt-2">{couponError}</p>}
+          </div>
+        </div>
+
         <div className="mb-10 flex justify-center">
           <div className="inline-flex p-1 bg-white rounded-2xl border border-black/5 shadow-sm">
             {(['monthly', 'yearly'] as const).map(c => (

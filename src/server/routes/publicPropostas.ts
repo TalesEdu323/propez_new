@@ -276,6 +276,12 @@ export function createPublicPropostasRouter(deps: {
         return res.status(409).json({ error: 'Aprovação da proposta é necessária antes da assinatura' });
       }
 
+      await pool.query(
+        `UPDATE propostas SET contract_sign_status = NULL, contract_sign_last_sync_at = NULL
+         WHERE public_token = $1 AND contract_sign_status IN ('failed', 'cancelled')`,
+        [token],
+      );
+
       const signResult = await triggerContractSignAfterApproval({
         pool,
         envConfig: config,

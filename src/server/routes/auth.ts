@@ -5,7 +5,6 @@ import { z } from 'zod'
 import type { EnvironmentConfig } from '../env.js'
 import { hashPassword, verifyPassword } from '../auth/password.js'
 import {
-  createOpaqueToken,
   createRefreshToken,
   generateEmailCode,
   hashToken,
@@ -22,16 +21,21 @@ import {
 import { buildRequireAuth } from '../auth/middleware.js'
 import type { MailClient } from '../mail/resend.js'
 import { isAuthMailFailure, respondAuthMailFailure, sendAuthEmail } from '../mail/authMail.js'
+import {
+  EMAIL_CODE_TTL_MINUTES,
+  issueEmailChangeRequest,
+  issueEmailVerification,
+  issuePasswordReset,
+} from '../services/authMailService.js'
 import type { SuiteLookupClient } from '../clients/suiteLookup.js'
-
-const EMAIL_CODE_TTL_MINUTES = 15
-const RESET_TOKEN_TTL_MINUTES = 30
 
 const registerSchema = z.object({
   name: z.string().trim().min(1).max(120),
   company: z.string().trim().min(1).max(200),
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8).max(200),
+  affiliateCode: z.string().trim().max(40).optional(),
+  affiliateSessionId: z.string().trim().max(120).optional(),
 })
 
 const loginSchema = z.object({
@@ -59,6 +63,20 @@ const resetSchema = z.object({
 
 const switchOrgSchema = z.object({
   organizationId: z.string().uuid(),
+})
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(200),
+})
+
+const requestEmailChangeSchema = z.object({
+  newEmail: z.string().trim().toLowerCase().email(),
+  password: z.string().min(1),
+})
+
+const confirmEmailChangeSchema = z.object({
+  code: z.string().trim().length(6),
 })
 
 export function createAuthRouter(deps: {
@@ -118,7 +136,7 @@ export function createAuthRouter(deps: {
     if (!parsed.success) {
       return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
     }
-    const { email, password, name, company } = parsed.data
+    const { email, password, name, company, affiliateCode, affiliateSessionId } = parsed.data
 
     try {
       const existing = await pool.query<{ id: string }>(
@@ -136,6 +154,7 @@ export function createAuthRouter(deps: {
 
       const client = await pool.connect()
       let userId = ''
+      let orgId = ''
       try {
         await client.query('BEGIN')
         const userRes = await client.query<{ id: string }>(
@@ -147,7 +166,7 @@ export function createAuthRouter(deps: {
           `INSERT INTO organizations (name) VALUES ($1) RETURNING id`,
           [company],
         )
-        const orgId = orgRes.rows[0].id
+        orgId = orgRes.rows[0].id
         await client.query(
           `INSERT INTO memberships (user_id, organization_id, role) VALUES ($1, $2, 'owner')`,
           [userId, orgId],
@@ -162,6 +181,10 @@ export function createAuthRouter(deps: {
         throw err
       } finally {
         client.release()
+      }
+
+      if (affiliateCode && orgId) {
+        await attributeOrganizationToAffiliate(pool, orgId, affiliateCode, affiliateSessionId);
       }
 
       const mailResult = await sendAuthEmail(
@@ -299,19 +322,8 @@ export function createAuthRouter(deps: {
       if (!u) return res.json({ sent: true })
       if (u.email_verified_at) return res.json({ alreadyVerified: true })
 
-      const code = generateEmailCode()
-      const codeHash = hashToken(code)
-      const expiresAt = new Date(Date.now() + EMAIL_CODE_TTL_MINUTES * 60_000)
-      await pool.query(
-        `INSERT INTO email_verifications (user_id, code_hash, expires_at) VALUES ($1, $2, $3)`,
-        [u.id, codeHash, expiresAt],
-      )
-      const mailResult = await sendAuthEmail(
-        config,
-        'resend-verification',
-        () => mail.sendVerificationEmail({ to: u.email, name: u.name, code }),
-        `código de verificação para ${u.email}: ${code}`,
-      )
+      const mailResult = await issueEmailVerification(pool, config, mail, u.id)
+      if (mailResult.alreadyVerified) return res.json({ alreadyVerified: true })
       if (isAuthMailFailure(mailResult)) {
         if (config.mail.required) {
           return respondAuthMailFailure(res, config, mailResult)
@@ -319,7 +331,9 @@ export function createAuthRouter(deps: {
         return res.json({
           sent: false,
           reason: mailResult.reason,
-          ...(config.nodeEnv !== 'production' ? { devVerificationCode: code } : {}),
+          ...(config.nodeEnv !== 'production' && mailResult.devVerificationCode
+            ? { devVerificationCode: mailResult.devVerificationCode }
+            : {}),
         })
       }
       return res.json({ sent: true })
@@ -499,21 +513,7 @@ export function createAuthRouter(deps: {
       const u = userRes.rows[0]
       if (!u) return res.json({ sent: true })
 
-      const token = createOpaqueToken(24)
-      const tokenHash = hashToken(token)
-      const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60_000)
-      await pool.query(
-        `INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
-        [u.id, tokenHash, expiresAt],
-      )
-
-      const resetUrl = `${config.appUrl.replace(/\/+$/, '')}/login?token=${encodeURIComponent(token)}`
-      const mailResult = await sendAuthEmail(
-        config,
-        'forgot-password',
-        () => mail.sendPasswordResetEmail({ to: u.email, name: u.name, resetUrl }),
-        config.nodeEnv !== 'production' ? `link de reset: ${resetUrl}` : undefined,
-      )
+      const mailResult = await issuePasswordReset(pool, config, mail, u.id)
       if (isAuthMailFailure(mailResult)) {
         if (config.mail.required) {
           return respondAuthMailFailure(res, config, mailResult)
@@ -569,8 +569,9 @@ export function createAuthRouter(deps: {
         email: string
         email_verified_at: string | null
         is_platform_admin: boolean
+        password_hash: string | null
       }>(
-        `SELECT id, name, email, email_verified_at, is_platform_admin
+        `SELECT id, name, email, email_verified_at, is_platform_admin, password_hash
          FROM users WHERE id = $1`,
         [req.auth.userId],
       )
@@ -620,6 +621,7 @@ export function createAuthRouter(deps: {
           email: user.email,
           emailVerifiedAt: user.email_verified_at,
           isPlatformAdmin,
+          hasPassword: user.password_hash != null,
         },
         organization: {
           id: org.id,
@@ -678,6 +680,238 @@ export function createAuthRouter(deps: {
     )
     setAccessCookie(res, newAccess, config.auth)
     return res.json({ organizationId: membership.organization_id, role: membership.role })
+  })
+
+  // --------------------------------------------------------------------------
+  // POST /api/auth/change-password
+  // --------------------------------------------------------------------------
+  router.post('/auth/change-password', requireAuth, async (req: Request, res: Response) => {
+    const parsed = changePasswordSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' })
+    if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
+
+    try {
+      const { rows } = await pool.query<{ password_hash: string | null }>(
+        `SELECT password_hash FROM users WHERE id = $1`,
+        [req.auth.userId],
+      )
+      const u = rows[0]
+      if (!u?.password_hash) {
+        return res.status(400).json({
+          error: 'Esta conta usa Google. Use "Enviar link por e-mail" para definir uma senha.',
+          reason: 'google_only',
+        })
+      }
+
+      const ok = await verifyPassword(parsed.data.currentPassword, u.password_hash)
+      if (!ok) return res.status(401).json({ error: 'Senha atual incorreta' })
+
+      const passwordHash = await hashPassword(parsed.data.newPassword)
+      await pool.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [
+        passwordHash,
+        req.auth.userId,
+      ])
+      return res.json({ ok: true })
+    } catch (err) {
+      console.error('[auth/change-password] erro:', err)
+      return res.status(500).json({ error: 'Erro ao alterar senha' })
+    }
+  })
+
+  // --------------------------------------------------------------------------
+  // POST /api/auth/send-password-reset-self
+  // --------------------------------------------------------------------------
+  router.post('/auth/send-password-reset-self', requireAuth, async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
+    try {
+      const mailResult = await issuePasswordReset(pool, config, mail, req.auth.userId)
+      if (isAuthMailFailure(mailResult)) {
+        if (config.mail.required) {
+          return respondAuthMailFailure(res, config, mailResult)
+        }
+        return res.json({ sent: false, reason: mailResult.reason })
+      }
+      return res.json({
+        sent: true,
+        ...(config.nodeEnv !== 'production' && mailResult.devResetUrl
+          ? { devResetUrl: mailResult.devResetUrl }
+          : {}),
+      })
+    } catch (err) {
+      console.error('[auth/send-password-reset-self] erro:', err)
+      return res.status(500).json({ error: 'Erro ao enviar e-mail' })
+    }
+  })
+
+  // --------------------------------------------------------------------------
+  // POST /api/auth/request-email-change
+  // --------------------------------------------------------------------------
+  router.post('/auth/request-email-change', requireAuth, async (req: Request, res: Response) => {
+    const parsed = requestEmailChangeSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' })
+    if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
+
+    const { newEmail, password } = parsed.data
+    if (newEmail === req.auth.email.toLowerCase()) {
+      return res.status(400).json({ error: 'O novo e-mail é igual ao atual' })
+    }
+
+    try {
+      const { rows } = await pool.query<{ password_hash: string | null }>(
+        `SELECT password_hash FROM users WHERE id = $1`,
+        [req.auth.userId],
+      )
+      const u = rows[0]
+      if (!u?.password_hash) {
+        return res.status(400).json({
+          error: 'Contas Google-only não podem alterar e-mail por senha. Contacte o suporte.',
+          reason: 'google_only',
+        })
+      }
+      const ok = await verifyPassword(password, u.password_hash)
+      if (!ok) return res.status(401).json({ error: 'Senha incorreta' })
+
+      const taken = await pool.query<{ id: string }>(
+        `SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND id <> $2 LIMIT 1`,
+        [newEmail, req.auth.userId],
+      )
+      if (taken.rows.length > 0) {
+        return res.status(409).json({ error: 'Este e-mail já está em uso' })
+      }
+
+      const mailResult = await issueEmailChangeRequest(
+        pool,
+        config,
+        mail,
+        req.auth.userId,
+        newEmail,
+      )
+      if (isAuthMailFailure(mailResult)) {
+        if (config.mail.required) {
+          return respondAuthMailFailure(res, config, mailResult)
+        }
+        return res.json({
+          sent: false,
+          reason: mailResult.reason,
+          ...(config.nodeEnv !== 'production' && mailResult.devVerificationCode
+            ? { devVerificationCode: mailResult.devVerificationCode }
+            : {}),
+        })
+      }
+      return res.json({
+        sent: true,
+        ...(config.nodeEnv !== 'production' && mailResult.devVerificationCode
+          ? { devVerificationCode: mailResult.devVerificationCode }
+          : {}),
+      })
+    } catch (err) {
+      console.error('[auth/request-email-change] erro:', err)
+      return res.status(500).json({ error: 'Erro ao solicitar alteração de e-mail' })
+    }
+  })
+
+  // --------------------------------------------------------------------------
+  // POST /api/auth/confirm-email-change
+  // --------------------------------------------------------------------------
+  router.post('/auth/confirm-email-change', requireAuth, async (req: Request, res: Response) => {
+    const parsed = confirmEmailChangeSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' })
+    if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
+
+    const codeHash = hashToken(parsed.data.code)
+    try {
+      const { rows } = await pool.query<{
+        id: string
+        new_email: string
+        expires_at: string
+      }>(
+        `SELECT id, new_email, expires_at FROM email_change_requests
+         WHERE user_id = $1 AND code_hash = $2 AND consumed_at IS NULL
+         ORDER BY created_at DESC LIMIT 1`,
+        [req.auth.userId, codeHash],
+      )
+      const r = rows[0]
+      if (!r) return res.status(400).json({ error: 'Código inválido' })
+      if (new Date(r.expires_at).getTime() < Date.now()) {
+        return res.status(400).json({ error: 'Código expirado' })
+      }
+
+      const taken = await pool.query<{ id: string }>(
+        `SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND id <> $2 LIMIT 1`,
+        [r.new_email, req.auth.userId],
+      )
+      if (taken.rows.length > 0) {
+        return res.status(409).json({ error: 'Este e-mail já está em uso' })
+      }
+
+      await pool.query(
+        `UPDATE email_change_requests SET consumed_at = NOW() WHERE id = $1`,
+        [r.id],
+      )
+      await pool.query(
+        `UPDATE users SET email = $2, email_verified_at = NOW() WHERE id = $1`,
+        [req.auth.userId, r.new_email],
+      )
+
+      const refresh = req.cookies?.[refreshCookieName(config.auth)]
+      const currentRefreshHash =
+        refresh && typeof refresh === 'string' ? hashToken(refresh) : null
+      await pool.query(
+        `UPDATE sessions SET revoked_at = NOW()
+         WHERE user_id = $1 AND revoked_at IS NULL
+         AND ($2::text IS NULL OR refresh_token_hash <> $2)`,
+        [req.auth.userId, currentRefreshHash],
+      )
+
+      const newAccess = signAccessToken(
+        {
+          sub: req.auth.userId,
+          org: req.auth.orgId,
+          role: req.auth.role,
+          name: req.auth.name,
+          email: r.new_email,
+        },
+        config.auth,
+      )
+      setAccessCookie(res, newAccess, config.auth)
+
+      return res.json({ ok: true, email: r.new_email })
+    } catch (err) {
+      console.error('[auth/confirm-email-change] erro:', err)
+      return res.status(500).json({ error: 'Erro ao confirmar e-mail' })
+    }
+  })
+
+  // --------------------------------------------------------------------------
+  // POST /api/auth/resend-verification-self
+  // --------------------------------------------------------------------------
+  router.post('/auth/resend-verification-self', requireAuth, async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).json({ error: 'Não autenticado' })
+    try {
+      const mailResult = await issueEmailVerification(pool, config, mail, req.auth.userId)
+      if (mailResult.alreadyVerified) return res.json({ alreadyVerified: true })
+      if (isAuthMailFailure(mailResult)) {
+        if (config.mail.required) {
+          return respondAuthMailFailure(res, config, mailResult)
+        }
+        return res.json({
+          sent: false,
+          reason: mailResult.reason,
+          ...(config.nodeEnv !== 'production' && mailResult.devVerificationCode
+            ? { devVerificationCode: mailResult.devVerificationCode }
+            : {}),
+        })
+      }
+      return res.json({
+        sent: true,
+        ...(config.nodeEnv !== 'production' && mailResult.devVerificationCode
+          ? { devVerificationCode: mailResult.devVerificationCode }
+          : {}),
+      })
+    } catch (err) {
+      console.error('[auth/resend-verification-self] erro:', err)
+      return res.status(500).json({ error: 'Erro ao reenviar verificação' })
+    }
   })
 
   return router

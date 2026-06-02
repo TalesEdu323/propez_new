@@ -23,6 +23,7 @@ interface PublicProposta {
   id: string;
   cliente_id: string | null;
   cliente_nome: string;
+  clienteEmail?: string;
   servicos: string[];
   valor: number;
   status: 'pendente' | 'aprovada' | 'recusada';
@@ -34,6 +35,8 @@ interface PublicProposta {
   data_criacao: string;
   rubricaStatus?: string | null;
   rubricaSigningUrl?: string | null;
+  contractSignStatus?: string | null;
+  contractSigningUrl?: string | null;
   clienteContratoRecebidoAt?: string | null;
   contratoConcluidoAt?: string | null;
   fluxo?: ProposalFlowConfig;
@@ -88,6 +91,7 @@ export default function PublicProposta({ token }: Props) {
     });
     setData(res);
     setClientName(res.proposta.cliente_nome ?? '');
+    setClientEmail(res.proposta.clienteEmail ?? '');
   }, [token]);
 
   useEffect(() => {
@@ -147,31 +151,53 @@ export default function PublicProposta({ token }: Props) {
   const isDecided = proposta?.status === 'aprovada' || proposta?.status === 'recusada';
   const showSign = isDecided && proposta?.status === 'aprovada' && flowHasStep(fluxo, 'sign');
 
+  const [retryingSignature, setRetryingSignature] = useState(false);
+
+  const signStatus = proposta?.contractSignStatus ?? proposta?.rubricaStatus;
+  const signingUrl = proposta?.contractSigningUrl ?? proposta?.rubricaSigningUrl;
+
   const awaitingRubricaLink =
     showSign &&
-    !proposta?.rubricaSigningUrl &&
-    proposta?.rubricaStatus !== 'failed' &&
-    proposta?.rubricaStatus !== 'cancelled' &&
-    proposta?.rubricaStatus !== 'signed';
+    !signingUrl &&
+    signStatus !== 'signed';
 
   const prepareSignatureRef = useRef(false);
 
+  const callPrepareSignature = useCallback(async () => {
+    const res = await api.post<{ proposta: PublicProposta; journey?: JourneyInfo; error?: string }>(
+      `/api/public/propostas/${encodeURIComponent(token)}/prepare-signature`,
+      {},
+      { skipRefresh: true },
+    );
+    setData((prev) => (prev ? { ...prev, proposta: res.proposta, journey: res.journey } : prev));
+    return res;
+  }, [token]);
+
   useEffect(() => {
     if (!awaitingRubricaLink || prepareSignatureRef.current) return;
+    if (signStatus === 'failed' || signStatus === 'cancelled') return;
     prepareSignatureRef.current = true;
     (async () => {
       try {
-        const res = await api.post<{ proposta: PublicProposta; journey?: JourneyInfo }>(
-          `/api/public/propostas/${encodeURIComponent(token)}/prepare-signature`,
-          {},
-          { skipRefresh: true },
-        );
-        setData((prev) => (prev ? { ...prev, proposta: res.proposta, journey: res.journey } : prev));
+        await callPrepareSignature();
       } catch {
         prepareSignatureRef.current = false;
       }
     })();
-  }, [awaitingRubricaLink, token]);
+  }, [awaitingRubricaLink, signStatus, callPrepareSignature]);
+
+  const retrySignature = async () => {
+    setRetryingSignature(true);
+    prepareSignatureRef.current = true;
+    try {
+      await callPrepareSignature();
+    } catch (err) {
+      prepareSignatureRef.current = false;
+      alert(err instanceof ApiError ? err.message : 'Não foi possível preparar a assinatura.');
+    } finally {
+      setRetryingSignature(false);
+    }
+  };
 
   useEffect(() => {
     if (!awaitingRubricaLink) return;
@@ -192,6 +218,10 @@ export default function PublicProposta({ token }: Props) {
   };
 
   const handleProposalAction = () => {
+    if (proposta) {
+      setClientName(proposta.cliente_nome ?? '');
+      setClientEmail(proposta.clienteEmail ?? '');
+    }
     setDockVisible(true);
     scrollToDecision();
   };
@@ -310,7 +340,9 @@ export default function PublicProposta({ token }: Props) {
                 orgName={org.name}
                 publicToken={token}
                 onConfirmReceipt={confirmReceipt}
+                onRetrySignature={retrySignature}
                 confirming={isSubmitting}
+                retrying={retryingSignature}
               />
             )}
             {showPay && (
@@ -343,7 +375,13 @@ export default function PublicProposta({ token }: Props) {
         <ProposalDecisionDock
           orgName={org.name}
           visible={dockVisible}
-          onApprove={() => { setFormOpen('approve'); }}
+          onApprove={() => {
+            if (proposta) {
+              setClientName(proposta.cliente_nome ?? '');
+              setClientEmail(proposta.clienteEmail ?? '');
+            }
+            setFormOpen('approve');
+          }}
           onReject={() => { setFormOpen('reject'); }}
           disabled={isSubmitting}
         />

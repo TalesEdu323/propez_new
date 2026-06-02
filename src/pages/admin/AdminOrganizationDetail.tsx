@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import AdminPageShell from './AdminPageShell';
 import { api } from '../../lib/apiClient';
 import { formatBRL, formatDateBR } from '../../lib/format';
@@ -58,6 +58,9 @@ export default function AdminOrganizationDetail({
   const [saving, setSaving] = useState(false);
   const [savingBrand, setSavingBrand] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -98,6 +101,23 @@ export default function AdminOrganizationDetail({
       await load();
     } finally {
       setSavingBrand(false);
+    }
+  };
+
+  const confirmDeleteOrg = async () => {
+    if (!data) return;
+    if (deleteConfirm.trim() !== data.organization.name.trim()) {
+      alert('Digite o nome da organização exatamente como aparece acima.');
+      return;
+    }
+    setDeleting(true);
+    try {
+      await api.delete(`/api/admin/organizations/${orgId}`);
+      navigate('admin-organizations');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao excluir organização');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -288,9 +308,62 @@ export default function AdminOrganizationDetail({
                 </ul>
               </div>
             )}
+
+            <div className="apple-card p-6 border border-red-100 bg-red-50/30">
+              <h3 className="text-sm font-semibold text-red-700 uppercase mb-2">Zona de perigo</h3>
+              <p className="text-xs text-zinc-600 mb-3">
+                Excluir apaga propostas, clientes, membros e dados vinculados. Assinaturas Stripe
+                serão canceladas.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirm('');
+                  setShowDeleteModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold w-full justify-center"
+              >
+                <Trash2 className="w-4 h-4" /> Excluir organização
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
+
+      {showDeleteModal && data && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="apple-card p-6 w-full max-w-md border border-red-100">
+            <h3 className="text-lg font-bold text-red-700 mb-1">Excluir organização</h3>
+            <p className="text-sm text-zinc-600 mb-4">
+              Digite <strong>{data.organization.name}</strong> para confirmar a exclusão permanente.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              className="w-full px-3 py-2.5 border border-black/5 rounded-xl text-sm bg-zinc-50 mb-4"
+              placeholder="Nome da organização"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 text-sm font-semibold text-zinc-600"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void confirmDeleteOrg()}
+                className="px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminPageShell>
   );
 }

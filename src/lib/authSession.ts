@@ -22,6 +22,7 @@ export interface CurrentUser {
   email: string;
   emailVerifiedAt: string | null;
   isPlatformAdmin?: boolean;
+  hasPassword?: boolean;
 }
 
 export interface CurrentOrg {

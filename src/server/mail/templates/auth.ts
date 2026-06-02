@@ -32,6 +32,33 @@ export function renderVerificationHtml(
   })
 }
 
+export function renderEmailChangeHtml(
+  branding: EmailBranding,
+  name: string,
+  code: string,
+  newEmail: string,
+): string {
+  const safeName = escapeHtml(name || 'utilizador')
+  const safeEmail = escapeHtml(newEmail)
+  const body = [
+    renderHeading('Confirmar novo e-mail'),
+    renderLead(
+      `Olá <strong>${safeName}</strong>, recebemos um pedido para alterar o e-mail da sua conta PropEZ para <strong>${safeEmail}</strong>.`,
+    ),
+    renderCodeBlock(code),
+    renderParagraph(
+      'Use o código acima para confirmar a alteração. Expira em <strong>15 minutos</strong>. Se não foi você, ignore este e-mail.',
+    ),
+  ].join('')
+
+  return renderEmailLayout({
+    branding,
+    preheader: `Confirme seu novo e-mail PropEZ: ${code}`,
+    title: 'Confirmar novo e-mail PropEZ',
+    bodyHtml: body,
+  })
+}
+
 export function renderResetHtml(
   branding: EmailBranding,
   name: string,

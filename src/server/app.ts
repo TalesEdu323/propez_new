@@ -46,8 +46,13 @@ import { createBlogRouter } from './routes/blog.js';
 import { createNewsletterRouter } from './routes/newsletter.js';
 import { createNotificationsRouter } from './routes/notifications.js';
 import { createAdminRouter } from './routes/admin.js';
+import { createAdminGrowthRouter } from './routes/adminGrowth.js';
 import { createAdminPostsRouter } from './routes/adminPosts.js';
 import { createMarketplaceRouter, createAdminMarketplaceRouter } from './routes/marketplace.js';
+import {
+  createAffiliateRedirectRouter,
+  createAffiliateTrackingRouter,
+} from './routes/affiliateTracking.js';
 import { errorHandler } from './errorHandler.js';
 import { logStartupIntegrationDiagnostics } from './startupDiagnostics.js';
 
@@ -179,6 +184,8 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   );
 
   // 7) Rotas públicas (proposta pelo link)
+  app.use(createAffiliateRedirectRouter({ pool, config }));
+  app.use('/api', createAffiliateTrackingRouter({ pool }));
   app.use(
     '/api/public/propostas',
     createPublicPropostasRouter({
@@ -197,13 +204,14 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
 
   // 8) Painel admin (super-admin do SaaS) — exige requireAuth + requirePlatformAdmin
   app.use('/api/marketplace', createMarketplaceRouter({ pool, config }));
-  app.use('/api/admin', createAdminRouter({ pool, config }));
+  app.use('/api/admin', createAdminRouter({ pool, config, mail, stripe }));
+  app.use('/api/admin', createAdminGrowthRouter({ pool, config, stripe }));
   app.use('/api/admin', createAdminMarketplaceRouter({ pool, config }));
   app.use('/api', createAdminPostsRouter({ pool, config, mail }));
 
   // 9) Utilitárias
   app.use('/api', createHealthRouter({ pool, integrationsConfig, config }));
-  app.use('/api', createCheckoutRouter({ stripe, config }));
+  app.use('/api', createCheckoutRouter({ stripe, config, pool }));
   app.use('/api', createNotificationsRouter({ pool, config }));
   app.use('/api', createBlogRouter({ pool }));
   app.use('/api', createNewsletterRouter({ pool }));

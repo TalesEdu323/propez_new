@@ -39,7 +39,7 @@ export function createSigningRouter(deps: {
     const rel = docRows[0]?.signed_pdf_path || docRows[0]?.original_pdf_path;
     if (!rel) return res.status(404).end();
     try {
-      const buf = await readPdf(rel);
+      const buf = await readPdf(rel, { pool });
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', 'inline; filename="contrato.pdf"');
       return res.send(buf);
@@ -87,7 +87,7 @@ export function createPublicValidityRouter(deps: { pool: Pool; config: Environme
     let originalBuffer: Buffer | undefined;
     if (document.original_pdf_path) {
       try {
-        originalBuffer = await readPdf(document.original_pdf_path);
+        originalBuffer = await readPdf(document.original_pdf_path, { pool: deps.pool });
       } catch {
         /* optional */
       }

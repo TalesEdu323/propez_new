@@ -4,6 +4,15 @@ import type { Pool } from 'pg';
 import Stripe from 'stripe';
 import type { EnvironmentConfig } from '../env.js';
 import { insertSubscriptionEvent, recordPlanChange } from '../services/subscriptionEvents.js';
+import {
+  recordAffiliateCommission,
+  recordSubscriptionConversion,
+  fetchOrgAffiliateInfo,
+} from '../services/affiliateCommissions.js';
+import {
+  incrementCouponRedemption,
+  resolvePromotionCodeForCheckout,
+} from '../services/stripeCoupons.js';
 
 export interface StripeWebhookOptions {
   stripe: Stripe;
@@ -14,6 +23,7 @@ export interface StripeWebhookOptions {
 export interface StripeCheckoutOptions {
   stripe: Stripe;
   config: EnvironmentConfig;
+  pool: Pool;
 }
 
 type PlanId = 'pro' | 'business';
@@ -226,6 +236,8 @@ export function createStripeWebhookRouter({ stripe, config, pool }: StripeWebhoo
                 ? new Date(periodEndSec * 1000).toISOString()
                 : null;
 
+              const couponCode = session.metadata?.coupon_code ?? null;
+
               await pool.query(
                 `UPDATE organizations SET
                    plan = $2,
@@ -233,9 +245,10 @@ export function createStripeWebhookRouter({ stripe, config, pool }: StripeWebhoo
                    stripe_customer_id = COALESCE($4, stripe_customer_id),
                    stripe_subscription_id = COALESCE($5, stripe_subscription_id),
                    plan_started_at = COALESCE(plan_started_at, NOW()),
-                   plan_renews_at = $6
+                   plan_renews_at = $6,
+                   referred_coupon_code = COALESCE($7, referred_coupon_code)
                  WHERE id = $1`,
-                [orgId, planMatch.plan, planMatch.cycle, customerId, subscriptionId, periodEndIso],
+                [orgId, planMatch.plan, planMatch.cycle, customerId, subscriptionId, periodEndIso, couponCode],
               );
 
               await recordPlanChange(pool, {
@@ -246,6 +259,18 @@ export function createStripeWebhookRouter({ stripe, config, pool }: StripeWebhoo
                 toCycle: planMatch.cycle,
                 stripeEventId: `${event.id}:sub`,
               });
+
+              const affiliateInfo = await fetchOrgAffiliateInfo(pool, orgId);
+              if (affiliateInfo?.affiliate_id) {
+                await recordSubscriptionConversion(pool, orgId, affiliateInfo.affiliate_id, {
+                  sessionId: session.id,
+                  plan: planMatch.plan,
+                });
+              }
+
+              if (couponCode) {
+                await incrementCouponRedemption(pool, couponCode);
+              }
             }
 
             await insertPayment(pool, {
@@ -416,6 +441,30 @@ export function createStripeWebhookRouter({ stripe, config, pool }: StripeWebhoo
                 metadata: { invoiceId: invoice.id },
               });
             }
+
+            if (orgId && event.type === 'invoice.payment_succeeded' && invoice.id) {
+              const periodStart = invoice.period_start
+                ? new Date(invoice.period_start * 1000)
+                : null;
+              const periodEnd = invoice.period_end
+                ? new Date(invoice.period_end * 1000)
+                : null;
+
+              await recordAffiliateCommission(pool, {
+                organizationId: orgId,
+                stripeInvoiceId: invoice.id,
+                amountPaidCents: invoice.amount_paid ?? 0,
+                periodStart,
+                periodEnd,
+              });
+
+              const couponCode = (
+                invoice as Stripe.Invoice & { discount?: { coupon?: { name?: string } } }
+              ).discount?.coupon?.name;
+              if (couponCode) {
+                await incrementCouponRedemption(pool, couponCode).catch(() => {});
+              }
+            }
             break;
           }
 
@@ -434,7 +483,7 @@ export function createStripeWebhookRouter({ stripe, config, pool }: StripeWebhoo
   return router;
 }
 
-export function createCheckoutRouter({ stripe, config }: StripeCheckoutOptions): Router {
+export function createCheckoutRouter({ stripe, config, pool }: StripeCheckoutOptions): Router {
   const router = express.Router();
 
   // Retorna os planos disponíveis com os price IDs configurados no servidor.
@@ -472,13 +521,19 @@ export function createCheckoutRouter({ stripe, config }: StripeCheckoutOptions):
         successPath = '/app?route=configuracoes&success=true&session_id={CHECKOUT_SESSION_ID}',
         cancelPath = '/app?route=planos&canceled=true',
         clientReferenceId,
+        organizationId,
         customerEmail,
+        promotionCode,
+        couponCode,
       } = (req.body ?? {}) as {
         priceId?: string;
         successPath?: string;
         cancelPath?: string;
         clientReferenceId?: string;
+        organizationId?: string;
         customerEmail?: string;
+        promotionCode?: string;
+        couponCode?: string;
       };
 
       if (!priceId) {
@@ -490,34 +545,91 @@ export function createCheckoutRouter({ stripe, config }: StripeCheckoutOptions):
         return res.status(400).json({ error: 'priceId não corresponde a nenhum plano configurado' });
       }
 
+      const orgRef = organizationId ?? clientReferenceId ?? undefined;
+
+      let resolvedCouponCode = (promotionCode ?? couponCode ?? '').trim() || null;
+      let affiliateId: string | null = null;
+      let affiliateDefaultCouponId: string | null = null;
+
+      if (orgRef) {
+        const orgAffiliate = await pool.query<{
+          affiliate_id: string | null;
+          default_coupon_id: string | null;
+        }>(
+          `SELECT o.affiliate_id, a.default_coupon_id
+           FROM organizations o
+           LEFT JOIN affiliates a ON a.id = o.affiliate_id
+           WHERE o.id = $1`,
+          [orgRef],
+        );
+        affiliateId = orgAffiliate.rows[0]?.affiliate_id ?? null;
+        affiliateDefaultCouponId = orgAffiliate.rows[0]?.default_coupon_id ?? null;
+      }
+
+      if (!resolvedCouponCode && affiliateDefaultCouponId) {
+        const defaultCoupon = await pool.query<{ code: string }>(
+          `SELECT code FROM promo_coupons WHERE id = $1 AND status = 'active' LIMIT 1`,
+          [affiliateDefaultCouponId],
+        );
+        resolvedCouponCode = defaultCoupon.rows[0]?.code ?? null;
+      }
+
+      const couponResolution = await resolvePromotionCodeForCheckout(pool, stripe, {
+        couponCode: resolvedCouponCode,
+        plan: planMatch.plan,
+      });
+
       const safeSuccessPath = normalizeReturnPath(
         successPath,
         '/app?route=configuracoes&success=true&session_id={CHECKOUT_SESSION_ID}',
       );
       const safeCancelPath = normalizeReturnPath(cancelPath, '/app?route=planos&canceled=true');
 
-      const session = await stripe.checkout.sessions.create({
+      const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
+        metadata: {
+          plan: planMatch.plan,
+          cycle: planMatch.cycle,
+          clientReferenceId: orgRef ?? '',
+          affiliate_id: affiliateId ?? '',
+          coupon_code: couponResolution.coupon?.code ?? resolvedCouponCode ?? '',
+        },
+      };
+
+      if (couponResolution.trialDays) {
+        subscriptionData.trial_period_days = couponResolution.trialDays;
+      }
+
+      const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: 'subscription',
         payment_method_types: ['card'],
         line_items: [{ price: priceId, quantity: 1 }],
         success_url: `${config.appUrl}${safeSuccessPath}`,
         cancel_url: `${config.appUrl}${safeCancelPath}`,
-        client_reference_id: clientReferenceId,
+        client_reference_id: orgRef,
         customer_email: customerEmail,
-        allow_promotion_codes: true,
-        subscription_data: {
-          metadata: {
-            plan: planMatch.plan,
-            cycle: planMatch.cycle,
-            clientReferenceId: clientReferenceId ?? '',
-          },
-        },
+        allow_promotion_codes: !couponResolution.stripePromotionCodeId,
+        subscription_data: subscriptionData,
         metadata: {
           plan: planMatch.plan,
           cycle: planMatch.cycle,
-          clientReferenceId: clientReferenceId ?? '',
+          clientReferenceId: orgRef ?? '',
+          affiliate_id: affiliateId ?? '',
+          coupon_code: couponResolution.coupon?.code ?? resolvedCouponCode ?? '',
         },
-      });
+      };
+
+      if (couponResolution.stripePromotionCodeId) {
+        sessionParams.discounts = [{ promotion_code: couponResolution.stripePromotionCodeId }];
+      }
+
+      const session = await stripe.checkout.sessions.create(sessionParams);
+
+      if (orgRef && resolvedCouponCode) {
+        await pool.query(
+          `UPDATE organizations SET referred_coupon_code = $2 WHERE id = $1`,
+          [orgRef, resolvedCouponCode],
+        );
+      }
 
       res.json({ id: session.id, url: session.url });
     } catch (error: unknown) {

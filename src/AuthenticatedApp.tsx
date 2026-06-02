@@ -43,6 +43,8 @@ const AdminOperations = lazy(() => import('./pages/admin/AdminOperations'));
 const AdminRequests = lazy(() => import('./pages/admin/AdminRequests'));
 const AdminOrganizationDetail = lazy(() => import('./pages/admin/AdminOrganizationDetail'));
 const AdminMarketplace = lazy(() => import('./pages/admin/AdminMarketplace'));
+const AdminAffiliates = lazy(() => import('./pages/admin/AdminAffiliates'));
+const AdminCoupons = lazy(() => import('./pages/admin/AdminCoupons'));
 const AdminBlogList = lazy(() => import('./pages/admin/AdminBlogList'));
 const AdminBlogEditor = lazy(() => import('./pages/admin/AdminBlogEditor'));
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
@@ -137,6 +139,10 @@ export default function AuthenticatedApp() {
         return session?.user.isPlatformAdmin ? <AdminUsers navigate={navigate} /> : <Dashboard navigate={navigate} />;
       case 'admin-subscriptions':
         return session?.user.isPlatformAdmin ? <AdminSubscriptions navigate={navigate} /> : <Dashboard navigate={navigate} />;
+      case 'admin-affiliates':
+        return session?.user.isPlatformAdmin ? <AdminAffiliates navigate={navigate} /> : <Dashboard navigate={navigate} />;
+      case 'admin-coupons':
+        return session?.user.isPlatformAdmin ? <AdminCoupons navigate={navigate} /> : <Dashboard navigate={navigate} />;
       case 'admin-retention':
         return session?.user.isPlatformAdmin ? <AdminRetention navigate={navigate} /> : <Dashboard navigate={navigate} />;
       case 'admin-acquisition':

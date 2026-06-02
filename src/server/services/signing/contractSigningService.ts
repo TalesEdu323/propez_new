@@ -135,7 +135,7 @@ export async function sendContractForSigning(deps: {
     if (!document) throw new Error('Falha ao criar documento');
 
     const originalPath = originalPdfRelativePath(document.id);
-    await writePdf(originalPath, pdf);
+    await writePdf(originalPath, pdf, { pool });
     await pool.query(
       `UPDATE contract_documents SET original_pdf_path = $2 WHERE id = $1`,
       [document.id, originalPath],
@@ -315,6 +315,7 @@ export async function completeSignature(deps: {
   );
 
   const { relativePath, buffer: signedPartial } = await applyClientSignatureToPdf({
+    pool: deps.pool,
     documentId: document.id,
     originalRelativePath: document.original_pdf_path,
     existingSignedRelativePath: document.signed_pdf_path,
@@ -328,12 +329,12 @@ export async function completeSignature(deps: {
     pool: deps.pool,
     document: { ...document, status: 'SIGNED', updated_at: usedAt },
     appUrl: deps.envConfig.appUrl,
-    originalPdfBuffer: await readPdf(document.original_pdf_path),
+    originalPdfBuffer: await readPdf(document.original_pdf_path, { pool: deps.pool }),
   });
 
   const finalBuffer = await buildFinalSignedPdf({ signedPdfBuffer: signedPartial, payload });
   const finalPath = relativePath.replace('_signed.pdf', '_final.pdf');
-  await writePdf(finalPath, finalBuffer);
+  await writePdf(finalPath, finalBuffer, { pool: deps.pool });
 
   await deps.pool.query(
     `UPDATE contract_documents SET
@@ -438,7 +439,7 @@ export async function readSignedPdfForDocument(pool: Pool, documentId: string): 
   );
   const path = rows[0]?.signed_pdf_path || rows[0]?.original_pdf_path;
   if (!path) return null;
-  return readPdf(path);
+  return readPdf(path, { pool });
 }
 
 export async function readSignedPdfForProposal(pool: Pool, proposalId: string): Promise<Buffer | null> {
@@ -450,7 +451,7 @@ export async function readSignedPdfForProposal(pool: Pool, proposalId: string): 
   if (!row) return null;
   if (row.contract_signed_pdf_path) {
     try {
-      return await readPdf(row.contract_signed_pdf_path);
+      return await readPdf(row.contract_signed_pdf_path, { pool });
     } catch {
       /* fall through */
     }
@@ -474,5 +475,5 @@ export async function readPartialPdfForProposal(pool: Pool, proposalId: string):
   );
   const p = docRows[0]?.original_pdf_path;
   if (!p) return null;
-  return readPdf(p);
+  return readPdf(p, { pool });
 }

@@ -3,7 +3,11 @@ import type { Transporter } from 'nodemailer'
 import { Resend } from 'resend'
 import type { MailConfig } from '../env.js'
 import type { EmailBranding } from './layout.js'
-import { renderResetHtml, renderVerificationHtml } from './templates/auth.js'
+import {
+  renderEmailChangeHtml,
+  renderResetHtml,
+  renderVerificationHtml,
+} from './templates/auth.js'
 
 export interface MailAttachment {
   filename: string
@@ -14,6 +18,12 @@ export interface MailAttachment {
 export interface MailClient {
   sendVerificationEmail(input: { to: string; name: string; code: string }): Promise<void>
   sendPasswordResetEmail(input: { to: string; name: string; resetUrl: string }): Promise<void>
+  sendEmailChangeCodeEmail(input: {
+    to: string
+    name: string
+    code: string
+    newEmail: string
+  }): Promise<void>
   sendBusinessEmail(input: {
     to: string
     subject: string
@@ -114,6 +124,14 @@ export function createMailClient(config: MailConfig, branding: EmailBranding): M
         to,
         renderResetHtml(branding, name, resetUrl),
         'reset',
+      )
+    },
+    async sendEmailChangeCodeEmail({ to, name, code, newEmail }) {
+      await dispatch(
+        'Confirme o seu novo e-mail PropEZ',
+        to,
+        renderEmailChangeHtml(branding, name, code, newEmail),
+        'email-change',
       )
     },
     async sendBusinessEmail({ to, subject, html, tag, attachment }) {

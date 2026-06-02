@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../../lib/apiClient';
 import { bootstrapSession } from '../../lib/authSession';
 import { APP_BASE_PATH } from '../../lib/appPaths';
+import { getAffiliateCode, getAffiliateSessionId, captureAffiliateFromUrl } from '../../lib/affiliateTracking';
 import { PropezLogo } from '../PropezLogo';
 import { GoogleAuthSection } from './GoogleAuthSection';
 
@@ -67,6 +68,10 @@ export function AuthForm({
     if (initialMode === 'register' && !resetToken) setMode('register');
   }, [initialMode, resetToken]);
 
+  useEffect(() => {
+    captureAffiliateFromUrl();
+  }, []);
+
   async function finishAuth() {
     const session = await bootstrapSession();
     if (!session) {
@@ -118,7 +123,14 @@ export function AuthForm({
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      await api.post('/api/auth/register', { name, company, email, password });
+      await api.post('/api/auth/register', {
+        name,
+        company,
+        email,
+        password,
+        affiliateCode: getAffiliateCode() ?? undefined,
+        affiliateSessionId: getAffiliateSessionId(),
+      });
       setMode('verify');
       setInfo('Enviamos um código de 6 dígitos para seu email.');
     } catch (err) {

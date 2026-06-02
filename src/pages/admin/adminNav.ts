@@ -11,6 +11,8 @@ import {
   LayoutTemplate,
   Inbox,
   BookOpen,
+  Link2,
+  Ticket,
 } from 'lucide-react';
 import type { AppRoute } from '../../types/navigation';
 
@@ -52,6 +54,16 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     id: 'admin-subscriptions',
     label: 'Assinaturas',
     icon: CreditCard,
+  },
+  {
+    id: 'admin-affiliates',
+    label: 'Afiliados',
+    icon: Link2,
+  },
+  {
+    id: 'admin-coupons',
+    label: 'Cupons',
+    icon: Ticket,
   },
   {
     id: 'admin-users',

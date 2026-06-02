@@ -79,7 +79,11 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
   useEffect(() => {
     if (!proposta) return;
     const lastEmail = localStorage.getItem('propez_last_email') || '';
-    setClientData(prev => ({ ...prev, nome: proposta.cliente_nome, email: prev.email || lastEmail }));
+    setClientData(prev => ({
+      ...prev,
+      nome: proposta.cliente_nome,
+      email: proposta.clienteEmail?.trim() || prev.email || lastEmail,
+    }));
     if (proposta.status === 'aprovada' && flowHasStep(proposta.fluxo, 'sign') && proposta.contratoTexto) {
       setViewState('contract');
     }

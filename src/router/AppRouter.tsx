@@ -1,11 +1,11 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { LoggedInRedirect } from '../marketing/LoggedInRedirect';
 import { LegacyRedirects } from './LegacyRedirects';
 import { RouteErrorBoundary } from './RouteErrorBoundary';
+import { captureAffiliateFromUrl, trackAffiliatePageView } from '../lib/affiliateTracking';
 import HomeRoute from './HomeRoute';
 import NotFoundPage from './NotFoundPage';
-
 const PublicProposta = lazy(() => import('../pages/PublicProposta'));
 const AuthenticatedApp = lazy(() => import('../AuthenticatedApp'));
 const SobreNosPage = lazy(() => import('../pages/marketing/SobreNosPage'));
@@ -26,9 +26,12 @@ const loadingFallback = (
 );
 
 function MarketingWrap({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    captureAffiliateFromUrl();
+    trackAffiliatePageView();
+  }, []);
   return <LoggedInRedirect>{children}</LoggedInRedirect>;
 }
-
 function PublicPropostaRoute() {
   const { token } = useParams<{ token: string }>();
   if (!token) return <Navigate to="/" replace />;

@@ -1,3 +1,4 @@
+import type { Pool } from 'pg';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { markToPdfCoords } from './pdfCoordinates.js';
 import type { ContractFieldRow } from './types.js';
@@ -25,6 +26,7 @@ async function embedImageFromDataUrl(pdfDoc: PDFDocument, dataUrl: string) {
 }
 
 export async function applyClientSignatureToPdf(input: {
+  pool: Pool;
   documentId: string;
   originalRelativePath: string;
   existingSignedRelativePath?: string | null;
@@ -34,7 +36,7 @@ export async function applyClientSignatureToPdf(input: {
   signedAt: Date;
 }): Promise<{ relativePath: string; buffer: Buffer }> {
   const sourcePath = input.existingSignedRelativePath || input.originalRelativePath;
-  const pdfBytes = await readPdf(sourcePath);
+  const pdfBytes = await readPdf(sourcePath, { pool: input.pool });
   const pdfDoc = await PDFDocument.load(pdfBytes);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
@@ -102,6 +104,6 @@ export async function applyClientSignatureToPdf(input: {
 
   const out = Buffer.from(await pdfDoc.save());
   const relativePath = signedPdfRelativePath(input.documentId);
-  await writePdf(relativePath, out);
+  await writePdf(relativePath, out, { pool: input.pool });
   return { relativePath, buffer: out };
 }
