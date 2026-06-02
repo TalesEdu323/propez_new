@@ -20,6 +20,9 @@ const SERVER_LIB_ENTRYPOINTS = [
   'src/lib/ids.ts',
   'src/lib/orgBrand.ts',
   'src/lib/planConfig.ts',
+  'src/lib/signatureConfig.ts',
+  'src/lib/documents/positioningTypes.ts',
+  'src/lib/documents/positioningConstants.ts',
   'src/server/lib/secretCrypto.ts',
 ];
 

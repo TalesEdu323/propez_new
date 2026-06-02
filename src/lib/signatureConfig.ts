@@ -4,9 +4,9 @@ import type {
   Marcador,
   PositioningSigner,
   TipoMarcador,
-} from './documents/positioningTypes';
-import { createId } from './documents/positioningTypes';
-import { DEFAULT_HEIGHT_PCT, DEFAULT_WIDTH_PCT } from './documents/positioningConstants';
+} from './documents/positioningTypes.js';
+import { createId } from './documents/positioningTypes.js';
+import { DEFAULT_HEIGHT_PCT, DEFAULT_WIDTH_PCT } from './documents/positioningConstants.js';
 
 /** Legado v1 — percentuais 0–100 */
 export interface LegacyClientField {
