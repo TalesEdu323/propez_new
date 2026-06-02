@@ -55,11 +55,13 @@ export function templateSignersToPositioning(
   signers: ContractTemplateSigner[],
   orgEmail = 'empresa@org',
 ): PositioningSigner[] {
-  return signers.map((s) => ({
-    id: s.id,
-    name: s.name,
-    email: s.role === 'client' ? 'cliente@proposta' : orgEmail,
-  }));
+  return signers
+    .filter((s): s is ContractTemplateSigner => !!s?.id)
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      email: s.role === 'client' ? 'cliente@proposta' : orgEmail,
+    }));
 }
 
 function legacyFieldToMarcador(
@@ -80,7 +82,20 @@ function legacyFieldToMarcador(
   };
 }
 
-export function normalizeSignatureConfig(
+function mapStoredFields(fields: Marcador[]): Marcador[] {
+  return fields
+    .filter((f): f is Marcador => !!f && typeof f === 'object')
+    .map((f) => ({
+      ...f,
+      xPct: pctToUi(f.xPct),
+      yPct: pctToUi(f.yPct),
+      widthPct: pctToUi(f.widthPct ?? DEFAULT_WIDTH_PCT),
+      heightPct: pctToUi(f.heightPct ?? DEFAULT_HEIGHT_PCT),
+    }));
+}
+
+/** Retorna apenas campos salvos — UI começa vazia se não houver config persistida. */
+export function parseSavedSignatureConfig(
   raw: unknown,
   orgName = 'Empresa',
   pageCount = 1,
@@ -89,16 +104,9 @@ export function normalizeSignatureConfig(
     const cfg = raw as Record<string, unknown>;
     if (cfg.version === 2 && Array.isArray(cfg.fields)) {
       const signers = Array.isArray(cfg.signers)
-        ? (cfg.signers as ContractTemplateSigner[])
+        ? (cfg.signers as ContractTemplateSigner[]).filter((s): s is ContractTemplateSigner => !!s?.id)
         : defaultTemplateSigners(orgName);
-      const fields = (cfg.fields as Marcador[]).map((f) => ({
-        ...f,
-        xPct: pctToUi(f.xPct),
-        yPct: pctToUi(f.yPct),
-        widthPct: pctToUi(f.widthPct ?? DEFAULT_WIDTH_PCT),
-        heightPct: pctToUi(f.heightPct ?? DEFAULT_HEIGHT_PCT),
-      }));
-      return { version: 2, signers, fields };
+      return { version: 2, signers, fields: mapStoredFields(cfg.fields as Marcador[]) };
     }
 
     const clientField = cfg.clientField as Partial<LegacyClientField> | undefined;
@@ -117,6 +125,18 @@ export function normalizeSignatureConfig(
     }
   }
 
+  return { version: 2, signers: defaultTemplateSigners(orgName), fields: [] };
+}
+
+/** Defaults de posição — usado no envio/geração quando não há campos salvos (fallback backend). */
+export function resolveSignatureConfigWithDefaults(
+  raw: unknown,
+  orgName = 'Empresa',
+  pageCount = 1,
+): ContractTemplateSignatureConfigV2 {
+  const parsed = parseSavedSignatureConfig(raw, orgName, pageCount);
+  if (parsed.fields.length > 0) return parsed;
+
   return {
     version: 2,
     signers: defaultTemplateSigners(orgName),
@@ -126,6 +146,9 @@ export function normalizeSignatureConfig(
     ],
   };
 }
+
+/** @deprecated Use parseSavedSignatureConfig (UI) ou resolveSignatureConfigWithDefaults (backend). */
+export const normalizeSignatureConfig = resolveSignatureConfigWithDefaults;
 
 export function configToMarcadores(config: ContractTemplateSignatureConfigV2): Marcador[] {
   return config.fields;
@@ -156,7 +179,7 @@ export function validateTemplateSignatureConfig(config: ContractTemplateSignatur
 }
 
 export function hasClientSignatureField(raw: unknown): boolean {
-  const cfg = normalizeSignatureConfig(raw);
+  const cfg = parseSavedSignatureConfig(raw);
   return hasSignerSignatureField(cfg, 'client');
 }
 

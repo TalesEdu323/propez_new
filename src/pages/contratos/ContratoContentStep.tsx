@@ -4,6 +4,7 @@ import { Sparkles, Upload } from 'lucide-react';
 import type { ContratoTemplate } from '../../lib/store';
 import ContractEditor from '../../components/ContractEditor';
 import { setupPdfWorker } from '../../lib/pdfSetup';
+import type { PdfPreviewSource } from '../../lib/pdfPreview';
 
 setupPdfWorker();
 
@@ -15,7 +16,7 @@ export interface ContratoContentStepProps {
   onOpenAi: () => void;
   uploading: boolean;
   onUploadPdf: (file: File) => void;
-  previewUrl: string | null;
+  previewFile: PdfPreviewSource | null;
   previewLoading: boolean;
   previewError: string | null;
 }
@@ -28,7 +29,7 @@ export function ContratoContentStep({
   onOpenAi,
   uploading,
   onUploadPdf,
-  previewUrl,
+  previewFile,
   previewLoading,
   previewError,
 }: ContratoContentStepProps) {
@@ -143,7 +144,7 @@ export function ContratoContentStep({
         </div>
       )}
 
-      {(previewLoading || previewUrl || previewError) && (
+      {(previewLoading || previewFile || previewError) && (
         <div>
           <h3 className="text-sm font-bold text-zinc-900 mb-2">Preview do documento</h3>
           <div
@@ -152,11 +153,12 @@ export function ContratoContentStep({
           >
             {previewError ? (
               <p className="p-8 text-center text-sm text-zinc-500">{previewError}</p>
-            ) : previewLoading || !previewUrl ? (
+            ) : previewLoading || !previewFile ? (
               <p className="p-8 text-center text-sm text-zinc-400">Gerando preview…</p>
             ) : (
               <Document
-                file={previewUrl}
+                file={previewFile}
+                onLoadError={() => undefined}
                 loading={<p className="p-8 text-sm text-zinc-400">Carregando PDF…</p>}
                 error={
                   <p className="p-8 text-sm text-zinc-500">Não foi possível exibir o preview.</p>

@@ -5,18 +5,24 @@ import { store, ContratoTemplate } from '../lib/store';
 import { useContratos, useUserConfig } from '../hooks/useStoreEntity';
 import { formatDateBR } from '../lib/format';
 import { AiBriefPromptModal } from '../components/ia/AiBriefPromptModal';
-import { api } from '../lib/apiClient';
+import { api, apiFetch, ApiError } from '../lib/apiClient';
+import { blobToPdfPreviewSource } from '../lib/pdfPreview';
+import type { PdfPreviewSource } from '../lib/pdfPreview';
 import type { Marcador } from '../lib/documents/positioningTypes';
 import {
   defaultTemplateSigners,
   marcadoresToConfig,
-  normalizeSignatureConfig,
+  parseSavedSignatureConfig,
   templateSignersToPositioning,
   validateTemplateSignatureConfig,
 } from '../lib/signatureConfig';
 import { ContratoOriginStep } from './contratos/ContratoOriginStep';
 import { ContratoContentStep } from './contratos/ContratoContentStep';
 import { ContratoSignatureStep } from './contratos/ContratoSignatureStep';
+import { ListingViewToggle, createListingViewState } from '../components/listing/ListingViewToggle';
+import { LISTING_GRID_CLASS, LISTING_LIST_CLASS } from '../components/listing/listingLayout';
+
+const CONTRATOS_VIEW_KEY = 'propez-listing-view-contratos';
 
 type WizardStep = 'choose' | 'content' | 'signature';
 
@@ -24,6 +30,9 @@ export default function Contratos() {
   const contratos = useContratos();
   const userConfig = useUserConfig();
   const [searchTerm, setSearchTerm] = useState('');
+  const [listView, setListView] = useState<'grid' | 'list'>(() =>
+    createListingViewState(CONTRATOS_VIEW_KEY, 'grid'),
+  );
   const [isEditing, setIsEditing] = useState(false);
   const [wizardStep, setWizardStep] = useState<WizardStep>('choose');
   const [currentContrato, setCurrentContrato] = useState<Partial<ContratoTemplate> | null>(null);
@@ -31,7 +40,7 @@ export default function Contratos() {
   const [marcadores, setMarcadores] = useState<Marcador[]>([]);
   const [selectedSignerId, setSelectedSignerId] = useState<string | null>('client');
   const [currentPage, setCurrentPage] = useState(1);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<PdfPreviewSource | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -48,13 +57,47 @@ export default function Contratos() {
     setPreviewLoading(true);
     setPreviewError(null);
     try {
-      const blob = await api.getBlob(`/api/contratos/${contratoId}/preview-pdf`);
-      setPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return URL.createObjectURL(blob);
-      });
-    } catch {
-      setPreviewError('Não foi possível carregar o preview do contrato.');
+      const res = await apiFetch(`/api/contratos/${contratoId}/preview-pdf`, { method: 'GET' });
+      if (!res.ok) {
+        if (res.status === 401) {
+          setPreviewFile(null);
+          setPreviewError('Sessão expirada. Faça login novamente.');
+          return;
+        }
+        const err = await res.json().catch(() => ({}));
+        const msg =
+          typeof err === 'object' && err && 'error' in err && typeof err.error === 'string'
+            ? err.error
+            : 'Não foi possível carregar o preview do contrato.';
+        setPreviewFile(null);
+        setPreviewError(msg);
+        return;
+      }
+      const ct = res.headers.get('content-type') || '';
+      const blob = await res.blob();
+      const source = await blobToPdfPreviewSource(blob);
+      if (!source && !ct.includes('application/pdf')) {
+        setPreviewFile(null);
+        setPreviewError(
+          'PDF não encontrado ou inválido. Envie o arquivo novamente na etapa de conteúdo.',
+        );
+        return;
+      }
+      if (!source) {
+        setPreviewFile(null);
+        setPreviewError('O servidor não retornou um PDF válido.');
+        return;
+      }
+      setPreviewFile(source);
+    } catch (e) {
+      setPreviewFile(null);
+      if (e instanceof ApiError && e.status === 401) {
+        setPreviewError('Sessão expirada. Faça login novamente.');
+      } else {
+        setPreviewError(
+          e instanceof Error ? e.message : 'Não foi possível carregar o preview do contrato.',
+        );
+      }
     } finally {
       setPreviewLoading(false);
     }
@@ -62,26 +105,18 @@ export default function Contratos() {
 
   useEffect(() => {
     if (!isEditing || wizardStep === 'choose') {
-      setPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
+      setPreviewFile(null);
+      setPreviewError(null);
       return;
     }
     if (currentContrato?.id) {
       void loadPreview(currentContrato.id);
     }
-    return () => {
-      setPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
-    };
   }, [isEditing, wizardStep, currentContrato?.id, currentContrato?.sourceType, loadPreview]);
 
   useEffect(() => {
     if (!currentContrato) return;
-    const cfg = normalizeSignatureConfig(
+    const cfg = parseSavedSignatureConfig(
       currentContrato.signatureConfig,
       orgName,
       pageCount,
@@ -100,6 +135,8 @@ export default function Contratos() {
     setWizardStep('choose');
     setMarcadores([]);
     setSelectedSignerId('client');
+    setPreviewFile(null);
+    setPreviewError(null);
   };
 
   const handleAiContract = (result: { titulo: string; texto: string }) => {
@@ -128,7 +165,10 @@ export default function Contratos() {
       sourceType,
     });
     setCurrentContrato(saved);
-    store.saveContratos([saved, ...contratos.filter((c) => c.id !== saved.id)]);
+    store.saveContratos([
+      saved,
+      ...contratos.filter((c): c is ContratoTemplate => !!c?.id && c.id !== saved.id),
+    ]);
     return saved;
   };
 
@@ -140,13 +180,16 @@ export default function Contratos() {
     try {
       const form = new FormData();
       form.append('file', file);
-      const res = await fetch(`/api/contratos/${saved.id}/upload-pdf`, {
+      const res = await apiFetch(`/api/contratos/${saved.id}/upload-pdf`, {
         method: 'POST',
         body: form,
-        credentials: 'include',
       });
-      const data = (await res.json().catch(() => ({}))) as ContratoTemplate & { error?: string; pageCount?: number };
+      const data = (await res.json().catch(() => ({}))) as ContratoTemplate & {
+        error?: string;
+        pageCount?: number;
+      };
       if (!res.ok) throw new Error(data.error || 'Falha no upload');
+      if (!data.id) throw new Error('Resposta inválida do servidor.');
       const updated: ContratoTemplate = {
         ...saved,
         ...data,
@@ -156,9 +199,11 @@ export default function Contratos() {
       setCurrentContrato(updated);
       setSourceType('pdf');
       store.saveContratos(
-        contratos.some((c) => c.id === updated.id)
-          ? contratos.map((c) => (c.id === updated.id ? updated : c))
-          : [updated, ...contratos],
+        contratos.some((c) => c?.id === updated.id)
+          ? contratos
+              .filter((c): c is ContratoTemplate => !!c?.id)
+              .map((c) => (c.id === updated.id ? updated : c))
+          : [updated, ...contratos.filter((c): c is ContratoTemplate => !!c?.id)],
       );
       void loadPreview(updated.id);
     } catch (err) {
@@ -192,7 +237,13 @@ export default function Contratos() {
         sourceType,
       });
       setCurrentContrato(updated);
-      store.saveContratos(contratos.map((c) => (c.id === updated.id ? updated : c)));
+      if (updated?.id) {
+        store.saveContratos(
+          contratos
+            .filter((c): c is ContratoTemplate => !!c?.id)
+            .map((c) => (c.id === updated.id ? updated : c)),
+        );
+      }
       return updated;
     }
     return draft;
@@ -201,6 +252,8 @@ export default function Contratos() {
   const handleAdvanceToSignature = async () => {
     const saved = await persistContent();
     if (!saved) return;
+    const savedCfg = parseSavedSignatureConfig(saved.signatureConfig, orgName, pageCount);
+    if (savedCfg.fields.length === 0) setMarcadores([]);
     void loadPreview(saved.id);
     setWizardStep('signature');
   };
@@ -220,7 +273,13 @@ export default function Contratos() {
       const updated = await api.patch<ContratoTemplate>(`/api/contratos/${saved.id}`, {
         signatureConfig,
       });
-      store.saveContratos(contratos.map((c) => (c.id === updated.id ? updated : c)));
+      if (updated?.id) {
+        store.saveContratos(
+          contratos
+            .filter((c): c is ContratoTemplate => !!c?.id)
+            .map((c) => (c.id === updated.id ? updated : c)),
+        );
+      }
       resetEditor();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Erro ao salvar contrato');
@@ -228,11 +287,12 @@ export default function Contratos() {
   };
 
   const handleDelete = (id: string) => {
-    store.saveContratos(contratos.filter((c) => c.id !== id));
+    store.saveContratos(contratos.filter((c): c is ContratoTemplate => !!c?.id && c.id !== id));
   };
 
-  const filteredContratos = contratos.filter((c) =>
-    c.titulo.toLowerCase().includes(searchTerm.toLowerCase()),
+  const filteredContratos = contratos.filter(
+    (c): c is ContratoTemplate =>
+      !!c?.id && !!c.titulo && c.titulo.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const stepLabels: Record<WizardStep, string> = {
@@ -346,7 +406,7 @@ export default function Contratos() {
                 onOpenAi={() => setAiOpen(true)}
                 uploading={uploading}
                 onUploadPdf={(f) => void handleUploadPdf(f)}
-                previewUrl={previewUrl}
+                previewFile={previewFile}
                 previewLoading={previewLoading}
                 previewError={previewError}
               />
@@ -361,7 +421,7 @@ export default function Contratos() {
                 documentPages={pageCount}
                 currentPage={currentPage}
                 onCurrentPageChange={setCurrentPage}
-                pdfUrl={previewUrl}
+                pdfFile={previewFile}
                 previewLoading={previewLoading}
                 previewError={previewError}
                 onNotify={showToast}
@@ -396,14 +456,21 @@ export default function Contratos() {
 
             <div className="apple-card overflow-hidden mx-0 !p-0">
               <div className="p-6 md:p-10 border-b border-zinc-100/50 bg-zinc-50/30">
-                <div className="relative max-w-md w-full">
-                  <Search className="w-4 h-4 absolute left-5 top-1/2 -translate-y-1/2 text-zinc-300" />
-                  <input
-                    type="text"
-                    placeholder="Buscar contratos..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="glass-input pl-12 pr-6 py-4 w-full text-sm font-medium"
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                  <div className="relative max-w-md w-full flex-1">
+                    <Search className="w-4 h-4 absolute left-5 top-1/2 -translate-y-1/2 text-zinc-300" />
+                    <input
+                      type="text"
+                      placeholder="Buscar contratos..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="glass-input pl-12 pr-6 py-4 w-full text-sm font-medium"
+                    />
+                  </div>
+                  <ListingViewToggle
+                    storageKey={CONTRATOS_VIEW_KEY}
+                    view={listView}
+                    onChange={setListView}
                   />
                 </div>
               </div>
@@ -421,9 +488,50 @@ export default function Contratos() {
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 p-6 sm:p-10">
+                <div
+                  className={
+                    listView === 'grid'
+                      ? `${LISTING_GRID_CLASS} p-6 sm:p-10`
+                      : `${LISTING_LIST_CLASS} p-4 sm:p-6`
+                  }
+                >
                   <AnimatePresence mode="popLayout">
-                    {filteredContratos.map((contrato, index) => (
+                    {filteredContratos.map((contrato, index) => {
+                      const openEditor = () => {
+                        setCurrentContrato(contrato);
+                        setSourceType(contrato.sourceType === 'pdf' ? 'pdf' : 'text');
+                        setWizardStep('content');
+                        setIsEditing(true);
+                      };
+                      if (listView === 'list') {
+                        return (
+                          <motion.div
+                            key={contrato.id}
+                            layout
+                            initial={{ opacity: 0, x: -8 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0 }}
+                            className="group flex cursor-pointer items-center gap-4 rounded-xl border border-zinc-100 bg-white p-4 hover:border-zinc-200 hover:shadow-md transition-all"
+                            onClick={openEditor}
+                          >
+                            <div className="w-10 h-10 rounded-xl bg-zinc-50 flex items-center justify-center shrink-0">
+                              <FileText className="w-5 h-5 text-zinc-400" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-zinc-900 truncate">{contrato.titulo}</div>
+                              <div className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mt-0.5">
+                                {contrato.sourceType === 'pdf' ? 'PDF' : 'Texto'}
+                                {contrato.signatureConfig ? ' · Assinatura' : ''}
+                              </div>
+                            </div>
+                            <span className="text-[9px] font-bold text-zinc-300 uppercase tracking-widest shrink-0 hidden sm:block">
+                              {formatDateBR(contrato.data_criacao)}
+                            </span>
+                            <ChevronRight className="w-4 h-4 text-zinc-300 shrink-0" />
+                          </motion.div>
+                        );
+                      }
+                      return (
                       <motion.div
                         key={contrato.id}
                         layout
@@ -432,12 +540,7 @@ export default function Contratos() {
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ delay: index * 0.05 }}
                         className="apple-card apple-card-hover group cursor-pointer !p-6 sm:!p-8 flex flex-col h-full"
-                        onClick={() => {
-                          setCurrentContrato(contrato);
-                          setSourceType(contrato.sourceType === 'pdf' ? 'pdf' : 'text');
-                          setWizardStep('content');
-                          setIsEditing(true);
-                        }}
+                        onClick={openEditor}
                       >
                         <div className="flex justify-between items-start mb-6 sm:mb-8">
                           <div className="w-12 h-12 sm:w-14 sm:h-14 bg-zinc-50 rounded-xl sm:rounded-2xl flex items-center justify-center group-hover:bg-zinc-900 group-hover:text-white transition-all duration-500 border border-black/[0.02]">
@@ -493,7 +596,8 @@ export default function Contratos() {
                           </div>
                         </div>
                       </motion.div>
-                    ))}
+                      );
+                    })}
                   </AnimatePresence>
                 </div>
               )}

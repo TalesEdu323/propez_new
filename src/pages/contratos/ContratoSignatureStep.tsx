@@ -1,4 +1,5 @@
 import type { Marcador, PositioningSigner } from '../../lib/documents/positioningTypes';
+import type { PdfPreviewSource } from '../../lib/pdfPreview';
 import { RubricaSignaturePositioningPanel } from '../../components/contratos/RubricaSignaturePositioningPanel';
 
 export interface ContratoSignatureStepProps {
@@ -10,7 +11,7 @@ export interface ContratoSignatureStepProps {
   documentPages: number;
   currentPage: number;
   onCurrentPageChange: (page: number) => void;
-  pdfUrl: string | null;
+  pdfFile: PdfPreviewSource | null;
   previewLoading: boolean;
   previewError: string | null;
   onNotify: (message: string) => void;
@@ -33,7 +34,7 @@ export function ContratoSignatureStep(props: ContratoSignatureStepProps) {
         documentPages={props.documentPages}
         currentPage={props.currentPage}
         onCurrentPageChange={props.onCurrentPageChange}
-        pdfUrl={props.pdfUrl}
+        pdfFile={props.pdfFile}
         loading={props.previewLoading}
         error={props.previewError}
         onNotify={props.onNotify}

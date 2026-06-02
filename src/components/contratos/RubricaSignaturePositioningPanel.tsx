@@ -18,6 +18,7 @@ import {
   hexToRgba,
 } from '../../lib/documents/positioningConstants';
 import { setupPdfWorker } from '../../lib/pdfSetup';
+import type { PdfPreviewSource } from '../../lib/pdfPreview';
 
 setupPdfWorker();
 
@@ -32,7 +33,7 @@ export interface RubricaSignaturePositioningPanelProps {
   documentPages: number;
   currentPage: number;
   onCurrentPageChange: (page: number) => void;
-  pdfUrl: string | null;
+  pdfFile: PdfPreviewSource | null;
   loading?: boolean;
   error?: string | null;
   onNotify?: (message: string) => void;
@@ -55,7 +56,7 @@ export function RubricaSignaturePositioningPanel({
   documentPages,
   currentPage,
   onCurrentPageChange,
-  pdfUrl,
+  pdfFile,
   loading,
   error,
   onNotify,
@@ -101,7 +102,7 @@ export function RubricaSignaturePositioningPanel({
     updateWidth();
     window.addEventListener('resize', updateWidth);
     return () => window.removeEventListener('resize', updateWidth);
-  }, [pdfUrl]);
+  }, [pdfFile]);
 
   const getPageRect = useCallback((pageNum: number) => {
     return pageRefs.current[pageNum]?.getBoundingClientRect() ?? null;
@@ -274,7 +275,7 @@ export function RubricaSignaturePositioningPanel({
           <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Signatários</span>
         </div>
         <ul className="space-y-2">
-          {signers.map((s, idx) => {
+          {signers.filter((s) => !!s?.id).map((s, idx) => {
             const color = getSignerColorByIndex(idx);
             const active = selectedSignerId === s.id;
             return (
@@ -308,13 +309,19 @@ export function RubricaSignaturePositioningPanel({
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 max-h-[70vh]">
           {error ? (
             <p className="text-center text-sm text-red-600 py-12">{error}</p>
-          ) : loading || !pdfUrl ? (
+          ) : loading || !pdfFile ? (
             <p className="text-center text-sm text-zinc-400 py-12">Carregando documento…</p>
           ) : (
             <Document
-              file={pdfUrl}
+              file={pdfFile}
               onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+              onLoadError={() => setNumPages(0)}
               loading={<p className="text-center text-sm text-zinc-400">Renderizando PDF…</p>}
+              error={
+                <p className="text-center text-sm text-red-600 py-12">
+                  Não foi possível exibir o documento. Volte à etapa de conteúdo e envie o PDF novamente.
+                </p>
+              }
             >
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
                 <div

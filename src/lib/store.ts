@@ -105,6 +105,7 @@ export interface Proposta {
   duracao_recorrencia?: number;
   data_envio?: string;
   data_validade?: string;
+  viewedAt?: string;
   status: 'pendente' | 'aprovada' | 'recusada';
   data_criacao: string;
   elementos: BuilderElement[];
@@ -449,7 +450,7 @@ export async function hydrateStore(force = false): Promise<void> {
     cache.servicos = (servicos ?? []).map(fromApiServico);
     cache.modelos = (modelos ?? []).map(fromApiModelo);
     cache.propostas = (propostas ?? []).map(fromApiProposta);
-    cache.contratos = (contratos ?? []).map(fromApiContrato);
+    cache.contratos = (contratos ?? []).filter(Boolean).map(fromApiContrato);
     cache.usage = usage ?? emptyUsage();
     hydrated = true;
     notify('propez_clientes');
@@ -486,7 +487,7 @@ export async function refreshEntity(key: Exclude<StoreKey, 'propez_user_config'>
     }
     case 'propez_contratos': {
       const list = await api.get<ApiContrato[]>('/api/contratos').catch(() => []);
-      cache.contratos = (list ?? []).map(fromApiContrato);
+      cache.contratos = (list ?? []).filter(Boolean).map(fromApiContrato);
       break;
     }
   }
@@ -531,8 +532,8 @@ async function diffSave<T extends { id: string }, TPayload>(
   impl: EntityApi<T, TPayload>,
 ): Promise<void> {
   const prev = getList();
-  const prevById = new Map(prev.map((i) => [i.id, i] as const));
-  const nextById = new Map(newList.map((i) => [i.id, i] as const));
+  const prevById = new Map(prev.filter(Boolean).map((i) => [i.id, i] as const));
+  const nextById = new Map(newList.filter(Boolean).map((i) => [i.id, i] as const));
 
   // Atualização otimista.
   setList(newList.slice());
