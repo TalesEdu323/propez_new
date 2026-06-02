@@ -6,14 +6,9 @@ export type PdfStoreContext = { pool: Pool };
 
 type PdfKind = 'original' | 'signed' | 'final';
 
-/** Ambientes serverless (Vercel/Lambda) não permitem escrita em disco persistente. */
-export function usesDbPdfStorage(): boolean {
-  return !!(
-    process.env.VERCEL ||
-    process.env.AWS_LAMBDA_FUNCTION_NAME ||
-    process.env.LAMBDA_TASK_ROOT
-  );
-}
+import { usesDbPdfStorage } from '../pdfStorageEnv.js';
+
+export { usesDbPdfStorage };
 
 function uploadsRoot(): string {
   if (usesDbPdfStorage()) {

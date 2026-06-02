@@ -53,6 +53,7 @@ export interface SendContractInput {
   publicToken?: string | null;
   signatureConfig?: unknown;
   contractSourceType?: 'text' | 'pdf';
+  templateContratoId?: string | null;
   templatePdfPath?: string | null;
 }
 
@@ -110,8 +111,16 @@ export async function sendContractForSigning(deps: {
 
     const orgFields = normSig.fields.filter((f) => f.signerId === 'org');
     let pdf: Buffer;
-    if (sourceType === 'pdf' && input.templatePdfPath) {
-      const templateBuffer = await readTemplatePdf(input.templatePdfPath);
+    if (sourceType === 'pdf') {
+      if (!input.templateContratoId) {
+        throw new Error('Template de contrato PDF não vinculado à proposta.');
+      }
+      const templateBuffer = await readTemplatePdf({
+        pool,
+        orgId: input.organizationId,
+        contratoId: input.templateContratoId,
+        pdfPath: input.templatePdfPath,
+      });
       pdf = await stampOrgSignatureOnPdf(templateBuffer, {
         orgName: input.companyName || 'Organização',
         orgSignatureDataUri,

@@ -1,7 +1,11 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Document, Page } from 'react-pdf';
 import { Sparkles, Upload } from 'lucide-react';
 import type { ContratoTemplate } from '../../lib/store';
 import ContractEditor from '../../components/ContractEditor';
+import { setupPdfWorker } from '../../lib/pdfSetup';
+
+setupPdfWorker();
 
 export interface ContratoContentStepProps {
   currentContrato: Partial<ContratoTemplate>;
@@ -29,7 +33,22 @@ export function ContratoContentStep({
   previewError,
 }: ContratoContentStepProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const iframeSrc = previewUrl ? `${previewUrl}#toolbar=0&navpanes=0` : null;
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const previewWrapRef = useRef<HTMLDivElement>(null);
+  const [previewWidth, setPreviewWidth] = useState(560);
+  const hasTitle = !!currentContrato.titulo?.trim();
+  const pageCount = currentContrato.pageCount ?? 0;
+
+  useEffect(() => {
+    const el = previewWrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) setPreviewWidth(Math.min(w, 720));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto w-full p-6 space-y-6">
@@ -38,12 +57,18 @@ export function ContratoContentStep({
           Título do Modelo
         </label>
         <input
+          ref={titleInputRef}
           type="text"
           value={currentContrato.titulo || ''}
           onChange={(e) => onContratoChange({ titulo: e.target.value })}
           placeholder="Ex: Contrato de Prestação de Serviços Web"
           className="w-full text-2xl font-semibold text-zinc-900 placeholder:text-zinc-200 focus:outline-none"
         />
+        {sourceType === 'pdf' && !hasTitle && (
+          <p className="text-xs text-amber-700 mt-2">
+            Informe o título antes de enviar o PDF — ele identifica o modelo na lista.
+          </p>
+        )}
       </div>
 
       {sourceType === 'text' && (
@@ -91,29 +116,59 @@ export function ContratoContentStep({
           />
           <button
             type="button"
-            disabled={uploading}
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            disabled={uploading || !hasTitle}
+            onClick={() => {
+              if (!hasTitle) {
+                titleInputRef.current?.focus();
+                return;
+              }
+              fileInputRef.current?.click();
+            }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Upload className="w-4 h-4" />
             {uploading ? 'Enviando…' : currentContrato.pdfFileName ? 'Substituir PDF' : 'Enviar PDF'}
           </button>
           {currentContrato.pdfFileName && (
-            <span className="text-sm text-blue-800 block">{currentContrato.pdfFileName}</span>
+            <p className="text-sm text-blue-800">
+              <span className="font-medium">{currentContrato.pdfFileName}</span>
+              {pageCount > 0 && (
+                <span className="text-blue-700/80">
+                  {' '}
+                  · {pageCount} {pageCount === 1 ? 'página' : 'páginas'}
+                </span>
+              )}
+            </p>
           )}
         </div>
       )}
 
-      {(previewLoading || iframeSrc || previewError) && (
+      {(previewLoading || previewUrl || previewError) && (
         <div>
           <h3 className="text-sm font-bold text-zinc-900 mb-2">Preview do documento</h3>
-          <div className="rounded-2xl border border-black/10 overflow-hidden bg-zinc-100 aspect-[794/1123] max-h-[480px]">
+          <div
+            ref={previewWrapRef}
+            className="rounded-2xl border border-black/10 overflow-hidden bg-zinc-100 flex justify-center min-h-[200px]"
+          >
             {previewError ? (
               <p className="p-8 text-center text-sm text-zinc-500">{previewError}</p>
-            ) : previewLoading || !iframeSrc ? (
+            ) : previewLoading || !previewUrl ? (
               <p className="p-8 text-center text-sm text-zinc-400">Gerando preview…</p>
             ) : (
-              <iframe title="Preview" src={iframeSrc} className="w-full h-full min-h-[400px] border-0" />
+              <Document
+                file={previewUrl}
+                loading={<p className="p-8 text-sm text-zinc-400">Carregando PDF…</p>}
+                error={
+                  <p className="p-8 text-sm text-zinc-500">Não foi possível exibir o preview.</p>
+                }
+              >
+                <Page
+                  pageNumber={1}
+                  width={previewWidth}
+                  renderTextLayer={false}
+                  renderAnnotationLayer={false}
+                />
+              </Document>
             )}
           </div>
         </div>

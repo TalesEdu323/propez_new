@@ -70,7 +70,9 @@ export async function triggerContractSignAfterApproval(deps: {
     org_signature_url: string | null;
     modelo_signature_config: unknown;
     contract_source_type: string | null;
+    contract_template_id: string | null;
     contract_pdf_path: string | null;
+    contract_has_pdf_data: boolean;
     contrato_signature_config: unknown;
     contract_template_title: string | null;
   }>(
@@ -79,7 +81,9 @@ export async function triggerContractSignAfterApproval(deps: {
             o.name AS org_name, o.cnpj AS org_cnpj, o.signature_url AS org_signature_url,
             m.signature_config AS modelo_signature_config,
             ct.source_type AS contract_source_type,
+            ct.id::text AS contract_template_id,
             ct.pdf_path AS contract_pdf_path,
+            (ct.pdf_data IS NOT NULL) AS contract_has_pdf_data,
             ct.signature_config AS contrato_signature_config,
             ct.titulo AS contract_template_title
      FROM propostas p
@@ -91,7 +95,8 @@ export async function triggerContractSignAfterApproval(deps: {
   );
   const row = rows[0];
   const sourceType = row?.contract_source_type === 'pdf' ? 'pdf' : 'text';
-  const hasPdfTemplate = sourceType === 'pdf' && !!row?.contract_pdf_path;
+  const hasPdfTemplate =
+    sourceType === 'pdf' && (!!row?.contract_pdf_path || !!row?.contract_has_pdf_data);
   const hasText = !!row?.contrato_texto?.trim();
 
   if (!row || (!hasPdfTemplate && !hasText)) {
@@ -157,6 +162,7 @@ export async function triggerContractSignAfterApproval(deps: {
           ? row.contrato_signature_config
           : { clientField: signatureField },
       contractSourceType: sourceType,
+      templateContratoId: row.contract_template_id,
       templatePdfPath: row.contract_pdf_path,
       contractTitle: contractTitle ?? undefined,
     },

@@ -17,7 +17,9 @@ import {
 import {
   deleteTemplatePdf,
   readTemplatePdf,
+  uploadPdfErrorMessage,
   writeTemplatePdf,
+  type TemplatePdfRef,
 } from '../services/contractTemplateStorage.js'
 
 const CONTRATO_SELECT = `id, titulo, texto, source_type, pdf_path, pdf_file_name, page_count, signature_config, created_at`
@@ -82,6 +84,10 @@ const upload = multer({
   },
 })
 
+function templatePdfRef(orgId: string, contratoId: string, pdfPath?: string | null): TemplatePdfRef {
+  return { pool, orgId, contratoId, pdfPath: pdfPath ?? null }
+}
+
 async function loadContratoRow(pool: Pool, orgId: string, id: string) {
   const { rows } = await pool.query(
     `SELECT ${CONTRATO_SELECT} FROM contratos_templates WHERE organization_id = $1 AND id = $2`,
@@ -127,8 +133,10 @@ export function createContratosRouter(deps: {
     if (!row) return res.status(404).json({ error: 'Contrato não encontrado' })
 
     try {
-      if (row.source_type === 'pdf' && row.pdf_path) {
-        const buf = await readTemplatePdf(row.pdf_path)
+      if (row.source_type === 'pdf') {
+        const buf = await readTemplatePdf(
+          templatePdfRef(req.auth.orgId, req.params.id, row.pdf_path),
+        )
         res.setHeader('Content-Type', 'application/pdf')
         res.setHeader('Content-Disposition', 'inline; filename="contrato-preview.pdf"')
         return res.send(buf)
@@ -155,11 +163,13 @@ export function createContratosRouter(deps: {
   router.get('/:id/pdf', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
     const row = await loadContratoRow(pool, req.auth.orgId, req.params.id)
-    if (!row || row.source_type !== 'pdf' || !row.pdf_path) {
+    if (!row || row.source_type !== 'pdf') {
       return res.status(404).json({ error: 'PDF não encontrado' })
     }
     try {
-      const buf = await readTemplatePdf(row.pdf_path)
+      const buf = await readTemplatePdf(
+        templatePdfRef(req.auth.orgId, req.params.id, row.pdf_path),
+      )
       const name = row.pdf_file_name || 'contrato.pdf'
       res.setHeader('Content-Type', 'application/pdf')
       res.setHeader('Content-Disposition', `inline; filename="${name}"`)
@@ -206,8 +216,9 @@ export function createContratosRouter(deps: {
       const pageCount = pdfDoc.getPageCount()
       if (pageCount === 0) return res.status(400).json({ error: 'PDF vazio' })
 
-      if (row.pdf_path) await deleteTemplatePdf(row.pdf_path)
-      const pdfPath = await writeTemplatePdf(req.auth.orgId, req.params.id, file.buffer)
+      const ref = templatePdfRef(req.auth.orgId, req.params.id, row.pdf_path)
+      if (row.pdf_path || row.source_type === 'pdf') await deleteTemplatePdf(ref, row.pdf_path)
+      const pdfPath = await writeTemplatePdf(pool, req.auth.orgId, req.params.id, file.buffer)
       const safeName = (file.originalname || 'contrato.pdf').replace(/[^\w\s.-]/g, '').slice(0, 120) || 'contrato.pdf'
 
       const { rows: updated } = await pool.query(
@@ -223,8 +234,9 @@ export function createContratosRouter(deps: {
       )
       return res.json({ ...serializeContrato(updated[0]), pageCount })
     } catch (err) {
-      console.error('[contratos/upload-pdf] erro:', err)
-      return res.status(400).json({ error: 'Arquivo PDF inválido ou corrompido' })
+      const code = err && typeof err === 'object' && 'code' in err ? (err as { code: string }).code : ''
+      console.error('[contratos/upload-pdf] erro:', { code, err })
+      return res.status(400).json({ error: uploadPdfErrorMessage(err) })
     }
   })
 
@@ -253,8 +265,11 @@ export function createContratosRouter(deps: {
       }
     }
 
-    if (d.sourceType === 'text' && existing.source_type === 'pdf' && existing.pdf_path) {
-      await deleteTemplatePdf(existing.pdf_path)
+    if (d.sourceType === 'text' && existing.source_type === 'pdf') {
+      await deleteTemplatePdf(
+        templatePdfRef(req.auth.orgId, req.params.id, existing.pdf_path),
+        existing.pdf_path,
+      )
     }
 
     const { rows } = await pool.query(
@@ -265,7 +280,8 @@ export function createContratosRouter(deps: {
          signature_config = CASE WHEN $7::boolean THEN $8::jsonb ELSE signature_config END,
          pdf_path = CASE WHEN $9::boolean THEN NULL ELSE pdf_path END,
          pdf_file_name = CASE WHEN $9::boolean THEN NULL ELSE pdf_file_name END,
-         page_count = CASE WHEN $9::boolean THEN NULL ELSE page_count END
+         page_count = CASE WHEN $9::boolean THEN NULL ELSE page_count END,
+         pdf_data = CASE WHEN $9::boolean THEN NULL ELSE pdf_data END
        WHERE organization_id = $1 AND id = $2
        RETURNING ${CONTRATO_SELECT}`,
       [
@@ -287,7 +303,12 @@ export function createContratosRouter(deps: {
     if (!req.auth) return res.status(401).end()
     const row = await loadContratoRow(pool, req.auth.orgId, req.params.id)
     if (!row) return res.status(404).json({ error: 'Contrato não encontrado' })
-    if (row.pdf_path) await deleteTemplatePdf(row.pdf_path)
+    if (row.pdf_path || row.source_type === 'pdf') {
+      await deleteTemplatePdf(
+        templatePdfRef(req.auth.orgId, req.params.id, row.pdf_path),
+        row.pdf_path,
+      )
+    }
     await pool.query(`DELETE FROM contratos_templates WHERE organization_id = $1 AND id = $2`, [
       req.auth.orgId,
       req.params.id,
