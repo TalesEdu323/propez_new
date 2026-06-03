@@ -404,7 +404,7 @@ export function RubricaSignaturePositioningPanel({
           )}
         </div>
 
-        {totalPages > 1 && pdfUrl && (
+        {totalPages > 1 && pdfFile && (
           <nav className="w-12 shrink-0 border-l border-zinc-200 flex flex-col items-center justify-center gap-2 py-4">
             <button
               type="button"

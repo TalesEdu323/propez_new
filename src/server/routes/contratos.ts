@@ -85,7 +85,12 @@ const upload = multer({
   },
 })
 
-function templatePdfRef(orgId: string, contratoId: string, pdfPath?: string | null): TemplatePdfRef {
+function templatePdfRef(
+  pool: Pool,
+  orgId: string,
+  contratoId: string,
+  pdfPath?: string | null,
+): TemplatePdfRef {
   return { pool, orgId, contratoId, pdfPath: pdfPath ?? null }
 }
 
@@ -136,7 +141,7 @@ export function createContratosRouter(deps: {
     try {
       if (row.source_type === 'pdf') {
         const buf = await readTemplatePdf(
-          templatePdfRef(req.auth.orgId, req.params.id, row.pdf_path),
+          templatePdfRef(pool, req.auth.orgId, req.params.id, row.pdf_path),
         )
         res.setHeader('Content-Type', 'application/pdf')
         res.setHeader('Content-Disposition', 'inline; filename="contrato-preview.pdf"')
@@ -175,7 +180,7 @@ export function createContratosRouter(deps: {
     }
     try {
       const buf = await readTemplatePdf(
-        templatePdfRef(req.auth.orgId, req.params.id, row.pdf_path),
+        templatePdfRef(pool, req.auth.orgId, req.params.id, row.pdf_path),
       )
       const name = row.pdf_file_name || 'contrato.pdf'
       res.setHeader('Content-Type', 'application/pdf')
@@ -281,7 +286,7 @@ export function createContratosRouter(deps: {
 
     if (d.sourceType === 'text' && existing.source_type === 'pdf') {
       await deleteTemplatePdf(
-        templatePdfRef(req.auth.orgId, req.params.id, existing.pdf_path),
+        templatePdfRef(pool, req.auth.orgId, req.params.id, existing.pdf_path),
         existing.pdf_path,
       )
     }
@@ -319,7 +324,7 @@ export function createContratosRouter(deps: {
     if (!row) return res.status(404).json({ error: 'Contrato não encontrado' })
     if (row.pdf_path || row.source_type === 'pdf') {
       await deleteTemplatePdf(
-        templatePdfRef(req.auth.orgId, req.params.id, row.pdf_path),
+        templatePdfRef(pool, req.auth.orgId, req.params.id, row.pdf_path),
         row.pdf_path,
       )
     }
