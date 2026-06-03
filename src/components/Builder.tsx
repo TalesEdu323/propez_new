@@ -21,6 +21,7 @@ import {
   type PlanTier,
 } from '../lib/featureFlags';
 import { UpgradeGate } from './UpgradeGate';
+import { loadUiPreference, saveUiPreference } from '../lib/uiPreferences';
 import {
   addElementToParent as addElementToParentTree,
   updateElementRecursive as updateElementRecursiveTree,
@@ -39,8 +40,8 @@ export type BuilderSaveHandler = (
   pageLayout: BuilderPageLayout,
 ) => void;
 
-const VIEWPORT_TOOLTIP_KEY = 'propez_builder_viewport_tooltip';
-const MOBILE_CHECK_KEY = 'propez_builder_mobile_checked';
+const PREF_VIEWPORT_TOOLTIP = 'builder:viewport_tooltip_dismissed';
+const PREF_MOBILE_REVIEWED = 'builder:mobile_layout_reviewed';
 
 export default function Builder({
   initialElements,
@@ -140,9 +141,26 @@ export default function Builder({
   const [previewMode, setPreviewMode] = useState(initialPreviewMode);
   const [viewport, setViewport] = useState<BuilderViewport>(embedded ? 'mobile' : 'desktop');
   const [activeTab, setActiveTab] = useState<BuilderTab>('properties');
-  const [mobileReviewed, setMobileReviewed] = useState(
-    () => typeof sessionStorage !== 'undefined' && sessionStorage.getItem(MOBILE_CHECK_KEY) === '1',
-  );
+  const [mobileReviewed, setMobileReviewed] = useState(false);
+  const [showViewportTooltip, setShowViewportTooltip] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [tooltipDismissed, mobileDone] = await Promise.all([
+        loadUiPreference<boolean>(PREF_VIEWPORT_TOOLTIP),
+        loadUiPreference<boolean>(PREF_MOBILE_REVIEWED),
+      ]);
+      if (cancelled) return;
+      setShowViewportTooltip(!tooltipDismissed);
+      setMobileReviewed(!!mobileDone);
+      setPrefsLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (initialPageLayout) setPageLayout(normalizePageLayout(initialPageLayout));
@@ -178,7 +196,7 @@ export default function Builder({
     setViewport(v);
     if (v === 'mobile') {
       setMobileReviewed(true);
-      try { sessionStorage.setItem(MOBILE_CHECK_KEY, '1'); } catch { /* ignore */ }
+      void saveUiPreference(PREF_MOBILE_REVIEWED, true);
     }
   };
 
@@ -352,9 +370,10 @@ export default function Builder({
             previewMode={previewMode}
             viewport={viewport}
             onViewportChange={handleViewportChange}
-            showViewportTooltip={typeof localStorage !== 'undefined' && !localStorage.getItem(VIEWPORT_TOOLTIP_KEY)}
+            showViewportTooltip={prefsLoaded && showViewportTooltip}
             onDismissViewportTooltip={() => {
-              try { localStorage.setItem(VIEWPORT_TOOLTIP_KEY, '1'); } catch { /* ignore */ }
+              setShowViewportTooltip(false);
+              void saveUiPreference(PREF_VIEWPORT_TOOLTIP, true);
             }}
             saveLabel={saveLabel}
             onBack={onBack}

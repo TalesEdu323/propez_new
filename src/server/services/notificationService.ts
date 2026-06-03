@@ -121,15 +121,26 @@ async function hasProposalNotification(
   return rows.length > 0
 }
 
-function sendEmailsFireAndForget(
+/** Aguarda envios antes de encerrar a função (necessário em serverless/Vercel). */
+async function sendNotificationEmails(
   mail: MailClient,
   emails: Array<{ to: string; subject: string; html: string; tag: string; attachment?: MailAttachment }>,
-): void {
-  for (const e of emails) {
-    void mail.sendBusinessEmail(e).catch((err) => {
-      console.error(`[notifications] email ${e.tag} → ${e.to} falhou:`, err)
-    })
+): Promise<void> {
+  if (!emails.length) return
+  const started = Date.now()
+  const results = await Promise.allSettled(
+    emails.map((e) => mail.sendBusinessEmail(e)),
+  )
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i]
+    if (result.status === 'rejected') {
+      const e = emails[i]
+      console.error(`[notifications] email ${e.tag} → ${e.to} falhou:`, result.reason)
+    }
   }
+  console.info(
+    `[notifications] ${emails.length} e-mail(s) em ${Date.now() - started}ms`,
+  )
 }
 
 export async function notifyProposalEvent(deps: {
@@ -212,7 +223,7 @@ export async function notifyProposalEvent(deps: {
     }
   }
 
-  sendEmailsFireAndForget(mail, emailJobs)
+  await sendNotificationEmails(mail, emailJobs)
 }
 
 /** Dispara notificação sem bloquear a requisição. */

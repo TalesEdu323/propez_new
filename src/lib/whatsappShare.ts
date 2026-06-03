@@ -18,3 +18,11 @@ export function buildWhatsAppUrl(phone: string, message: string): string | null 
 export function buildProposalWhatsAppMessage(proposalUrl: string): string {
   return `Olá! Segue o link da sua proposta: ${proposalUrl}`;
 }
+
+export function buildComprovanteWhatsAppMessage(opts?: { title?: string; valorLabel?: string }): string {
+  const parts = ['Olá! Realizei o pagamento.'];
+  if (opts?.title?.trim()) parts.push(`Referente a: ${opts.title.trim()}.`);
+  if (opts?.valorLabel?.trim()) parts.push(`Valor: ${opts.valorLabel.trim()}.`);
+  parts.push('Nos envie seu comprovante por aqui.');
+  return parts.join(' ');
+}

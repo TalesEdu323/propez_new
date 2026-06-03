@@ -5,24 +5,16 @@ import { MarketingLayout } from '../../marketing/MarketingLayout';
 import { PageMeta } from '../../marketing/PageMeta';
 import { buildArticleJsonLd } from '../../marketing/articleJsonLd';
 import { BlogPostContent } from '../../marketing/blog/BlogPostContent';
-import { NewsletterSignup } from '../../marketing/NewsletterSignup';
+import { BlogNewsletterModal } from '../../marketing/BlogNewsletterModal';
+import { ensureSiteVisitor } from '../../lib/siteVisitor';
 import type { BlogPostDetail } from '../../marketing/blog/blockTypes';
-
-function sessionId(): string {
-  const key = 'propez_blog_sid';
-  let id = sessionStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID?.() ?? String(Date.now());
-    sessionStorage.setItem(key, id);
-  }
-  return id;
-}
 
 export default function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>();
   const [post, setPost] = useState<BlogPostDetail | null>(null);
   const [error, setError] = useState(false);
   const startRef = useRef(Date.now());
+  const visitorIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -37,21 +29,33 @@ export default function BlogPostPage() {
 
   useEffect(() => {
     if (!post?.id) return;
-    const sid = sessionId();
-    void fetch('/api/blog/analytics', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postId: post.id, sessionId: sid, eventType: 'view' }),
-    });
+    let cancelled = false;
+
+    void (async () => {
+      const visitorId = await ensureSiteVisitor();
+      if (cancelled || !visitorId) return;
+      visitorIdRef.current = visitorId;
+
+      void fetch('/api/blog/analytics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ postId: post.id, sessionId: visitorId, eventType: 'view' }),
+      });
+    })();
+
     return () => {
+      cancelled = true;
+      const visitorId = visitorIdRef.current;
       const seconds = Math.round((Date.now() - startRef.current) / 1000);
-      if (seconds > 2) {
+      if (visitorId && seconds > 2) {
         void fetch('/api/blog/analytics', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             postId: post.id,
-            sessionId: sid,
+            sessionId: visitorId,
             eventType: 'time_on_page',
             eventData: { seconds },
           }),
@@ -101,6 +105,7 @@ export default function BlogPostPage() {
         ogType="article"
         jsonLd={jsonLd}
       />
+      <BlogNewsletterModal />
       <article className="py-12">
         <div className="container mx-auto px-4 lg:px-8 max-w-3xl">
           <Link to="/blog" className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-900 mb-8">
@@ -114,10 +119,6 @@ export default function BlogPostPage() {
             <p className="text-sm text-zinc-500 mb-8">Por {post.author_name}</p>
           )}
           <BlogPostContent blocks={post.content || []} />
-          <div className="mt-16 pt-8 border-t border-black/5">
-            <h3 className="font-semibold mb-4">Receba novos artigos</h3>
-            <NewsletterSignup />
-          </div>
         </div>
       </article>
     </MarketingLayout>

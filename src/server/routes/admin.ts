@@ -10,7 +10,8 @@ import { registerAdminServiceRequestRoutes, adminOrgBrandPatchSchema, applyAdmin
 import { registerAdminAnalyticsRoutes, enrichOrgDetail } from './adminAnalytics.js'
 import { isOrgActiveForMrr, mrrBrlForPlan } from '../services/mrrPricing.js'
 import type { MailClient } from '../mail/client.js'
-import { isAuthMailFailure, respondAuthMailFailure } from '../mail/authMail.js'
+import { isAuthMailFailure, respondAuthMailFailure, sendAuthEmail } from '../mail/authMail.js'
+import { isMailConfigured } from '../env.js'
 import {
   issueEmailVerification,
   issuePasswordReset,
@@ -577,6 +578,48 @@ export function createAdminRouter(deps: {
       console.error('[admin/users/send-verification] erro:', err)
       return res.status(500).json({ error: 'Erro ao enviar verificação' })
     }
+  })
+
+  // ==========================================================================
+  // POST /api/admin/operations/test-email — valida provedor em produção (Vercel)
+  // ==========================================================================
+  const testEmailSchema = z.object({
+    to: z.string().trim().toLowerCase().email(),
+  })
+
+  router.post('/operations/test-email', async (req: Request, res: Response) => {
+    const parsed = testEmailSchema.safeParse(req.body ?? {})
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'E-mail inválido' })
+    }
+    if (!isMailConfigured(config.mail)) {
+      return res.status(503).json({
+        sent: false,
+        reason: 'email_not_configured',
+        provider: config.mail.provider,
+        error: 'Serviço de e-mail não configurado.',
+      })
+    }
+    const stamp = new Date().toISOString()
+    const mailResult = await sendAuthEmail(
+      config,
+      'admin-test-email',
+      () =>
+        mail.sendBusinessEmail({
+          to: parsed.data.to,
+          subject: `PropEZ teste de e-mail ${stamp}`,
+          html: `<p>Teste de envio PropEZ em <strong>${stamp}</strong>.</p><p>Provedor: <code>${config.mail.provider}</code></p>`,
+          tag: 'admin-test-email',
+        }),
+    )
+    if (isAuthMailFailure(mailResult)) {
+      return respondAuthMailFailure(res, config, mailResult)
+    }
+    return res.json({
+      sent: true,
+      to: parsed.data.to,
+      provider: config.mail.provider,
+    })
   })
 
   // ==========================================================================

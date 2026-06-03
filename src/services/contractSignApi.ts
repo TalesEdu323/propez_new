@@ -15,11 +15,14 @@ export interface ContractSignStatusResponse {
   validationToken?: string | null;
 }
 
+const CONTRACT_STATUS_TIMEOUT_MS = 15_000;
+
 export async function getContractSignStatus(proposalId: string): Promise<ContractSignStatusResponse | null> {
   try {
     const res = await fetch(`/api/propostas/${encodeURIComponent(proposalId)}/contract-status`, {
       method: 'GET',
       credentials: 'include',
+      signal: AbortSignal.timeout(CONTRACT_STATUS_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     return (await res.json()) as ContractSignStatusResponse;

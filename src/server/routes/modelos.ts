@@ -11,7 +11,7 @@ import { fetchOrgBrand, mergePageLayoutWithOrgBrand } from '../services/orgBrand
 const builderElement = z.object({}).passthrough()
 
 const MODEL_SELECT = `id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
-              chave_pix, link_pagamento, tier, fluxo, signature_config, created_at`
+              chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config, created_at`
 
 const pageLayoutSchema = z.object({
   widthMode: z.enum(['boxed', 'full']),
@@ -33,6 +33,7 @@ const bodySchema = z.object({
   contratoTexto: z.string().max(200_000).optional().nullable(),
   chavePix: z.string().max(500).optional().nullable(),
   linkPagamento: z.string().max(2000).optional().nullable(),
+  whatsappComprovante: z.string().max(30).optional().nullable(),
   tier: z.enum(['free', 'pro', 'business']).default('free'),
   fluxo: proposalFlowConfigSchema.optional(),
   signatureConfig: z.record(z.unknown()).optional(),
@@ -84,8 +85,8 @@ export function createModelosRouter(deps: {
     const { rows } = await pool.query(
       `INSERT INTO modelos_propostas
          (organization_id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
-          chave_pix, link_pagamento, tier, fluxo, signature_config)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::uuid[], $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb)
+          chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::uuid[], $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb)
        RETURNING ${MODEL_SELECT}`,
       [
         req.auth.orgId,
@@ -97,6 +98,7 @@ export function createModelosRouter(deps: {
         d.contratoTexto ?? null,
         d.chavePix ?? null,
         d.linkPagamento ?? null,
+        d.whatsappComprovante ?? null,
         d.tier,
         JSON.stringify(d.fluxo ?? { steps: ['approve', 'sign', 'pay'] }),
         d.signatureConfig != null ? JSON.stringify(d.signatureConfig) : null,
@@ -120,9 +122,10 @@ export function createModelosRouter(deps: {
          contrato_texto = CASE WHEN $12::boolean THEN $13 ELSE contrato_texto END,
          chave_pix = CASE WHEN $14::boolean THEN $15 ELSE chave_pix END,
          link_pagamento = CASE WHEN $16::boolean THEN $17 ELSE link_pagamento END,
-         tier = COALESCE($18, tier),
-         fluxo = CASE WHEN $19::boolean THEN $20::jsonb ELSE fluxo END,
-         signature_config = CASE WHEN $21::boolean THEN $22::jsonb ELSE signature_config END
+         whatsapp_comprovante = CASE WHEN $18::boolean THEN $19 ELSE whatsapp_comprovante END,
+         tier = COALESCE($20, tier),
+         fluxo = CASE WHEN $21::boolean THEN $22::jsonb ELSE fluxo END,
+         signature_config = CASE WHEN $23::boolean THEN $24::jsonb ELSE signature_config END
        WHERE organization_id = $1 AND id = $2
        RETURNING ${MODEL_SELECT}`,
       [
@@ -143,6 +146,8 @@ export function createModelosRouter(deps: {
         d.chavePix ?? null,
         'linkPagamento' in d,
         d.linkPagamento ?? null,
+        'whatsappComprovante' in d,
+        d.whatsappComprovante ?? null,
         d.tier ?? null,
         d.fluxo !== undefined,
         d.fluxo !== undefined ? JSON.stringify(d.fluxo) : null,

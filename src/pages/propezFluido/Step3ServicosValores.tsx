@@ -253,6 +253,17 @@ export function Step3ServicosValores({
               placeholder="https://..."
             />
           </div>
+          <div className="sm:col-span-2">
+            <label className="block text-[10px] font-bold text-zinc-400 mb-3 uppercase tracking-[0.2em]">WhatsApp para comprovante (Opcional)</label>
+            <input
+              type="tel"
+              value={formData.whatsappComprovante}
+              onChange={(e) => setFormData(prev => ({ ...prev, whatsappComprovante: e.target.value }))}
+              className="w-full bg-white border border-black/[0.05] rounded-2xl px-5 py-4 text-sm focus:outline-none focus:ring-4 focus:ring-zinc-100 transition-all shadow-sm"
+              placeholder="(11) 99999-9999"
+            />
+            <p className="text-xs text-zinc-500 mt-2">Número que receberá o comprovante quando o cliente marcar como pago.</p>
+          </div>
         </div>
       </div>
     </motion.div>

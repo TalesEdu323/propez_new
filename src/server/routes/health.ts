@@ -46,6 +46,20 @@ export function createHealthRouter({ pool, integrationsConfig, config }: HealthR
         ? 'Prefira DATABASE_URL com host Neon "-pooler" na Vercel.'
         : undefined;
 
+    const mail = config.mail;
+    const mailWarnings: string[] = [];
+    if (!isMailConfigured(mail)) {
+      mailWarnings.push(
+        config.nodeEnv === 'production'
+          ? 'Provedor de e-mail não configurado — auth e envios falham com 503.'
+          : 'E-mail em modo simulação (provider=none).',
+      );
+    } else if (process.env.VERCEL === '1' && mail.provider === 'smtp') {
+      mailWarnings.push(
+        'Vercel + SMTP: prefira RESEND_API_KEY e MAIL_PROVIDER=resend para envio confiável em serverless.',
+      );
+    }
+
     const ok = dbOk;
     res.status(ok ? 200 : 503).json({
       ok,
@@ -58,6 +72,14 @@ export function createHealthRouter({ pool, integrationsConfig, config }: HealthR
       hasPooler,
       migrationHint,
       bootErrors: [],
+      mail: {
+        provider: mail.provider,
+        configured: isMailConfigured(mail),
+        from: mail.from,
+        smtpHost: mail.smtp?.host ?? null,
+        hasResendKey: Boolean(mail.resendApiKey),
+        warnings: mailWarnings,
+      },
     });
   });
 

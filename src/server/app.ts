@@ -44,6 +44,8 @@ import { createRequestsRouter } from './routes/requests.js';
 import { createSeoRouter } from './routes/seo.js';
 import { createBlogRouter } from './routes/blog.js';
 import { createNewsletterRouter } from './routes/newsletter.js';
+import { createSiteRouter } from './routes/site.js';
+import { createMePreferencesRouter } from './routes/mePreferences.js';
 import { createNotificationsRouter } from './routes/notifications.js';
 import { createAdminRouter } from './routes/admin.js';
 import { createAdminGrowthRouter } from './routes/adminGrowth.js';
@@ -118,6 +120,9 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
 
   // 3) JSON global.
   app.use(express.json({ limit: '5mb' }));
+
+  // Health/boot-check públicos — antes de rotas autenticadas (diagnóstico Vercel).
+  app.use('/api', createHealthRouter({ pool, integrationsConfig, config }));
 
   app.use((req, res, next) => {
     const start = Date.now();
@@ -210,11 +215,12 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   app.use('/api', createAdminPostsRouter({ pool, config, mail }));
 
   // 9) Utilitárias
-  app.use('/api', createHealthRouter({ pool, integrationsConfig, config }));
   app.use('/api', createCheckoutRouter({ stripe, config, pool }));
   app.use('/api', createNotificationsRouter({ pool, config }));
   app.use('/api', createBlogRouter({ pool }));
-  app.use('/api', createNewsletterRouter({ pool }));
+  app.use('/api', createSiteRouter({ pool, config }));
+  app.use('/api', createNewsletterRouter({ pool, config }));
+  app.use('/api', createMePreferencesRouter({ pool, config }));
 
   // SEO (dev/produção local — na Vercel use api/robots.ts e api/sitemap.ts)
   app.use(createSeoRouter({ pool, config }));

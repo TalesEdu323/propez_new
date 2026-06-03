@@ -32,7 +32,6 @@ import type { PropezFluidoFormData, StepDescriptor } from './propezFluido/types'
 import { INITIAL_PROPEZ_FLUIDO_FORM } from './propezFluido/types';
 import type { NavigateFn, RouteParams } from '../types/navigation';
 import { mergeServiceLayouts } from '../lib/mergeServiceLayouts';
-import { consumeFluidoReturnContext, setFluidoReturnContext } from '../lib/fluidoReturnContext';
 import { hasUnresolvedImagePrompts } from '../lib/modelImagePrompts';
 import { iaApi } from '../lib/iaApi';
 
@@ -136,6 +135,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
           contratoId: modelo.contratoId || '',
           chavePix: modelo.chavePix || '',
           linkPagamento: modelo.linkPagamento || '',
+          whatsappComprovante: modelo.whatsappComprovante || '',
           fluxo: modelo.fluxo ?? prev.fluxo,
         };
       });
@@ -205,6 +205,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
           contratoId: prop.contratoId || '',
           chavePix: prop.chavePix || '',
           linkPagamento: prop.linkPagamento || '',
+          whatsappComprovante: prop.whatsappComprovante || '',
         }));
         setStep(2);
       }
@@ -214,21 +215,26 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
 
   useEffect(() => {
     if (returnHandledRef.current) return;
-    const ctx = consumeFluidoReturnContext();
-    if (!ctx) return;
+    const modeloId = typeof initialData?.fluidoReturn === 'string' ? initialData.fluidoReturn : '';
+    const returnStep =
+      typeof initialData?.fluidoStep === 'number' ? initialData.fluidoStep : Number(initialData?.fluidoStep);
+    if (!modeloId || Number.isNaN(returnStep)) return;
     returnHandledRef.current = true;
 
     void (async () => {
       await refreshEntity('propez_modelos');
-      applyModeloToForm(ctx.modeloId, { preservePricing: true });
-      setStep(ctx.returnStep);
+      applyModeloToForm(modeloId, { preservePricing: true });
+      setStep(returnStep);
     })();
-  }, [applyModeloToForm]);
+  }, [applyModeloToForm, initialData?.fluidoReturn, initialData?.fluidoStep]);
 
   const handleEditModelo = () => {
     if (!formData.modeloId) return;
-    setFluidoReturnContext({ modeloId: formData.modeloId, returnStep: 4 });
-    navigate('criar-modelo', { editId: formData.modeloId });
+    navigate('criar-modelo', {
+      editId: formData.modeloId,
+      fluidoReturn: formData.modeloId,
+      fluidoStep: 4,
+    });
   };
 
   const handleSelectProSyncLead = (lead: ExternalClient) => {
@@ -310,6 +316,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
       contratoId: formData.contratoId || undefined,
       chavePix: formData.chavePix,
       linkPagamento: formData.linkPagamento,
+      whatsappComprovante: formData.whatsappComprovante,
       pago: false,
       prosyncLeadId: formData.prosyncLeadId || undefined,
       creatorPlan: resolvePlan(userConfig),

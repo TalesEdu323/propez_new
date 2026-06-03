@@ -76,10 +76,32 @@ if (recommendedMissing.length > 0) {
   for (const key of recommendedMissing) console.warn(`  - ${key}`);
 }
 
-if (productionMode && !process.env.RESEND_API_KEY?.trim() && isPlaceholder(process.env.SMTP_HOST)) {
+const resendKey = process.env.RESEND_API_KEY?.trim() || '';
+const hasResend = resendKey.startsWith('re_');
+const smtpHost = process.env.SMTP_HOST?.trim() || '';
+const hasSmtp = smtpHost && !isPlaceholder(smtpHost);
+const mailProvider = (process.env.MAIL_PROVIDER || '').trim().toLowerCase();
+
+if (productionMode && !hasResend && !hasSmtp) {
   console.warn(
     '[check-deploy-env] Nenhum provedor de e-mail válido (SMTP_HOST ou RESEND_API_KEY) — auth por e-mail falhará em produção.',
   );
+}
+
+if (productionMode || process.env.VERCEL === '1') {
+  if (!hasResend) {
+    console.warn(
+      '[check-deploy-env] Vercel: defina RESEND_API_KEY + MAIL_PROVIDER=resend + MAIL_FROM (domínio verificado no Resend).',
+    );
+  } else if (mailProvider === 'smtp') {
+    console.warn(
+      '[check-deploy-env] Vercel: MAIL_PROVIDER=smtp pode dar timeout; use MAIL_PROVIDER=resend com RESEND_API_KEY.',
+    );
+  } else if (!mailProvider) {
+    console.warn(
+      '[check-deploy-env] Vercel: recomendado MAIL_PROVIDER=resend quando RESEND_API_KEY estiver definida.',
+    );
+  }
 }
 
 const dbUrl = process.env.DATABASE_URL || '';

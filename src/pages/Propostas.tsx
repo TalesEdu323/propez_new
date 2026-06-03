@@ -5,21 +5,22 @@ import { motion } from 'motion/react';
 import { usePropostas, useServicos } from '../hooks/useStoreEntity';
 import type { NavigateFn } from '../types/navigation';
 import { ListingShell } from '../components/listing/ListingShell';
-import { ListingViewToggle, createListingViewState } from '../components/listing/ListingViewToggle';
+import { ListingViewToggle } from '../components/listing/ListingViewToggle';
+import { useListingViewPref } from '../hooks/useListingViewPref';
 import { LISTING_GRID_CLASS, LISTING_LIST_CLASS, LISTING_EMPTY_STATE_CLASS } from '../components/listing/listingLayout';
 import { ProposalListingCard } from '../components/listing/proposals/ProposalListingCard';
 import { ProposalListingRow } from '../components/listing/proposals/ProposalListingRow';
 import { ProposalWaitingPanel } from '../components/listing/proposals/ProposalWaitingPanel';
 import { AnimatePresence } from 'motion/react';
 
-const VIEW_STORAGE_KEY = 'propez-listing-view-propostas';
+const VIEW_PREF_KEY = 'listing_view:propostas';
 
 export default function Propostas({ navigate }: { navigate: NavigateFn }) {
   const propostas = usePropostas();
   const servicos = useServicos();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todas' | 'pendente' | 'aprovada' | 'recusada'>('todas');
-  const [view, setView] = useState<'grid' | 'list'>(() => createListingViewState(VIEW_STORAGE_KEY, 'grid'));
+  const [view, setView] = useListingViewPref(VIEW_PREF_KEY, 'grid');
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const getServicosNomes = (ids: string[]) => {
@@ -103,7 +104,7 @@ export default function Propostas({ navigate }: { navigate: NavigateFn }) {
             searchValue={searchTerm}
             onSearchChange={setSearchTerm}
             viewToggle={
-              <ListingViewToggle storageKey={VIEW_STORAGE_KEY} view={view} onChange={setView} />
+              <ListingViewToggle view={view} onChange={setView} />
             }
             filters={
               <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 no-scrollbar">

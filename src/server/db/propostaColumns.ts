@@ -8,7 +8,7 @@ export const PROPOSTA_SELECT = `
 
   data_envio, data_validade, status, elementos, page_layout, contrato_texto, contrato_id,
 
-  chave_pix, link_pagamento, pago, data_pagamento, creator_plan, public_token,
+  chave_pix, link_pagamento, whatsapp_comprovante, pago, data_pagamento, creator_plan, public_token,
 
   prosync_lead_id, contract_sign_document_id, contract_sign_status, contract_signing_url,
 
@@ -36,7 +36,7 @@ export const PROPOSTA_SUMMARY_SELECT = `
 
   data_envio, data_validade, status, contrato_id,
 
-  chave_pix, link_pagamento, pago, data_pagamento, creator_plan, public_token,
+  chave_pix, link_pagamento, whatsapp_comprovante, pago, data_pagamento, creator_plan, public_token,
 
   prosync_lead_id, contract_sign_document_id, contract_sign_status, contract_signing_url,
 

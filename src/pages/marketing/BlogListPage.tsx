@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { MarketingLayout } from '../../marketing/MarketingLayout';
 import { PageMeta } from '../../marketing/PageMeta';
-import { NewsletterSignup } from '../../marketing/NewsletterSignup';
+import { BlogNewsletterModal } from '../../marketing/BlogNewsletterModal';
 import type { BlogPostSummary } from '../../marketing/blog/blockTypes';
 
 export default function BlogListPage() {
@@ -35,10 +35,11 @@ export default function BlogListPage() {
   return (
     <MarketingLayout>
       <PageMeta title="Blog" description="Artigos sobre propostas, vendas e produtividade." path="/blog" />
+      <BlogNewsletterModal />
       <section className="py-12 lg:py-16">
         <div className="container mx-auto px-4 lg:px-8">
           <h1 className="text-4xl font-bold mb-4">Blog</h1>
-          <p className="text-zinc-500 mb-8 max-w-xl">Dicas para fechar mais negócios com propostas profissionais.</p>
+          <p className="text-zinc-500 mb-8 max-w-xl">Artigos sobre propostas comerciais e processo de vendas.</p>
 
           <div className="flex flex-col sm:flex-row gap-4 mb-10">
             <div className="relative flex-1 max-w-md">
@@ -93,13 +94,6 @@ export default function BlogListPage() {
               ))}
             </div>
           )}
-        </div>
-      </section>
-
-      <section className="py-12 bg-zinc-50 border-t border-black/5">
-        <div className="container mx-auto px-4 max-w-lg text-center">
-          <h2 className="text-xl font-bold mb-4">Newsletter</h2>
-          <NewsletterSignup />
         </div>
       </section>
     </MarketingLayout>

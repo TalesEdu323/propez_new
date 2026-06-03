@@ -8,18 +8,17 @@ import { ClienteModal } from './clientes/ClienteModal';
 import { ClientesTable } from './clientes/ClientesTable';
 import { ClientesCards } from './clientes/ClientesCards';
 import type { NavigateFn } from '../types/navigation';
-import { ListingViewToggle, createListingViewState } from '../components/listing/ListingViewToggle';
+import { ListingViewToggle } from '../components/listing/ListingViewToggle';
+import { useListingViewPref } from '../hooks/useListingViewPref';
 
-const CLIENTES_VIEW_KEY = 'propez-listing-view-clientes';
+const CLIENTES_VIEW_KEY = 'listing_view:clientes';
 
 export default function Clientes({ navigate: _navigate }: { navigate: NavigateFn }) {
   const clientes = useClientes();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Cliente>>({});
-  const [listView, setListView] = useState<'grid' | 'list'>(() =>
-    createListingViewState(CLIENTES_VIEW_KEY, 'grid'),
-  );
+  const [listView, setListView] = useListingViewPref(CLIENTES_VIEW_KEY, 'grid');
 
   const filteredClientes = clientes.filter(c => 
     c.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -118,11 +117,7 @@ export default function Clientes({ navigate: _navigate }: { navigate: NavigateFn
                   className="w-full bg-white border border-zinc-200 rounded-2xl pl-14 pr-6 py-4 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-900 transition-all placeholder:text-zinc-300 shadow-sm"
                 />
               </div>
-              <ListingViewToggle
-                storageKey={CLIENTES_VIEW_KEY}
-                view={listView}
-                onChange={setListView}
-              />
+              <ListingViewToggle view={listView} onChange={setListView} />
             </div>
           </div>
 

@@ -20,6 +20,7 @@ export interface CriarModeloFormData {
   contratoId: string;
   chavePix: string;
   linkPagamento: string;
+  whatsappComprovante: string;
   fluxo: ProposalFlowConfig;
   signatureConfig?: ModelSignatureConfig;
 }
@@ -31,6 +32,7 @@ export const INITIAL_CRIAR_MODELO_FORM: CriarModeloFormData = {
   contratoId: '',
   chavePix: '',
   linkPagamento: '',
+  whatsappComprovante: '',
   fluxo: DEFAULT_FLOW,
 };
 

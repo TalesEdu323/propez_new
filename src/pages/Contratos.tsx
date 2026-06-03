@@ -19,10 +19,11 @@ import {
 import { ContratoOriginStep } from './contratos/ContratoOriginStep';
 import { ContratoContentStep } from './contratos/ContratoContentStep';
 import { ContratoSignatureStep } from './contratos/ContratoSignatureStep';
-import { ListingViewToggle, createListingViewState } from '../components/listing/ListingViewToggle';
+import { ListingViewToggle } from '../components/listing/ListingViewToggle';
+import { useListingViewPref } from '../hooks/useListingViewPref';
 import { LISTING_GRID_CLASS, LISTING_LIST_CLASS } from '../components/listing/listingLayout';
 
-const CONTRATOS_VIEW_KEY = 'propez-listing-view-contratos';
+const CONTRATOS_VIEW_KEY = 'listing_view:contratos';
 
 type WizardStep = 'choose' | 'content' | 'signature';
 
@@ -30,9 +31,7 @@ export default function Contratos() {
   const contratos = useContratos();
   const userConfig = useUserConfig();
   const [searchTerm, setSearchTerm] = useState('');
-  const [listView, setListView] = useState<'grid' | 'list'>(() =>
-    createListingViewState(CONTRATOS_VIEW_KEY, 'grid'),
-  );
+  const [listView, setListView] = useListingViewPref(CONTRATOS_VIEW_KEY, 'grid');
   const [isEditing, setIsEditing] = useState(false);
   const [wizardStep, setWizardStep] = useState<WizardStep>('choose');
   const [currentContrato, setCurrentContrato] = useState<Partial<ContratoTemplate> | null>(null);
@@ -468,7 +467,6 @@ export default function Contratos() {
                     />
                   </div>
                   <ListingViewToggle
-                    storageKey={CONTRATOS_VIEW_KEY}
                     view={listView}
                     onChange={setListView}
                   />

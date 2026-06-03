@@ -16,11 +16,18 @@ function paramsFromSearchParams(searchParams: URLSearchParams): {
   const tab = searchParams.get('tab');
   const postId = searchParams.get('postId');
   const targetPlan = searchParams.get('targetPlan');
+  const fluidoReturn = searchParams.get('fluidoReturn');
+  const fluidoStep = searchParams.get('fluidoStep');
   if (id) params.id = id;
   if (editId) params.editId = editId;
   if (postId) params.postId = postId;
   if (tab === 'loja' || tab === 'meus') params.tab = tab;
   if (targetPlan) params.targetPlan = targetPlan;
+  if (fluidoReturn) params.fluidoReturn = fluidoReturn;
+  if (fluidoStep) {
+    const step = Number(fluidoStep);
+    if (!Number.isNaN(step)) params.fluidoStep = step;
+  }
   return { route, params };
 }
 
@@ -32,6 +39,8 @@ function searchParamsFromRoute(route: AppRoute, params: RouteParams): URLSearchP
   if (params.postId) sp.set('postId', String(params.postId));
   if (params.tab) sp.set('tab', params.tab);
   if (params.targetPlan) sp.set('targetPlan', String(params.targetPlan));
+  if (params.fluidoReturn) sp.set('fluidoReturn', String(params.fluidoReturn));
+  if (params.fluidoStep != null) sp.set('fluidoStep', String(params.fluidoStep));
   return sp;
 }
 

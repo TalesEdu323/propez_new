@@ -639,7 +639,7 @@ export function createCheckoutRouter({ stripe, config, pool }: StripeCheckoutOpt
     }
   });
 
-  // Retorna o status normalizado de uma sessão para a UI atualizar o localStorage.
+  // Retorna o status normalizado de uma sessão para a UI atualizar via refetch/API.
   router.get('/stripe/session/:id', async (req: Request, res: Response) => {
     try {
       const session = await stripe.checkout.sessions.retrieve(req.params.id, {

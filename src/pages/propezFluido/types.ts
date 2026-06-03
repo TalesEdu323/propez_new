@@ -27,6 +27,7 @@ export interface PropezFluidoFormData {
   contratoId: string;
   chavePix: string;
   linkPagamento: string;
+  whatsappComprovante: string;
   fluxo: ProposalFlowConfig;
 }
 
@@ -49,6 +50,7 @@ export const INITIAL_PROPEZ_FLUIDO_FORM: PropezFluidoFormData = {
   contratoId: '',
   chavePix: '',
   linkPagamento: '',
+  whatsappComprovante: '',
   fluxo: DEFAULT_FLOW,
 };
 

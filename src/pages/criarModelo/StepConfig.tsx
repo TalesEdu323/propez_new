@@ -96,6 +96,18 @@ export function StepConfig({ formData, setFormData, servicosDisponiveis }: StepC
                 placeholder="https://..."
               />
             </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-zinc-400 mb-3 uppercase tracking-widest">WhatsApp para comprovante (opcional)</label>
+              <input
+                type="tel"
+                value={formData.whatsappComprovante}
+                onChange={(e) => setFormData({ ...formData, whatsappComprovante: e.target.value })}
+                className="w-full bg-zinc-50 border border-black/10 rounded-xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+                placeholder="(11) 99999-9999"
+              />
+              <p className="text-xs text-zinc-500 mt-2">Número que receberá o comprovante quando o cliente marcar como pago.</p>
+            </div>
           </div>
         </div>
       </div>

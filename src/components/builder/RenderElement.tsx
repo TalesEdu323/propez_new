@@ -71,6 +71,8 @@ function SafeImg({
 
 export type ProposalActionHandler = (action: 'approve') => void;
 
+export type ProposalDecision = 'pending' | 'approved' | 'rejected';
+
 function resolveProposalAction(
   elType: string,
   props: Record<string, unknown>,
@@ -79,6 +81,15 @@ function resolveProposalAction(
   if (props.proposalAction === 'approve') return 'approve';
   if (['button', 'marketing_cta', 'pricing', 'card', 'marketing_hero', 'marketing_pricing'].includes(elType)) return 'approve';
   return 'none';
+}
+
+function shouldRenderApproveCta(
+  elType: string,
+  props: Record<string, unknown>,
+  proposalDecision?: ProposalDecision,
+): boolean {
+  if (proposalDecision !== 'approved') return true;
+  return resolveProposalAction(elType, props) !== 'approve';
 }
 
 function proposalClickProps(
@@ -104,6 +115,7 @@ export function RenderElement({
   previewMode,
   allowInteraction,
   onProposalAction,
+  proposalDecision,
   viewport = 'desktop',
   pageLayout,
 }: {
@@ -111,12 +123,13 @@ export function RenderElement({
   previewMode?: boolean;
   allowInteraction?: boolean;
   onProposalAction?: ProposalActionHandler;
+  proposalDecision?: ProposalDecision;
   viewport?: BuilderViewport;
   pageLayout?: BuilderPageLayout | null;
   key?: React.Key;
 }) {
   const { type, props } = element;
-  const childRenderProps = { previewMode, allowInteraction, onProposalAction, viewport, pageLayout };
+  const childRenderProps = { previewMode, allowInteraction, onProposalAction, proposalDecision, viewport, pageLayout };
   const contentPad = pageLayout?.widthMode === 'boxed' ? resolvePagePadding(pageLayout) : undefined;
   const theme = resolveThemeColors(pageLayout);
   const isInteractive = previewMode || allowInteraction;
@@ -156,6 +169,7 @@ export function RenderElement({
       );
     
     case 'button':
+      if (!shouldRenderApproveCta('button', props, proposalDecision)) return null;
       return (
         <motion.button 
           {...getAnimationProps(props.animation || 'scale')}
@@ -307,6 +321,7 @@ export function RenderElement({
           <div className="p-8 md:p-10 md:w-3/5 flex flex-col justify-center relative z-10">
             <h3 className="text-3xl font-bold text-zinc-900 mb-4 tracking-tight">{props.title}</h3>
             <p className="text-zinc-600 mb-8 leading-relaxed text-lg">{props.description}</p>
+            {shouldRenderApproveCta('card', props, proposalDecision) && (
             <div>
               <motion.button 
                 {...proposalClickProps('card', props, previewMode, onProposalAction)}
@@ -317,6 +332,7 @@ export function RenderElement({
                 {props.buttonText}
               </motion.button>
             </div>
+            )}
           </div>
         </motion.div>
       );
@@ -421,7 +437,10 @@ export function RenderElement({
             {hero.description && (
               <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-12 leading-relaxed whitespace-pre-line">{hero.description}</p>
             )}
+            {(shouldRenderApproveCta('marketing_hero', props, proposalDecision) ||
+              (secondaryText && shouldRenderApproveCta('marketing_hero', { ...props, proposalAction: props.secondaryButtonAction ?? 'none' }, proposalDecision))) && (
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              {shouldRenderApproveCta('marketing_hero', props, proposalDecision) && (
               <button
                 {...proposalClickProps('marketing_hero', props, previewMode, onProposalAction)}
                 className="px-8 py-4 rounded-xl font-bold text-white transition-all hover:scale-105"
@@ -429,7 +448,8 @@ export function RenderElement({
               >
                 {hero.buttonText}
               </button>
-              {secondaryText ? (
+              )}
+              {secondaryText && shouldRenderApproveCta('marketing_hero', { ...props, proposalAction: props.secondaryButtonAction ?? 'none' }, proposalDecision) ? (
                 <button
                   {...(secondaryAction === 'approve'
                     ? proposalClickProps('marketing_hero', { ...props, proposalAction: 'approve' }, previewMode, onProposalAction)
@@ -440,6 +460,7 @@ export function RenderElement({
                 </button>
               ) : null}
             </div>
+            )}
           </motion.div>
         </div>
       );
@@ -567,12 +588,14 @@ export function RenderElement({
                   </div>
                 ))}
               </div>
+              {shouldRenderApproveCta('marketing_pricing', props, proposalDecision) && (
               <button
                 {...proposalClickProps('marketing_pricing', props, previewMode, onProposalAction)}
                 className="w-full py-5 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xl transition-all shadow-lg shadow-amber-600/20"
               >
                 {props.buttonText ?? 'Aprovar proposta'}
               </button>
+              )}
             </div>
           </div>
         </div>
@@ -593,6 +616,7 @@ export function RenderElement({
             <p className="text-xl text-gray-400 mb-12 leading-relaxed">
               {props.description}
             </p>
+            {shouldRenderApproveCta('marketing_cta', props, proposalDecision) && (
             <button
               {...proposalClickProps('marketing_cta', props, previewMode, onProposalAction)}
               className="inline-flex items-center gap-3 px-10 py-5 rounded-2xl bg-white text-black font-bold text-xl hover:bg-gray-200 transition-all group"
@@ -600,6 +624,7 @@ export function RenderElement({
               {props.buttonText}
               <ArrowRight className="group-hover:translate-x-1 transition-transform" />
             </button>
+            )}
           </motion.div>
         </div>
       );
@@ -637,6 +662,7 @@ export function RenderElement({
               </motion.a>
             ))}
           </div>
+          {shouldRenderApproveCta('navbar', props, proposalDecision) && (
           <motion.button 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -645,6 +671,7 @@ export function RenderElement({
           >
             {props.buttonText}
           </motion.button>
+          )}
         </motion.div>
       );
 
@@ -787,6 +814,7 @@ export function RenderElement({
               </li>
             ))}
           </ul>
+          {shouldRenderApproveCta('pricing', props, proposalDecision) && (
           <motion.button 
             {...proposalClickProps('pricing', props, previewMode, onProposalAction)}
             whileHover={{ scale: 1.02 }}
@@ -796,6 +824,7 @@ export function RenderElement({
           >
             {props.buttonText}
           </motion.button>
+          )}
         </motion.div>
       );
 

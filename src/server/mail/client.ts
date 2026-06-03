@@ -65,48 +65,58 @@ export function createMailClient(config: MailConfig, branding: EmailBranding): M
     tag: string,
     attachment?: MailAttachment,
   ): Promise<void> {
-    if (config.provider === 'smtp') {
-      if (!smtpTransporter) {
-        throw new Error(
-          `[mail:${tag}] MAIL_PROVIDER=smtp mas SMTP_HOST/usuário/senha não estão configurados`,
-        )
+    const started = Date.now()
+    try {
+      if (config.provider === 'smtp') {
+        if (!smtpTransporter) {
+          throw new Error(
+            `[mail:${tag}] MAIL_PROVIDER=smtp mas SMTP_HOST/usuário/senha não estão configurados`,
+          )
+        }
+        const envelopeFrom = config.smtp?.user?.trim() || config.from
+        await smtpTransporter.sendMail({
+          from: config.from,
+          to,
+          subject,
+          html,
+          envelope: { from: envelopeFrom, to: [to] },
+          attachments: attachment
+            ? [{ filename: attachment.filename, content: attachment.content, contentType: attachment.contentType ?? 'application/pdf' }]
+            : undefined,
+        })
+        return
       }
-      const envelopeFrom = config.smtp?.user?.trim() || config.from
-      await smtpTransporter.sendMail({
-        from: config.from,
-        to,
-        subject,
-        html,
-        envelope: { from: envelopeFrom, to: [to] },
-        attachments: attachment
-          ? [{ filename: attachment.filename, content: attachment.content, contentType: attachment.contentType ?? 'application/pdf' }]
-          : undefined,
-      })
-      return
-    }
 
-    if (config.provider === 'resend') {
-      if (!resend) {
-        throw new Error(`[mail:${tag}] MAIL_PROVIDER=resend mas RESEND_API_KEY é inválida ou ausente`)
+      if (config.provider === 'resend') {
+        if (!resend) {
+          throw new Error(`[mail:${tag}] MAIL_PROVIDER=resend mas RESEND_API_KEY é inválida ou ausente`)
+        }
+        const res = await resend.emails.send({
+          from: config.from,
+          to,
+          subject,
+          html,
+          attachments: attachment
+            ? [{ filename: attachment.filename, content: attachment.content.toString('base64'), contentType: attachment.contentType ?? 'application/pdf' }]
+            : undefined,
+        })
+        if (res.error) {
+          throw new Error(`[mail:${tag}] resend error: ${res.error.message}`)
+        }
+        return
       }
-      const res = await resend.emails.send({
-        from: config.from,
-        to,
-        subject,
-        html,
-        attachments: attachment
-          ? [{ filename: attachment.filename, content: attachment.content.toString('base64'), contentType: attachment.contentType ?? 'application/pdf' }]
-          : undefined,
-      })
-      if (res.error) {
-        throw new Error(`[mail:${tag}] resend error: ${res.error.message}`)
-      }
-      return
-    }
 
-    console.warn(`[mail] provider=none; simulando ${tag} para ${to}`)
-    console.warn(`[mail] subject: ${subject}`)
-    console.warn(`[mail] html:\n${html}`)
+      console.warn(`[mail] provider=none; simulando ${tag} para ${to}`)
+      console.warn(`[mail] subject: ${subject}`)
+      console.warn(`[mail] html:\n${html}`)
+    } catch (err) {
+      const ms = Date.now() - started
+      console.error(
+        `[mail:${tag}] falhou em ${ms}ms (provider=${config.provider}, to=${to}):`,
+        err,
+      )
+      throw err
+    }
   }
 
   return {

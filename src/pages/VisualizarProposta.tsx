@@ -82,11 +82,10 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
 
   useEffect(() => {
     if (!proposta) return;
-    const lastEmail = localStorage.getItem('propez_last_email') || '';
     setClientData(prev => ({
       ...prev,
       nome: proposta.cliente_nome,
-      email: proposta.clienteEmail?.trim() || prev.email || lastEmail,
+      email: proposta.clienteEmail?.trim() || prev.email,
     }));
     if (proposta.status === 'aprovada' && flowHasStep(proposta.fluxo, 'sign') && proposta.contratoTexto) {
       setViewState('contract');
@@ -173,7 +172,6 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
       setContractSignStatus(updated.contractSignStatus ?? 'pending');
       setViewState('contract');
       setShowIdentification(false);
-      localStorage.setItem('propez_last_email', clientData.email);
     } catch (error) {
       console.error('Failed to update status:', error);
       alert('Erro ao aprovar proposta. Tente novamente.');

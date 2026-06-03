@@ -60,6 +60,7 @@ export interface JourneyMethodsResponse {
     valorCents: number | null;
     chavePix: string | null;
     linkPagamento: string | null;
+    whatsappComprovante: string | null;
   } | null;
 }
 

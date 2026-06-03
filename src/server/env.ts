@@ -209,12 +209,30 @@ export function loadConfig(): EnvironmentConfig {
   const smtpGreetingTimeout = Number(
     process.env.SMTP_GREETING_TIMEOUT || process.env.EMAIL_GREETING_TIMEOUT || '8000',
   );
-  const mailProvider = resolveMailProvider({
+  const forcedMailProvider = (process.env.MAIL_PROVIDER || '').trim().toLowerCase();
+
+  let mailProvider = resolveMailProvider({
     mailProvider: process.env.MAIL_PROVIDER || '',
     emailProvider: process.env.EMAIL_PROVIDER || '',
     smtpHost,
     resendApiKey,
   });
+
+  if (
+    process.env.VERCEL === '1' &&
+    mailProvider === 'smtp' &&
+    resendApiKey &&
+    forcedMailProvider !== 'smtp'
+  ) {
+    mailProvider = 'resend';
+    console.warn(
+      '[env] Vercel: usando Resend (RESEND_API_KEY) em vez de SMTP para envio confiável em serverless.',
+    );
+  } else if (process.env.VERCEL === '1' && mailProvider === 'smtp' && resendApiKey) {
+    console.warn(
+      '[env] Vercel + MAIL_PROVIDER=smtp: SMTP pode falhar por timeout. Recomendado: MAIL_PROVIDER=resend.',
+    );
+  }
 
   if (smtpHost && (!Number.isFinite(smtpPort) || smtpPort <= 0)) {
     throw new Error('SMTP_PORT deve ser um número positivo');
@@ -232,7 +250,6 @@ export function loadConfig(): EnvironmentConfig {
       }
     : null;
 
-  const forcedMailProvider = (process.env.MAIL_PROVIDER || '').trim().toLowerCase();
   if (forcedMailProvider === 'smtp' && !smtpHost && resendApiKey) {
     console.warn(
       '[env] MAIL_PROVIDER=smtp mas SMTP_HOST é inválido/placeholder — usando Resend.',

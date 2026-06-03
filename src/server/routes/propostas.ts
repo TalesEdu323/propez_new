@@ -56,6 +56,7 @@ const bodySchema = z.object({
   contratoId: z.string().uuid().optional().nullable(),
   chavePix: z.string().max(500).optional().nullable(),
   linkPagamento: z.string().max(2000).optional().nullable(),
+  whatsappComprovante: z.string().max(30).optional().nullable(),
   pago: z.boolean().default(false),
   data_pagamento: z.string().datetime().optional().nullable(),
   creatorPlan: z.string().max(50).optional().nullable(),
@@ -233,12 +234,12 @@ export function createPropostasRouter(deps: {
            id, organization_id, cliente_id, cliente_nome, cliente_email, modelo_id, servicos,
            valor_cents, desconto_cents, recorrente, ciclo_recorrencia, duracao_recorrencia,
            data_envio, data_validade, status, elementos, page_layout, contrato_texto, contrato_id,
-           chave_pix, link_pagamento, pago, data_pagamento, creator_plan, prosync_lead_id, fluxo
+           chave_pix, link_pagamento, whatsapp_comprovante, pago, data_pagamento, creator_plan, prosync_lead_id, fluxo
          ) VALUES (
            COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7::uuid[],
            $8, $9, $10, $11, $12,
            $13, $14, $15, $16::jsonb, $17::jsonb, $18, $19,
-           $20, $21, $22, $23, $24, $25, $26::jsonb
+           $20, $21, $22, $23, $24, $25, $26, $27::jsonb
          )
          RETURNING ${PROPOSTA_SELECT}`,
         [
@@ -263,6 +264,7 @@ export function createPropostasRouter(deps: {
           d.contratoId ?? null,
           d.chavePix ?? null,
           d.linkPagamento ?? null,
+          d.whatsappComprovante ?? null,
           d.pago,
           d.data_pagamento ?? null,
           d.creatorPlan ?? null,
@@ -353,6 +355,7 @@ export function createPropostasRouter(deps: {
            contrato_id = CASE WHEN $28::boolean THEN $29 ELSE contrato_id END,
            chave_pix = CASE WHEN $30::boolean THEN $31 ELSE chave_pix END,
            link_pagamento = CASE WHEN $32::boolean THEN $33 ELSE link_pagamento END,
+           whatsapp_comprovante = CASE WHEN $41::boolean THEN $42 ELSE whatsapp_comprovante END,
            pago = COALESCE($34, pago),
            data_pagamento = CASE WHEN $35::boolean THEN $36 ELSE data_pagamento END,
            creator_plan = COALESCE($37, creator_plan),
@@ -400,6 +403,8 @@ export function createPropostasRouter(deps: {
           d.prosyncLeadId ?? null,
           'clienteEmail' in d,
           clienteEmailPatch,
+          'whatsappComprovante' in d,
+          d.whatsappComprovante ?? null,
         ],
       )
       if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
@@ -609,24 +614,21 @@ export function createPropostasRouter(deps: {
       rubrica_signing_url: string | null
       contract_signed_pdf_path: string | null
       rubrica_signed_pdf_url: string | null
+      validation_token: string | null
     }>(
-      `SELECT contract_sign_status, rubrica_status, contract_sign_document_id, rubrica_document_id,
-              contract_signing_url, rubrica_signing_url, contract_signed_pdf_path, rubrica_signed_pdf_url
-       FROM propostas WHERE organization_id = $1 AND id = $2`,
+      `SELECT p.contract_sign_status, p.rubrica_status, p.contract_sign_document_id, p.rubrica_document_id,
+              p.contract_signing_url, p.rubrica_signing_url, p.contract_signed_pdf_path, p.rubrica_signed_pdf_url,
+              cd.validation_token
+       FROM propostas p
+       LEFT JOIN contract_documents cd ON cd.id = COALESCE(p.contract_sign_document_id, p.rubrica_document_id)
+       WHERE p.organization_id = $1 AND p.id = $2`,
       [req.auth.orgId, req.params.id],
     )
     const row = rows[0]
     if (!row) return res.status(404).json({ error: 'Proposta não encontrada' })
     const status = row.contract_sign_status ?? row.rubrica_status ?? 'pending'
     const documentId = row.contract_sign_document_id ?? row.rubrica_document_id
-    let validationToken: string | null = null
-    if (documentId) {
-      const { rows: docRows } = await pool.query<{ validation_token: string | null }>(
-        `SELECT validation_token FROM contract_documents WHERE id = $1`,
-        [documentId],
-      )
-      validationToken = docRows[0]?.validation_token ?? null
-    }
+    const validationToken = row.validation_token ?? null
     const hasDocument = status === 'sent' || status === 'signed'
     const validationPath = documentId
       ? `/validar/${documentId}${validationToken ? `?token=${encodeURIComponent(validationToken)}` : ''}`

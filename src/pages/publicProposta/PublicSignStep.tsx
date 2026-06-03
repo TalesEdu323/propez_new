@@ -23,23 +23,6 @@ interface Props {
   retrying?: boolean;
 }
 
-function resolveSigningUrl(p: PropostaSignFields, publicToken: string): string | null {
-  const url = p.contractSigningUrl;
-  if (!url) return null;
-  try {
-    if (url.startsWith('http')) {
-      const u = new URL(url);
-      return u.pathname + u.search;
-    }
-  } catch {
-    /* relative */
-  }
-  if (url.startsWith('/')) return url;
-  return `/p/${publicToken}/assinar/${url}`;
-}
-
-/** sign_pending: redirect automático na proposta — não renderiza card intermediário */
-
 function SignedContractDownload({ publicToken }: { publicToken: string }) {
   const pdfUrl = buildPublicSignedContractPdfUrl(publicToken);
   return (
@@ -63,14 +46,23 @@ function SignedContractDownload({ publicToken }: { publicToken: string }) {
   );
 }
 
-export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceipt, onRetrySignature, confirming, retrying }: Props) {
+/** sign_pending / not_started: overlay fullscreen + redirect na página pai */
+
+export function PublicSignStep({
+  proposta,
+  orgName,
+  publicToken,
+  onConfirmReceipt,
+  onRetrySignature,
+  confirming,
+  retrying,
+}: Props) {
   const phase = getContractSignPhase({
     contractSignStatus: proposta.contractSignStatus,
     clienteContratoRecebidoAt: proposta.clienteContratoRecebidoAt,
     orgContratoAceitoAt: proposta.orgContratoAceitoAt,
     contratoConcluidoAt: proposta.contratoConcluidoAt,
   });
-  const signingPath = resolveSigningUrl(proposta, publicToken);
   const status = proposta.contractSignStatus;
 
   if (phase === 'complete') {
@@ -132,15 +124,7 @@ export function PublicSignStep({ proposta, orgName, publicToken, onConfirmReceip
     );
   }
 
-  if (phase === 'sign_pending') {
-    if (!signingPath) {
-      return (
-        <div className="max-w-lg mx-auto my-12 p-8 rounded-2xl bg-white border border-gray-200 text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-3" />
-          <p className="text-sm text-gray-600">Preparando assinatura…</p>
-        </div>
-      );
-    }
+  if (phase === 'sign_pending' || phase === 'not_started') {
     return null;
   }
 

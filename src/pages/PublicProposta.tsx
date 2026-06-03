@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { api, apiFetch, ApiError } from '../lib/apiClient';
 import { friendlySignaturePrepareError } from '../lib/signatureErrors';
 import { RenderElement } from '../components/builder/RenderElement';
+import type { ProposalDecision } from '../components/builder/RenderElement';
 import { PageShell } from '../components/builder/PageShell';
 import { normalizePageLayout, mergeOrgBrandIntoPageLayout } from '../lib/pageLayout';
 import { PropezWatermark } from './visualizarProposta/PropezWatermark';
@@ -20,6 +21,10 @@ import type { BuilderElement } from '../types/builder';
 import type { ProposalFlowConfig } from '../types/proposalFlow';
 import { ProposalDecisionDock } from './publicProposta/ProposalDecisionDock';
 import { PublicSignStep } from './publicProposta/PublicSignStep';
+import {
+  ContractPreparingOverlay,
+  type ContractPrepareOverlayState,
+} from '../components/publicProposta/ContractPreparingOverlay';
 
 interface PublicProposta {
   id: string;
@@ -36,6 +41,7 @@ interface PublicProposta {
   pago: boolean;
   data_criacao: string;
   contractSignStatus?: string | null;
+  contractSignDocumentId?: string | null;
   contractSigningUrl?: string | null;
   clienteContratoRecebidoAt?: string | null;
   contratoConcluidoAt?: string | null;
@@ -73,6 +79,16 @@ interface Props {
   token: string;
 }
 
+type ContractPrepareState = 'idle' | ContractPrepareOverlayState;
+
+function pathFromProposta(p: PublicProposta, publicToken: string): string | null {
+  return resolveSigningPath(p.contractSigningUrl ?? null, publicToken);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 export default function PublicProposta({ token }: Props) {
   const navigate = useNavigate();
   const [data, setData] = useState<PublicResponse | null>(null);
@@ -85,15 +101,20 @@ export default function PublicProposta({ token }: Props) {
   const [formOpen, setFormOpen] = useState<false | 'approve' | 'reject'>(false);
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [dockVisible, setDockVisible] = useState(false);
+  const [contractPrepareState, setContractPrepareState] = useState<ContractPrepareState>('idle');
+  const [prepareError, setPrepareError] = useState<string | null>(null);
+  const [retryingSignature, setRetryingSignature] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
+  const autoPrepareStartedRef = useRef(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<PublicResponse> => {
     const res = await api.get<PublicResponse>(`/api/public/propostas/${encodeURIComponent(token)}`, {
       skipRefresh: true,
     });
     setData(res);
     setClientName(res.proposta.cliente_nome ?? '');
     setClientEmail(res.proposta.clienteEmail ?? '');
+    return res;
   }, [token]);
 
   useEffect(() => {
@@ -153,8 +174,6 @@ export default function PublicProposta({ token }: Props) {
   const isDecided = proposta?.status === 'aprovada' || proposta?.status === 'recusada';
   const showSign = isDecided && proposta?.status === 'aprovada' && flowHasStep(fluxo, 'sign');
 
-  const [retryingSignature, setRetryingSignature] = useState(false);
-
   const signStatus = proposta?.contractSignStatus;
   const signingUrl = proposta?.contractSigningUrl;
 
@@ -164,8 +183,6 @@ export default function PublicProposta({ token }: Props) {
     signStatus !== 'signed' &&
     signStatus !== 'failed' &&
     signStatus !== 'cancelled';
-
-  const prepareSignatureRef = useRef(false);
 
   const callPrepareSignature = useCallback(async () => {
     const url = `/api/public/propostas/${encodeURIComponent(token)}/prepare-signature`;
@@ -193,47 +210,93 @@ export default function PublicProposta({ token }: Props) {
     return json;
   }, [token]);
 
-  useEffect(() => {
-    if (!awaitingSigningLink || prepareSignatureRef.current) return;
-    prepareSignatureRef.current = true;
-    (async () => {
-      try {
-        await callPrepareSignature();
-      } catch (err) {
-        console.error('[PublicProposta] prepare-signature:', err);
-        prepareSignatureRef.current = false;
+  const ensureSigningPath = useCallback(
+    async (initial?: PublicProposta): Promise<string | null> => {
+      let current = initial;
+      if (!current) {
+        const refreshed = await load();
+        current = refreshed.proposta;
       }
-    })();
-  }, [awaitingSigningLink, callPrepareSignature]);
 
-  const retrySignature = async () => {
+      let path = pathFromProposta(current, token);
+      if (path) return path;
+
+      try {
+        const json = await callPrepareSignature();
+        if (json.proposta) {
+          path = pathFromProposta(json.proposta, token);
+          if (path) return path;
+        }
+      } catch {
+        /* tenta polling abaixo */
+      }
+
+      for (let i = 0; i < 3; i++) {
+        await sleep(2000);
+        const refreshed = await load();
+        path = pathFromProposta(refreshed.proposta, token);
+        if (path) return path;
+      }
+
+      return null;
+    },
+    [callPrepareSignature, load, token],
+  );
+
+  const redirectToSigning = useCallback(
+    (path: string) => {
+      setContractPrepareState('redirecting');
+      navigate(path, { replace: true });
+    },
+    [navigate],
+  );
+
+  const runPrepareAndRedirect = useCallback(
+    async (initialProposta?: PublicProposta) => {
+      setContractPrepareState('preparing');
+      setPrepareError(null);
+      try {
+        const path = await ensureSigningPath(initialProposta);
+        if (path) {
+          redirectToSigning(path);
+          return;
+        }
+        setContractPrepareState('error');
+        setPrepareError('Não foi possível gerar o link de assinatura. Tente novamente.');
+      } catch (err) {
+        setContractPrepareState('error');
+        setPrepareError(
+          err instanceof ApiError
+            ? friendlySignaturePrepareError(err.message)
+            : 'Não foi possível preparar a assinatura.',
+        );
+      }
+    },
+    [ensureSigningPath, redirectToSigning],
+  );
+
+  const retryPrepareFromOverlay = async () => {
     setRetryingSignature(true);
-    prepareSignatureRef.current = true;
+    autoPrepareStartedRef.current = true;
     try {
-      await callPrepareSignature();
-    } catch (err) {
-      prepareSignatureRef.current = false;
-      const msg =
-        err instanceof ApiError
-          ? friendlySignaturePrepareError(err.message)
-          : 'Não foi possível preparar a assinatura.';
-      alert(msg);
+      await runPrepareAndRedirect();
     } finally {
       setRetryingSignature(false);
     }
   };
 
   useEffect(() => {
-    if (!awaitingSigningLink) return;
-    const interval = window.setInterval(() => {
-      void load();
-    }, 8000);
-    return () => window.clearInterval(interval);
-  }, [awaitingSigningLink, load]);
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('done') === '1') return;
+    if (!awaitingSigningLink || autoPrepareStartedRef.current) return;
+    autoPrepareStartedRef.current = true;
+    void runPrepareAndRedirect();
+  }, [awaitingSigningLink, runPrepareAndRedirect]);
 
   const signPhase = proposta
     ? getContractSignPhase({
         contractSignStatus: proposta.contractSignStatus,
+        contractSignDocumentId: proposta.contractSignDocumentId,
         clienteContratoRecebidoAt: proposta.clienteContratoRecebidoAt,
         orgContratoAceitoAt: proposta.orgContratoAceitoAt,
         contratoConcluidoAt: proposta.contratoConcluidoAt,
@@ -245,9 +308,19 @@ export default function PublicProposta({ token }: Props) {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     if (q.get('done') === '1') return;
+    if (contractPrepareState !== 'idle') return;
     if (!showSign || signPhase !== 'sign_pending' || !signingPath) return;
-    navigate(signingPath);
-  }, [showSign, signPhase, signingPath, navigate]);
+    redirectToSigning(signingPath);
+  }, [showSign, signPhase, signingPath, contractPrepareState, redirectToSigning]);
+
+  const showPrepareOverlay = contractPrepareState !== 'idle';
+
+  const proposalDecision: ProposalDecision | undefined =
+    proposta?.status === 'aprovada'
+      ? 'approved'
+      : proposta?.status === 'recusada'
+        ? 'rejected'
+        : 'pending';
 
   const scrollToDecision = () => {
     anchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -287,11 +360,17 @@ export default function PublicProposta({ token }: Props) {
       );
       setData((prev) => (prev ? { ...prev, proposta: res.proposta, journey: res.journey } : prev));
       setFormOpen(false);
+
       if (action === 'approve') {
         const approvedFluxo = parseProposalFlow(res.proposta.fluxo);
         if (flowHasStep(approvedFluxo, 'sign')) {
-          const path = resolveSigningPath(res.proposta.contractSigningUrl ?? null, token);
-          if (path) navigate(path);
+          autoPrepareStartedRef.current = true;
+          const immediatePath = pathFromProposta(res.proposta, token);
+          if (immediatePath) {
+            redirectToSigning(immediatePath);
+          } else {
+            await runPrepareAndRedirect(res.proposta);
+          }
         }
       }
     } catch (err) {
@@ -347,7 +426,7 @@ export default function PublicProposta({ token }: Props) {
         />
       )}
 
-      {proposta.status === 'aprovada' && (
+      {proposta.status === 'aprovada' && !showPrepareOverlay && (
         <div className="sticky top-0 z-40 w-full bg-emerald-600 text-white px-4 py-3 flex items-center justify-center gap-2 shadow-sm">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
           <span className="text-sm font-bold">Sim — Proposta aprovada</span>
@@ -373,6 +452,7 @@ export default function PublicProposta({ token }: Props) {
                   element={el}
                   previewMode
                   pageLayout={pageLayout}
+                  proposalDecision={proposalDecision}
                   onProposalAction={proposta.status === 'pendente' ? handleProposalAction : undefined}
                 />
               ))}
@@ -388,7 +468,7 @@ export default function PublicProposta({ token }: Props) {
           </p>
         )}
 
-        {proposta.status === 'aprovada' && (
+        {proposta.status === 'aprovada' && !showPrepareOverlay && (
           <>
             {showSign && (
               <PublicSignStep
@@ -397,12 +477,12 @@ export default function PublicProposta({ token }: Props) {
                 orgName={org.name}
                 publicToken={token}
                 onConfirmReceipt={confirmReceipt}
-                onRetrySignature={retrySignature}
+                onRetrySignature={retryPrepareFromOverlay}
                 confirming={isSubmitting}
                 retrying={retryingSignature}
               />
             )}
-            {!showSign && !flowHasStep(fluxo, 'sign') && proposta.status === 'aprovada' && (
+            {!showSign && !flowHasStep(fluxo, 'sign') && (
               <div className="max-w-lg mx-auto my-12 p-6 rounded-2xl bg-emerald-50 text-emerald-800 text-center font-medium border border-emerald-100">
                 Proposta aprovada. Obrigado!
               </div>
@@ -449,7 +529,7 @@ export default function PublicProposta({ token }: Props) {
             <motion.div
               initial={{ y: 40, scale: 0.98 }}
               animate={{ y: 0, scale: 1 }}
-              exit={{ y: 40, scale:  0.98 }}
+              exit={{ y: 40, scale: 0.98 }}
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
             >
@@ -477,6 +557,15 @@ export default function PublicProposta({ token }: Props) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {showPrepareOverlay && (
+        <ContractPreparingOverlay
+          state={contractPrepareState === 'idle' ? 'preparing' : contractPrepareState}
+          errorMessage={prepareError}
+          onRetry={contractPrepareState === 'error' ? () => void retryPrepareFromOverlay() : undefined}
+          retrying={retryingSignature}
+        />
+      )}
     </div>
   );
 }

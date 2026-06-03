@@ -221,6 +221,21 @@ Após o health passar, rodar o smoke test ponta a ponta documentado em
 
 ### E-mails transacionais (proposta / contrato)
 
+#### Vercel (produção / preview)
+
+1. Em **Vercel → Settings → Environment Variables**, configure em **Production** e **Preview**:
+   - `RESEND_API_KEY` (`re_...`, domínio verificado no painel Resend)
+   - `MAIL_FROM` (mesmo endereço verificado, ex. `PropEZ <noreply@taggo.com.br>`)
+   - `MAIL_PROVIDER=resend`
+2. Redeploy após salvar variáveis.
+3. Diagnóstico público: `GET {APP_URL}/api/boot-check` → campo `mail` (`provider`, `configured`, `warnings`).
+4. Teste autenticado (platform admin): `POST /api/admin/operations/test-email` com body `{"to":"seu@email.com"}`.
+5. Não confie só no `.env` local — a função serverless só lê variáveis do painel Vercel.
+
+SMTP na Vercel é possível mas instável (timeout); o app prioriza Resend automaticamente quando `VERCEL=1`, `RESEND_API_KEY` está definida e `MAIL_PROVIDER` não é `smtp`.
+
+#### Local
+
 Preview de template HTML via SMTP (usa o `.env` local):
 
 ```bash

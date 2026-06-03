@@ -47,14 +47,3 @@ export function getListingStatusColors(tone: ListingStatusTone): {
       };
   }
 }
-
-export function readListingView(storageKey: string, fallback: 'grid' | 'list' = 'grid'): 'grid' | 'list' {
-  if (typeof window === 'undefined') return fallback;
-  const v = localStorage.getItem(storageKey);
-  return v === 'list' || v === 'grid' ? v : fallback;
-}
-
-export function persistListingView(storageKey: string, view: 'grid' | 'list'): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(storageKey, view);
-}

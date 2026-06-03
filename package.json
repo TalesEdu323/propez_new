@@ -18,6 +18,7 @@
     "check:integrations": "node scripts/check-integrations.mjs",
     "check:server-imports": "tsx scripts/check-server-imports.ts",
     "check:deploy-env": "node scripts/check-deploy-env.mjs",
+    "check:production-mail": "node scripts/check-production-mail.mjs",
     "test:email": "node scripts/test-smtp-deliverability.mjs",
     "seed:dev": "node scripts/seed-dev.mjs",
     "migrate:suite-credentials": "node scripts/migrate-suite-credentials.mjs",

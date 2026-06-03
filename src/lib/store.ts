@@ -85,6 +85,7 @@ export interface ModeloProposta {
   contratoId?: string;
   chavePix?: string;
   linkPagamento?: string;
+  whatsappComprovante?: string;
   fluxo?: ProposalFlowConfig;
   signatureConfig?: unknown;
   data_criacao: string;
@@ -114,6 +115,7 @@ export interface Proposta {
   contratoId?: string;
   chavePix?: string;
   linkPagamento?: string;
+  whatsappComprovante?: string;
   pago: boolean;
   data_pagamento?: string;
   prosyncLeadId?: string;
@@ -260,6 +262,7 @@ interface ApiModelo {
   contratoTexto?: string | null;
   chavePix?: string | null;
   linkPagamento?: string | null;
+  whatsappComprovante?: string | null;
   tier: PlanTier;
   fluxo?: ProposalFlowConfig;
   signatureConfig?: unknown;
@@ -286,6 +289,7 @@ interface ApiProposta {
   contratoId?: string | null;
   chavePix?: string | null;
   linkPagamento?: string | null;
+  whatsappComprovante?: string | null;
   pago: boolean;
   data_pagamento?: string | null;
   data_criacao: string;
@@ -352,6 +356,7 @@ function fromApiModelo(a: ApiModelo): ModeloProposta {
     contratoTexto: a.contratoTexto ?? undefined,
     chavePix: a.chavePix ?? undefined,
     linkPagamento: a.linkPagamento ?? undefined,
+    whatsappComprovante: a.whatsappComprovante ?? undefined,
     tier: (a.tier ?? 'free') as PlanTier,
     fluxo: a.fluxo,
     signatureConfig: a.signatureConfig ?? undefined,
@@ -380,6 +385,7 @@ function fromApiProposta(a: ApiProposta): Proposta {
     contratoId: a.contratoId ?? undefined,
     chavePix: a.chavePix ?? undefined,
     linkPagamento: a.linkPagamento ?? undefined,
+    whatsappComprovante: a.whatsappComprovante ?? undefined,
     pago: !!a.pago,
     data_pagamento: a.data_pagamento ?? undefined,
     data_criacao: a.data_criacao,
@@ -670,6 +676,7 @@ interface ModeloPayload {
   contratoTexto?: string | null;
   chavePix?: string | null;
   linkPagamento?: string | null;
+  whatsappComprovante?: string | null;
   tier: PlanTier;
   fluxo?: ProposalFlowConfig;
   signatureConfig?: unknown;
@@ -686,6 +693,7 @@ const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
     contratoTexto: m.contratoTexto ?? null,
     chavePix: m.chavePix ?? null,
     linkPagamento: m.linkPagamento ?? null,
+    whatsappComprovante: m.whatsappComprovante ?? null,
     tier: m.tier ?? 'free',
     fluxo: m.fluxo ?? { steps: ['approve', 'sign', 'pay'] },
     signatureConfig: m.signatureConfig ?? null,
@@ -718,6 +726,7 @@ interface PropostaPayload {
   contratoId?: string | null;
   chavePix?: string | null;
   linkPagamento?: string | null;
+  whatsappComprovante?: string | null;
   pago: boolean;
   data_pagamento?: string | null;
   creatorPlan?: PlanTier | null;
@@ -766,6 +775,7 @@ function toPropostaPayload(p: Proposta): PropostaPayload {
     contratoId: normalizeUuidOrNull(p.contratoId),
     chavePix: p.chavePix ?? null,
     linkPagamento: p.linkPagamento ?? null,
+    whatsappComprovante: p.whatsappComprovante ?? null,
     pago: p.pago,
     data_pagamento: normalizeDateTimeOrNull(p.data_pagamento),
     creatorPlan: p.creatorPlan ?? null,

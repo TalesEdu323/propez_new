@@ -35,6 +35,7 @@ export interface LinkProposalContext {
   valorCents: number | null;
   chavePix: string | null;
   linkPagamento: string | null;
+  whatsappComprovante: string | null;
   title: string;
 }
 
@@ -107,10 +108,11 @@ export async function loadLinkProposalContext(pool: Pool, token: string): Promis
     valor_cents: number | null;
     chave_pix: string | null;
     link_pagamento: string | null;
+    whatsapp_comprovante: string | null;
   }>(
     `SELECT sl.id, sl.token, sl.document_id, sl.signer_email, sl.signer_name, sl.used,
             sl.authentication_data, cd.title, cd.proposta_id,
-            p.public_token, p.fluxo, p.valor_cents, p.chave_pix, p.link_pagamento
+            p.public_token, p.fluxo, p.valor_cents, p.chave_pix, p.link_pagamento, p.whatsapp_comprovante
      FROM signature_links sl
      JOIN contract_documents cd ON cd.id = sl.document_id
      LEFT JOIN propostas p ON p.id = cd.proposta_id
@@ -132,6 +134,7 @@ export async function loadLinkProposalContext(pool: Pool, token: string): Promis
     valorCents: row.valor_cents,
     chavePix: row.chave_pix,
     linkPagamento: row.link_pagamento,
+    whatsappComprovante: row.whatsapp_comprovante,
     title: row.title,
   };
 }
@@ -297,6 +300,14 @@ export async function completePaymentStep(deps: {
     PAYMENT: { completedAt: new Date().toISOString() },
   };
   await updateAuthData(deps.pool, ctx.linkId, auth);
+  await deps.pool.query(
+    `UPDATE propostas p
+     SET pago = true, data_pagamento = NOW()
+     FROM contract_documents cd
+     JOIN signature_links sl ON sl.document_id = cd.id
+     WHERE sl.id = $1 AND p.id = cd.proposta_id AND cd.proposta_id IS NOT NULL`,
+    [ctx.linkId],
+  );
   return { ok: true };
 }
 
@@ -335,6 +346,7 @@ export async function getJourneyMethodsPayload(pool: Pool, token: string) {
           valorCents: ctx.valorCents,
           chavePix: ctx.chavePix,
           linkPagamento: ctx.linkPagamento,
+          whatsappComprovante: ctx.whatsappComprovante,
         }
       : null,
   };

@@ -13,6 +13,11 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['icone.svg', 'logo.svg'],
+        workbox: {
+          navigateFallback: 'index.html',
+          navigateFallbackDenylist: [/^\/assets\//, /^\/api\//],
+          cleanupOutdatedCaches: true,
+        },
         manifest: {
           name: LANDING_SEO.title,
           short_name: 'Propez',

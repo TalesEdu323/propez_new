@@ -48,6 +48,7 @@ export interface SerializedModelo {
   contratoTexto?: string
   chavePix?: string
   linkPagamento?: string
+  whatsappComprovante?: string
   tier: 'free' | 'pro' | 'business'
   fluxo: ProposalFlowConfig
   signatureConfig?: unknown
@@ -146,6 +147,7 @@ export function serializeModelo(r: AnyRow): SerializedModelo {
     contratoTexto: r.contrato_texto ?? undefined,
     chavePix: r.chave_pix ?? undefined,
     linkPagamento: r.link_pagamento ?? undefined,
+    whatsappComprovante: r.whatsapp_comprovante ?? undefined,
     tier: (r.tier ?? 'free') as 'free' | 'pro' | 'business',
     fluxo: parseProposalFlow(r.fluxo),
     signatureConfig: r.signature_config ?? undefined,
@@ -176,6 +178,7 @@ export function serializeProposta(r: AnyRow): SerializedProposta {
     contratoId: r.contrato_id,
     chavePix: r.chave_pix,
     linkPagamento: r.link_pagamento,
+    whatsappComprovante: r.whatsapp_comprovante,
     pago: !!r.pago,
     data_pagamento: r.data_pagamento,
     data_criacao: r.created_at,

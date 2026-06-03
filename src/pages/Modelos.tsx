@@ -6,10 +6,11 @@ import { useModelos } from '../hooks/useStoreEntity';
 import { formatDateBR } from '../lib/format';
 import type { NavigateFn, ModelosTab } from '../types/navigation';
 import { LojaTemplatesPanel } from './modelos/LojaTemplatesPanel';
-import { ListingViewToggle, createListingViewState } from '../components/listing/ListingViewToggle';
+import { ListingViewToggle } from '../components/listing/ListingViewToggle';
+import { useListingViewPref } from '../hooks/useListingViewPref';
 import { LISTING_GRID_CLASS, LISTING_LIST_CLASS } from '../components/listing/listingLayout';
 
-const MODELOS_VIEW_KEY = 'propez-listing-view-modelos';
+const MODELOS_VIEW_KEY = 'listing_view:modelos';
 
 export default function Modelos({
   navigate,
@@ -21,9 +22,7 @@ export default function Modelos({
   const modelos = useModelos();
   const [searchTerm, setSearchTerm] = useState('');
   const [tab, setTab] = useState<ModelosTab>(initialTab);
-  const [listView, setListView] = useState<'grid' | 'list'>(() =>
-    createListingViewState(MODELOS_VIEW_KEY, 'grid'),
-  );
+  const [listView, setListView] = useListingViewPref(MODELOS_VIEW_KEY, 'grid');
 
   useEffect(() => {
     setTab(initialTab);
@@ -149,7 +148,6 @@ export default function Modelos({
                   />
                 </div>
                 <ListingViewToggle
-                  storageKey={MODELOS_VIEW_KEY}
                   view={listView}
                   onChange={setListView}
                 />

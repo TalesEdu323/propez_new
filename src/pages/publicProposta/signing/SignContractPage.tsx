@@ -291,6 +291,8 @@ export default function SignContractPage() {
         valorCents={journey.payment.valorCents}
         chavePix={journey.payment.chavePix}
         linkPagamento={journey.payment.linkPagamento}
+        whatsappComprovante={journey.payment.whatsappComprovante}
+        proposalTitle={meta?.title}
         org={orgBrand}
         onBack={() => setStep('auth_select')}
         onComplete={handlePaymentComplete}

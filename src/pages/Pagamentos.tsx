@@ -5,19 +5,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import { formatBRL } from '../lib/format';
 import { usePropostas } from '../hooks/useStoreEntity';
 import type { NavigateFn } from '../types/navigation';
-import { ListingViewToggle, createListingViewState } from '../components/listing/ListingViewToggle';
+import { ListingViewToggle } from '../components/listing/ListingViewToggle';
+import { useListingViewPref } from '../hooks/useListingViewPref';
 import { LISTING_GRID_CLASS, LISTING_LIST_CLASS } from '../components/listing/listingLayout';
 
-const PAGAMENTOS_VIEW_KEY = 'propez-listing-view-pagamentos';
+const PAGAMENTOS_VIEW_KEY = 'listing_view:pagamentos';
 
 export default function Pagamentos({ navigate }: { navigate: NavigateFn }) {
   const allPropostas = usePropostas();
   const propostas = useMemo(() => allPropostas.filter(p => p.status === 'aprovada'), [allPropostas]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'todos' | 'pagos' | 'pendentes'>('todos');
-  const [listView, setListView] = useState<'grid' | 'list'>(() =>
-    createListingViewState(PAGAMENTOS_VIEW_KEY, 'list'),
-  );
+  const [listView, setListView] = useListingViewPref(PAGAMENTOS_VIEW_KEY, 'list');
 
   const toggleStatus = (id: string) => {
     const updated = allPropostas.map(p => {
@@ -80,11 +79,7 @@ export default function Pagamentos({ navigate }: { navigate: NavigateFn }) {
             className="glass-input pl-14 py-4"
           />
         </div>
-        <ListingViewToggle
-          storageKey={PAGAMENTOS_VIEW_KEY}
-          view={listView}
-          onChange={setListView}
-        />
+        <ListingViewToggle view={listView} onChange={setListView} />
         <div className="flex bg-white/50 backdrop-blur-3xl p-1.5 rounded-2xl border border-black/[0.05] shadow-sm">
           {(['todos', 'pagos', 'pendentes'] as const).map((f) => (
             <button

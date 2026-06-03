@@ -1,7 +1,6 @@
 import { useLayoutEffect } from 'react';
 import { MarketingLayout } from '../../marketing/MarketingLayout';
 import { PageMeta } from '../../marketing/PageMeta';
-import { NewsletterSignup } from '../../marketing/NewsletterSignup';
 import { CustomCursor } from '../../marketing/landing/CustomCursor';
 import { LandingHero } from '../../marketing/landing/LandingHero';
 import { LandingComparison } from '../../marketing/landing/LandingComparison';
@@ -37,12 +36,6 @@ export default function LandingPage() {
       <LandingROICalculator />
       <LandingPricing />
       <LandingFinalCTA />
-      <section className="py-16 bg-gray-50 border-t border-gray-100">
-        <div className="max-w-lg mx-auto px-6 text-center">
-          <h2 className="text-xl font-bold mb-4 font-heading">Newsletter</h2>
-          <NewsletterSignup />
-        </div>
-      </section>
     </MarketingLayout>
   );
 }
