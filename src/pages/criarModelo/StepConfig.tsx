@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import { formatBRL } from '../../lib/format';
 import type { Servico } from '../../lib/store';
+import { sanitizeWhatsappComprovante } from '../../lib/sanitizeModeloPayload';
 import type { CriarModeloFormData, SetCriarModeloFormData } from './types';
 
 export interface StepConfigProps {
@@ -102,11 +103,19 @@ export function StepConfig({ formData, setFormData, servicosDisponiveis }: StepC
               <input
                 type="tel"
                 value={formData.whatsappComprovante}
-                onChange={(e) => setFormData({ ...formData, whatsappComprovante: e.target.value })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    whatsappComprovante: sanitizeWhatsappComprovante(e.target.value) ?? '',
+                  })
+                }
+                maxLength={20}
                 className="w-full bg-zinc-50 border border-black/10 rounded-xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
-                placeholder="(11) 99999-9999"
+                placeholder="5511999999999"
               />
-              <p className="text-xs text-zinc-500 mt-2">Número que receberá o comprovante quando o cliente marcar como pago.</p>
+              <p className="text-xs text-zinc-500 mt-2">
+                Apenas números (com DDI). Ex.: 5511999999999 — usado quando o cliente marcar como pago.
+              </p>
             </div>
           </div>
         </div>

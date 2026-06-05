@@ -38,7 +38,7 @@ export type ElementData = BuilderElement;
 export type BuilderSaveHandler = (
   elements: ElementData[],
   pageLayout: BuilderPageLayout,
-) => void;
+) => void | Promise<void>;
 
 const PREF_VIEWPORT_TOOLTIP = 'builder:viewport_tooltip_dismissed';
 const PREF_MOBILE_REVIEWED = 'builder:mobile_layout_reviewed';
@@ -51,6 +51,8 @@ export default function Builder({
   onChange,
   onPageLayoutChange,
   saveLabel = 'Salvar',
+  saveLoading = false,
+  saveError = null,
   previewMode: initialPreviewMode = false,
   embedded = false,
   widgetWhitelist,
@@ -64,6 +66,8 @@ export default function Builder({
   onChange?: (elements: ElementData[]) => void;
   onPageLayoutChange?: (layout: BuilderPageLayout) => void;
   saveLabel?: string;
+  saveLoading?: boolean;
+  saveError?: string | null;
   previewMode?: boolean;
   embedded?: boolean;
   widgetWhitelist?: ReadonlySet<BuilderElementType>;
@@ -322,8 +326,8 @@ export default function Builder({
     setElementsWithHistory(moveElementRecursiveTree(elements, id, direction));
   };
 
-  const handleSaveClick = () => {
-    if (!onSave) return;
+  const handleSaveClick = async () => {
+    if (!onSave || saveLoading) return;
     if (!mobileReviewed && !embedded) {
       const goMobile = window.confirm(
         'Recomendamos revisar a proposta no celular antes de salvar. Abrir visualização mobile agora?',
@@ -333,7 +337,7 @@ export default function Builder({
         return;
       }
     }
-    (onSave as BuilderSaveHandler)(elements, pageLayout);
+    await (onSave as BuilderSaveHandler)(elements, pageLayout);
   };
 
   const selectedElement = selectedId ? findElementRecursiveTree(elements, selectedId) : undefined;
@@ -376,6 +380,8 @@ export default function Builder({
               void saveUiPreference(PREF_VIEWPORT_TOOLTIP, true);
             }}
             saveLabel={saveLabel}
+            saveLoading={saveLoading}
+            saveError={saveError}
             onBack={onBack}
             onTogglePreview={() => { setPreviewMode(!previewMode); setSelectedId(null); }}
             onImport={hideImportExport ? undefined : handleImport}

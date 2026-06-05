@@ -16,6 +16,7 @@
  */
 import type { BuilderElement, BuilderPageLayout } from '../types/builder';
 import { normalizePageLayout } from './pageLayout';
+import { sanitizePageLayoutForApi, sanitizeWhatsappComprovante } from './sanitizeModeloPayload';
 import type { ProposalFlowConfig } from '../types/proposalFlow';
 import { api } from './apiClient';
 import { normalizeUuidOrNull } from './normalizeUuid';
@@ -536,7 +537,7 @@ async function diffSave<T extends { id: string }, TPayload>(
   setList: (v: T[]) => void,
   newList: T[],
   impl: EntityApi<T, TPayload>,
-): Promise<void> {
+): Promise<{ failed: Array<{ id: string; err: unknown }> }> {
   const prev = getList();
   const prevById = new Map(prev.filter(Boolean).map((i) => [i.id, i] as const));
   const nextById = new Map(newList.filter(Boolean).map((i) => [i.id, i] as const));
@@ -546,6 +547,7 @@ async function diffSave<T extends { id: string }, TPayload>(
   notify(key);
 
   const ops: Promise<void>[] = [];
+  const failed: Array<{ id: string; err: unknown }> = [];
 
   // DELETEs
   for (const [id, deletedItem] of prevById) {
@@ -558,6 +560,7 @@ async function diffSave<T extends { id: string }, TPayload>(
             notify(key);
           })
           .catch((err) => {
+            failed.push({ id, err });
             notifyStoreSaveError(key, 'delete', err);
             const current = getList();
             if (!current.some((i) => i.id === id)) {
@@ -581,6 +584,7 @@ async function diffSave<T extends { id: string }, TPayload>(
             notify(key);
           })
           .catch((err) => {
+            failed.push({ id, err });
             notifyStoreSaveError(key, 'create', err);
             setList(removeCacheItem(getList(), id));
             notify(key);
@@ -595,6 +599,7 @@ async function diffSave<T extends { id: string }, TPayload>(
             notify(key);
           })
           .catch((err) => {
+            failed.push({ id, err });
             notifyStoreSaveError(key, 'update', err);
             setList(replaceCacheItem(getList(), id, prevItem));
             notify(key);
@@ -604,6 +609,7 @@ async function diffSave<T extends { id: string }, TPayload>(
   }
 
   await Promise.allSettled(ops);
+  return { failed };
 }
 
 // ============================================================================
@@ -682,22 +688,27 @@ interface ModeloPayload {
   signatureConfig?: unknown;
 }
 const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
-  toPayload: (m) => ({
-    nome: m.nome,
-    elementos: m.elementos ?? [],
-    pageLayout: m.pageLayout ?? normalizePageLayout(null),
-    servicos: (m.servicos ?? [])
-      .map((sid) => normalizeUuidOrNull(sid))
-      .filter((sid): sid is string => sid !== null),
-    contratoId: normalizeUuidOrNull(m.contratoId),
-    contratoTexto: m.contratoTexto ?? null,
-    chavePix: m.chavePix ?? null,
-    linkPagamento: m.linkPagamento ?? null,
-    whatsappComprovante: m.whatsappComprovante ?? null,
-    tier: m.tier ?? 'free',
-    fluxo: m.fluxo ?? { steps: ['approve', 'sign', 'pay'] },
-    signatureConfig: m.signatureConfig ?? null,
-  }),
+  toPayload: (m) => {
+    const payload: ModeloPayload = {
+      nome: m.nome,
+      elementos: m.elementos ?? [],
+      pageLayout: sanitizePageLayoutForApi(m.pageLayout ?? normalizePageLayout(null)),
+      servicos: (m.servicos ?? [])
+        .map((sid) => normalizeUuidOrNull(sid))
+        .filter((sid): sid is string => sid !== null),
+      contratoId: normalizeUuidOrNull(m.contratoId),
+      contratoTexto: m.contratoTexto ?? null,
+      chavePix: m.chavePix ?? null,
+      linkPagamento: m.linkPagamento ?? null,
+      whatsappComprovante: sanitizeWhatsappComprovante(m.whatsappComprovante),
+      tier: m.tier ?? 'free',
+      fluxo: m.fluxo ?? { steps: ['approve', 'sign', 'pay'] },
+    };
+    if (m.signatureConfig != null) {
+      payload.signatureConfig = m.signatureConfig;
+    }
+    return payload;
+  },
   create: async (p) => fromApiModelo(await api.post<ApiModelo>('/api/modelos', p as unknown as Record<string, unknown>)),
   update: async (id, p) => fromApiModelo(await api.patch<ApiModelo>(`/api/modelos/${id}`, p as unknown as Record<string, unknown>)),
   delete: async (id) => {
@@ -968,6 +979,20 @@ export const store = {
       list,
       modeloApi,
     );
+  },
+  saveModelosAsync: async (list: ModeloProposta[]): Promise<void> => {
+    const { failed } = await diffSave(
+      'propez_modelos',
+      () => cache.modelos,
+      (v) => {
+        cache.modelos = v;
+      },
+      list,
+      modeloApi,
+    );
+    if (failed.length > 0) {
+      throw failed[0].err;
+    }
   },
 
   getPropostas: (): Proposta[] => cache.propostas,

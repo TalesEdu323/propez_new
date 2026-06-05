@@ -35,18 +35,30 @@ if (body.mail) {
     for (const w of body.mail.warnings) console.log('  -', w);
   }
 } else {
-  console.log(
-    '\n⚠ Campo mail ausente — faça deploy da versão atual e rode de novo.',
-  );
-  console.log('Enquanto isso, confira na Vercel: RESEND_API_KEY, MAIL_PROVIDER=resend, MAIL_FROM');
+  console.log('\n⚠ Campo mail ausente no boot-check de produção.');
+  console.log('Isso significa que o deploy na Vercel ainda NÃO inclui a versão nova do código.');
+  console.log('Faça push + redeploy e rode este script de novo.');
+  console.log('\n── Enquanto isso (SMTP Hostinger na Vercel) ──');
+  console.log('  MAIL_PROVIDER=smtp');
+  console.log('  MAIL_FROM=PropEZ <noreplypropez@taggo.com.br>');
+  console.log('  SMTP_HOST=smtp.hostinger.com');
+  console.log('  SMTP_PORT=465');
+  console.log('  SMTP_SECURE=true');
+  console.log('  SMTP_USER=noreplypropez@taggo.com.br');
+  console.log('  SMTP_PASS=<senha sem aspas no painel>');
+  console.log('  SMTP_TIMEOUT=30000');
+  console.log('  SMTP_GREETING_TIMEOUT=8000');
+  console.log('\n(Opção alternativa: RESEND_API_KEY + MAIL_PROVIDER=resend)');
 }
 
 if (!body.mail?.configured) {
-  console.log('\n── Ação na Vercel (Production + Preview) ──');
-  console.log('  RESEND_API_KEY=re_...');
-  console.log('  MAIL_PROVIDER=resend');
-  console.log('  MAIL_FROM=PropEZ <noreply@...>');
-  console.log('Redeploy após salvar.');
+  if (body.mail) {
+    console.log('\n── E-mail não configurado na função serverless ──');
+    if (body.mail.provider === 'none') {
+      console.log('provider=none — variáveis SMTP ou Resend ausentes/inválidas na Vercel.');
+    }
+    console.log('Confira Production + Preview, salve e redeploy.');
+  }
   process.exit(1);
 }
 

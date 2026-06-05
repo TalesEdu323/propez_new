@@ -128,7 +128,11 @@ export const iaApi = {
 export function getIaErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
     const body = err.body as IaErrorBody | undefined;
-    return body?.error ?? err.message;
+    const base = body?.error ?? err.message;
+    if (body?.code === 'validation_failed' && err.status === 422) {
+      return `${base} Inclua escopo, prazos, investimento e tipo de serviço na descrição.`;
+    }
+    return base;
   }
   if (err instanceof Error) return err.message;
   return 'Não foi possível gerar. Tente novamente.';

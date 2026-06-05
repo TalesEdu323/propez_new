@@ -31,4 +31,14 @@ describe('validateGeneratedLayout', () => {
     const result = validateGeneratedLayout(raw, allowed);
     expect(result.some((el) => el.type === 'service_stack')).toBe(false);
   });
+
+  it('completa com blocos padrão quando o LLM gera poucos widgets permitidos', () => {
+    const allowed = getIaAllowedWidgets('pro');
+    const raw = {
+      elementos: [{ id: 'a1', type: 'marketing_hero', props: { title: 'Hero' } }],
+    };
+    const result = validateGeneratedLayout(raw, allowed);
+    expect(result.length).toBeGreaterThanOrEqual(2);
+    expect(result.some((el) => el.type === 'heading' || el.type === 'paragraph')).toBe(true);
+  });
 });

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ChevronLeft, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { store, ModeloProposta } from '../lib/store';
+import { formatStoreSaveError } from '../lib/storeSaveFeedback';
 import Builder from '../components/Builder';
 import { createId } from '../lib/ids';
 import { useContratos, useServicos, useUserConfig } from '../hooks/useStoreEntity';
@@ -52,6 +53,8 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
     userConfig.segment ?? 'generico',
   );
   const [fromStarterId, setFromStarterId] = useState<string | null>(null);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (userConfig.segment) setLayoutOfferType(userConfig.segment);
@@ -78,7 +81,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
     }
   }, [initialData]);
 
-  const handleSave = (finalElements: BuilderElement[], finalPageLayout: BuilderPageLayout) => {
+  const handleSave = async (finalElements: BuilderElement[], finalPageLayout: BuilderPageLayout) => {
     if (hasUnresolvedImagePrompts(finalElements)) {
       alert('Resolva as imagens pendentes no passo "Imagens e banners" antes de salvar o modelo.');
       return;
@@ -101,24 +104,32 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
     };
 
     const modelos = store.getModelos();
-    if (initialData?.editId) {
-      store.saveModelos(modelos.map((m) => (m.id === newModelo.id ? newModelo : m)));
-    } else {
-      store.saveModelos([newModelo, ...modelos]);
-    }
+    const nextList = initialData?.editId
+      ? modelos.map((m) => (m.id === newModelo.id ? newModelo : m))
+      : [newModelo, ...modelos];
 
-    const fluidoReturn =
-      typeof initialData?.fluidoReturn === 'string' ? initialData.fluidoReturn : undefined;
-    const fluidoStep =
-      typeof initialData?.fluidoStep === 'number'
-        ? initialData.fluidoStep
-        : initialData?.fluidoStep != null
-          ? Number(initialData.fluidoStep)
-          : undefined;
-    if (fluidoReturn && fluidoReturn === newModelo.id && fluidoStep != null && !Number.isNaN(fluidoStep)) {
-      navigate('propez-fluido', { fluidoReturn, fluidoStep });
-    } else {
-      navigate('modelos');
+    setSaveLoading(true);
+    setSaveError(null);
+    try {
+      await store.saveModelosAsync(nextList);
+
+      const fluidoReturn =
+        typeof initialData?.fluidoReturn === 'string' ? initialData.fluidoReturn : undefined;
+      const fluidoStep =
+        typeof initialData?.fluidoStep === 'number'
+          ? initialData.fluidoStep
+          : initialData?.fluidoStep != null
+            ? Number(initialData.fluidoStep)
+            : undefined;
+      if (fluidoReturn && fluidoReturn === newModelo.id && fluidoStep != null && !Number.isNaN(fluidoStep)) {
+        navigate('propez-fluido', { fluidoReturn, fluidoStep });
+      } else {
+        navigate('modelos');
+      }
+    } catch (err) {
+      setSaveError(formatStoreSaveError(err));
+    } finally {
+      setSaveLoading(false);
     }
   };
 
@@ -189,6 +200,8 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
           onSave={handleSave}
           onBack={() => setStep(builderBackStep)}
           saveLabel="Salvar Modelo"
+          saveLoading={saveLoading}
+          saveError={saveError}
         />
       </motion.div>
     );

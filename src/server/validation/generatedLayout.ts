@@ -23,6 +23,30 @@ const layoutResponseSchema = z.object({
   elementos: z.array(elementSchema).min(1).max(20),
 });
 
+const FALLBACK_BLOCKS: Array<{ type: BuilderElementType; props: Record<string, unknown> }> = [
+  { type: 'heading', props: { text: 'Sua proposta' } },
+  { type: 'paragraph', props: { text: 'Descreva aqui o escopo, prazos e benefícios da sua oferta.' } },
+  { type: 'button', props: { text: 'Aprovar proposta', proposalAction: 'approve' } },
+];
+
+function buildFallbackElements(
+  allowed: ReadonlySet<BuilderElementType>,
+  existing: BuilderElement[],
+): BuilderElement[] {
+  const result = [...existing];
+  for (const block of FALLBACK_BLOCKS) {
+    if (result.length >= 3) break;
+    if (!allowed.has(block.type)) continue;
+    if (result.some((el) => el.type === block.type)) continue;
+    result.push({
+      id: createId(),
+      type: block.type,
+      props: { ...block.props },
+    } as BuilderElement);
+  }
+  return result;
+}
+
 function cloneElement(
   el: RawElement,
   allowed: ReadonlySet<BuilderElementType>,
@@ -65,9 +89,12 @@ export function validateGeneratedLayout(
     .map((el) => cloneElement(el, allowedWidgets))
     .filter((el): el is BuilderElement => el !== null);
 
-  if (elementos.length < 3) {
+  const withFallback =
+    elementos.length >= 3 ? elementos : buildFallbackElements(allowedWidgets, elementos);
+
+  if (withFallback.length < 2) {
     throw new LayoutValidationError('Poucos blocos gerados. Tente uma descrição mais detalhada.');
   }
 
-  return elementos;
+  return withFallback;
 }

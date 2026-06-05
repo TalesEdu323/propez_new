@@ -1,45 +1,17 @@
 import express from 'express'
 import type { Request, Response, Router } from 'express'
 import type { Pool } from 'pg'
-import { z } from 'zod'
 import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import { serializeModelo } from '../db/serializers.js'
-import { proposalFlowConfigSchema } from '../validation/proposalFlow.js'
 import { fetchOrgBrand, mergePageLayoutWithOrgBrand } from '../services/orgBrandDefaults.js'
-
-const builderElement = z.object({}).passthrough()
+import { modeloBodySchema, modeloPatchSchema } from '../validation/modeloPayload.js'
 
 const MODEL_SELECT = `id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
               chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config, created_at`
 
-const pageLayoutSchema = z.object({
-  widthMode: z.enum(['boxed', 'full']),
-  horizontalPadding: z.number().min(0).max(120),
-  maxContentWidth: z.number().positive().optional(),
-}).passthrough()
-
-const optionalUuid = z.preprocess(
-  (v) => (v === '' || v === undefined ? null : v),
-  z.string().uuid().nullable().optional(),
-)
-
-const bodySchema = z.object({
-  nome: z.string().trim().min(1).max(200),
-  elementos: z.array(builderElement).default([]),
-  pageLayout: pageLayoutSchema.optional(),
-  servicos: z.array(z.string().uuid()).default([]),
-  contratoId: optionalUuid,
-  contratoTexto: z.string().max(200_000).optional().nullable(),
-  chavePix: z.string().max(500).optional().nullable(),
-  linkPagamento: z.string().max(2000).optional().nullable(),
-  whatsappComprovante: z.string().max(30).optional().nullable(),
-  tier: z.enum(['free', 'pro', 'business']).default('free'),
-  fluxo: proposalFlowConfigSchema.optional(),
-  signatureConfig: z.record(z.unknown()).optional(),
-})
-
-const patchSchema = bodySchema.partial()
+const bodySchema = modeloBodySchema
+const patchSchema = modeloPatchSchema
 
 export function createModelosRouter(deps: {
   pool: Pool
@@ -110,7 +82,7 @@ export function createModelosRouter(deps: {
   router.patch('/:id', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
     const parsed = patchSchema.safeParse(req.body)
-    if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' })
+    if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
     const d = parsed.data
     const { rows } = await pool.query(
       `UPDATE modelos_propostas SET

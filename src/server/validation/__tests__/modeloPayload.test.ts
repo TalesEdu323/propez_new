@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest';
+import { modeloBodySchema } from '../modeloPayload.js';
+
+describe('modeloBodySchema', () => {
+  const validBase = {
+    nome: 'Modelo teste',
+    elementos: [],
+    servicos: [],
+    tier: 'free' as const,
+  };
+
+  it('aceita body sem signatureConfig', () => {
+    const parsed = modeloBodySchema.safeParse(validBase);
+    expect(parsed.success).toBe(true);
+  });
+
+  it('aceita signatureConfig null', () => {
+    const parsed = modeloBodySchema.safeParse({ ...validBase, signatureConfig: null });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('aceita whatsappComprovante com até 20 dígitos', () => {
+    const parsed = modeloBodySchema.safeParse({
+      ...validBase,
+      whatsappComprovante: '5511999999999',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejeita whatsappComprovante com mais de 20 caracteres', () => {
+    const parsed = modeloBodySchema.safeParse({
+      ...validBase,
+      whatsappComprovante: '1'.repeat(21),
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejeita pageLayout.maxContentWidth zero', () => {
+    const parsed = modeloBodySchema.safeParse({
+      ...validBase,
+      pageLayout: { widthMode: 'boxed', horizontalPadding: 60, maxContentWidth: 0 },
+    });
+    expect(parsed.success).toBe(false);
+  });
+});

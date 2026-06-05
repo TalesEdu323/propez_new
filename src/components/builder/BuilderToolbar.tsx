@@ -13,6 +13,8 @@ export interface BuilderToolbarProps {
   showViewportTooltip?: boolean;
   onDismissViewportTooltip?: () => void;
   saveLabel?: string;
+  saveLoading?: boolean;
+  saveError?: string | null;
   onBack?: () => void;
   onTogglePreview: () => void;
   onImport?: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -34,6 +36,8 @@ export function BuilderToolbar({
   showViewportTooltip,
   onDismissViewportTooltip,
   saveLabel = 'Salvar',
+  saveLoading = false,
+  saveError = null,
   onBack,
   onTogglePreview,
   onImport,
@@ -54,7 +58,7 @@ export function BuilderToolbar({
   ];
 
   return (
-    <div className="h-16 glass-panel border-b border-black/5 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20 shadow-sm shrink-0 bg-white/80">
+    <div className="h-16 glass-panel border-b border-black/5 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20 shadow-sm shrink-0 bg-white/80 relative">
       <div className="flex items-center gap-2 flex-wrap">
         {onBack && (
           <button type="button" onClick={onBack} className="btn-secondary mr-2">
@@ -153,12 +157,17 @@ export function BuilderToolbar({
           {onSave && (
             <button
               type="button"
-              title={saveLabel}
+              title={saveError ?? saveLabel}
               aria-label={saveLabel}
               onClick={onSave}
-              className="p-2 rounded-xl bg-zinc-900 text-white hover:bg-black transition-all active:scale-[0.97] shadow-lg shadow-black/5"
+              disabled={saveLoading}
+              className="p-2 rounded-xl bg-zinc-900 text-white hover:bg-black transition-all active:scale-[0.97] shadow-lg shadow-black/5 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <Save className="w-4 h-4" />
+              {saveLoading ? (
+                <span className="block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
             </button>
           )}
         </div>
@@ -167,14 +176,24 @@ export function BuilderToolbar({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            title={saveLabel}
+            title={saveError ?? saveLabel}
             aria-label={saveLabel}
             onClick={onSave}
-            className="p-2 rounded-xl bg-zinc-900 text-white hover:bg-black transition-all active:scale-[0.97] shadow-lg shadow-black/5"
+            disabled={saveLoading}
+            className="p-2 rounded-xl bg-zinc-900 text-white hover:bg-black transition-all active:scale-[0.97] shadow-lg shadow-black/5 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Save className="w-4 h-4" />
+            {saveLoading ? (
+              <span className="block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
           </button>
         </div>
+      )}
+      {saveError && !previewMode && (
+        <p className="absolute left-1/2 -translate-x-1/2 top-full mt-1 text-xs text-red-600 max-w-md text-center px-2">
+          {saveError}
+        </p>
       )}
     </div>
   );
