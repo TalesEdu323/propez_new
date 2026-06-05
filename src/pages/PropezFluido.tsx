@@ -11,6 +11,7 @@ import {
   updateProposta,
   refreshEntity,
   fetchPropostaById,
+  fetchModeloById,
   type Servico,
 } from '../lib/store';
 import { ApiError } from '../lib/apiClient';
@@ -145,8 +146,12 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
 
   const resolveModeloElementos = useCallback(
     async (modeloId: string): Promise<BuilderElement[]> => {
-      const modelo = store.getModelos().find(m => m.id === modeloId) ?? modelos.find(m => m.id === modeloId);
+      let modelo = store.getModelos().find(m => m.id === modeloId) ?? modelos.find(m => m.id === modeloId);
       if (!modelo) return [];
+      if (!modelo.elementos?.length) {
+        modelo = (await fetchModeloById(modeloId)) ?? modelo;
+      }
+      if (!modelo.elementos?.length) return [];
 
       let elementos = mergeServiceLayouts(modelo.elementos, modelo.servicos, servicosDisponiveis);
       if (!hasUnresolvedImagePrompts(elementos)) return elementos;

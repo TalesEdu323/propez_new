@@ -639,7 +639,7 @@ export function RenderElement({
           <div className="flex items-center gap-3">
             {pickSafeImageUrl(props.logoUrl) || pickSafeImageUrl(theme.logoUrl) ? (
               <SafeImg
-                src={(props.logoUrl as string) || theme.logoUrl}
+                src={pickSafeImageUrl(props.logoUrl) ?? pickSafeImageUrl(theme.logoUrl)}
                 alt={String(props.logoText ?? 'Logo')}
                 className="h-8 max-w-[140px] object-contain"
               />

@@ -1,4 +1,4 @@
-import type { BuilderPageLayout } from '../types/builder';
+import type { BuilderElement, BuilderPageLayout } from '../types/builder';
 import { normalizePageLayout } from './pageLayout';
 
 /** Normaliza WhatsApp para dígitos (E.164 compacto), máx. 20 caracteres. */
@@ -17,4 +17,53 @@ export function sanitizePageLayoutForApi(raw: BuilderPageLayout | null | undefin
     return { ...rest, maxContentWidth };
   }
   return rest;
+}
+
+const STRIP_PROPS = new Set(['imageGeneratePrompt', 'imageSearchQuery']);
+
+function stripRecordProps(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (STRIP_PROPS.has(key)) continue;
+    if (Array.isArray(value)) {
+      out[key] = value.map((item) =>
+        typeof item === 'object' && item !== null && !Array.isArray(item)
+          ? stripRecordProps(item as Record<string, unknown>)
+          : item,
+      );
+    } else if (typeof value === 'object' && value !== null) {
+      out[key] = stripRecordProps(value as Record<string, unknown>);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/** Remove metadados internos de IA antes de persistir no servidor. */
+export function stripElementosForApi(elementos: BuilderElement[]): BuilderElement[] {
+  return elementos.map((el) => {
+    const next: BuilderElement = {
+      ...el,
+      props: stripRecordProps((el.props ?? {}) as Record<string, unknown>),
+    };
+    if (el.children?.length) {
+      next.children = stripElementosForApi(el.children);
+    }
+    return next;
+  });
+}
+
+/** Alerta se o payload de elementos for excessivamente grande (>500KB serializado). */
+export function warnIfElementosPayloadLarge(elementos: BuilderElement[]): void {
+  try {
+    const size = JSON.stringify(elementos).length;
+    if (size > 500_000) {
+      console.warn(
+        `[modelo] Payload de elementos muito grande (${Math.round(size / 1024)}KB). O salvamento pode demorar ou falhar.`,
+      );
+    }
+  } catch {
+    /* ignore */
+  }
 }

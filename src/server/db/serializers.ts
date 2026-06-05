@@ -155,6 +155,17 @@ export function serializeModelo(r: AnyRow): SerializedModelo {
   }
 }
 
+/** Versão leve para listagem (sem elementos, page_layout, contrato_texto, signature_config). */
+export function serializeModeloSummary(r: AnyRow): SerializedModelo {
+  return serializeModelo({
+    ...r,
+    elementos: [],
+    page_layout: null,
+    contrato_texto: null,
+    signature_config: null,
+  })
+}
+
 export function serializeProposta(r: AnyRow): SerializedProposta {
   return {
     id: r.id,

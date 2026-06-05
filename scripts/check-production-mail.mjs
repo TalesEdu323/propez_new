@@ -36,7 +36,7 @@ if (body.mail) {
   }
 } else {
   console.log('\n⚠ Campo mail ausente no boot-check de produção.');
-  console.log('Isso significa que o deploy na Vercel ainda NÃO inclui a versão nova do código.');
+  console.log('Causa comum: api/boot-check.ts desatualizado na Vercel — faça deploy do commit mais recente.');
   console.log('Faça push + redeploy e rode este script de novo.');
   console.log('\n── Enquanto isso (SMTP Hostinger na Vercel) ──');
   console.log('  MAIL_PROVIDER=smtp');

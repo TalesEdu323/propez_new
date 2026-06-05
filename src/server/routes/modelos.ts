@@ -3,12 +3,18 @@ import type { Request, Response, Router } from 'express'
 import type { Pool } from 'pg'
 import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
-import { serializeModelo } from '../db/serializers.js'
+import { serializeModelo, serializeModeloSummary } from '../db/serializers.js'
 import { fetchOrgBrand, mergePageLayoutWithOrgBrand } from '../services/orgBrandDefaults.js'
 import { modeloBodySchema, modeloPatchSchema } from '../validation/modeloPayload.js'
 
 const MODEL_SELECT = `id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
               chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config, created_at`
+
+const MODEL_SUMMARY_SELECT = `id, nome, servicos, contrato_id, chave_pix, link_pagamento,
+              whatsapp_comprovante, tier, fluxo, created_at`
+
+const MODEL_WRITE_RETURN = `id, nome, servicos, contrato_id, chave_pix, link_pagamento,
+              whatsapp_comprovante, tier, fluxo, created_at`
 
 const bodySchema = modeloBodySchema
 const patchSchema = modeloPatchSchema
@@ -21,15 +27,29 @@ export function createModelosRouter(deps: {
   const router = express.Router()
   router.use(buildRequireAuth(config.auth))
 
-  router.get('/', async (req: Request, res: Response) => {
+  router.get('/summary', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
     const { rows } = await pool.query(
-      `SELECT ${MODEL_SELECT}
+      `SELECT ${MODEL_SUMMARY_SELECT}
        FROM modelos_propostas
        WHERE organization_id = $1 ORDER BY created_at DESC`,
       [req.auth.orgId],
     )
-    return res.json(rows.map(serializeModelo))
+    return res.json(rows.map(serializeModeloSummary))
+  })
+
+  router.get('/', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    const summary = req.query.fields === 'summary'
+    const select = summary ? MODEL_SUMMARY_SELECT : MODEL_SELECT
+    const mapper = summary ? serializeModeloSummary : serializeModelo
+    const { rows } = await pool.query(
+      `SELECT ${select}
+       FROM modelos_propostas
+       WHERE organization_id = $1 ORDER BY created_at DESC`,
+      [req.auth.orgId],
+    )
+    return res.json(rows.map(mapper))
   })
 
   router.get('/:id', async (req: Request, res: Response) => {
@@ -59,7 +79,7 @@ export function createModelosRouter(deps: {
          (organization_id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
           chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config)
        VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::uuid[], $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb)
-       RETURNING ${MODEL_SELECT}`,
+       RETURNING ${MODEL_WRITE_RETURN}`,
       [
         req.auth.orgId,
         d.nome,
@@ -76,7 +96,7 @@ export function createModelosRouter(deps: {
         d.signatureConfig != null ? JSON.stringify(d.signatureConfig) : null,
       ],
     )
-    return res.status(201).json(serializeModelo(rows[0]))
+    return res.status(201).json(serializeModeloSummary(rows[0]))
   })
 
   router.patch('/:id', async (req: Request, res: Response) => {
@@ -99,7 +119,7 @@ export function createModelosRouter(deps: {
          fluxo = CASE WHEN $21::boolean THEN $22::jsonb ELSE fluxo END,
          signature_config = CASE WHEN $23::boolean THEN $24::jsonb ELSE signature_config END
        WHERE organization_id = $1 AND id = $2
-       RETURNING ${MODEL_SELECT}`,
+       RETURNING ${MODEL_WRITE_RETURN}`,
       [
         req.auth.orgId,
         req.params.id,
@@ -128,7 +148,7 @@ export function createModelosRouter(deps: {
       ],
     )
     if (!rows[0]) return res.status(404).json({ error: 'Modelo não encontrado' })
-    return res.json(serializeModelo(rows[0]))
+    return res.json(serializeModeloSummary(rows[0]))
   })
 
   router.delete('/:id', async (req: Request, res: Response) => {

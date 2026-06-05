@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { store, ModeloProposta } from '../lib/store';
+import { store, ModeloProposta, fetchModeloById } from '../lib/store';
 import { formatStoreSaveError } from '../lib/storeSaveFeedback';
 import Builder from '../components/Builder';
 import { createId } from '../lib/ids';
@@ -61,25 +61,33 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
   }, [userConfig.segment]);
 
   useEffect(() => {
-    if (initialData?.editId) {
-      const modelo = store.getModelos().find((m) => m.id === initialData.editId);
-      if (modelo) {
-        setFormData({
-          nome: modelo.nome,
-          servicos: modelo.servicos,
-          contratoTexto: modelo.contratoTexto || '',
-          contratoId: modelo.contratoId || '',
-          chavePix: modelo.chavePix || '',
-          linkPagamento: modelo.linkPagamento || '',
-          whatsappComprovante: modelo.whatsappComprovante || '',
-          fluxo: modelo.fluxo ?? INITIAL_CRIAR_MODELO_FORM.fluxo,
-          signatureConfig: modelo.signatureConfig,
-        });
-        setElementos(modelo.elementos);
-        setPageLayout(normalizePageLayout(modelo.pageLayout));
+    if (!initialData?.editId) return;
+    const editId = initialData.editId;
+    const applyModelo = (modelo: ModeloProposta) => {
+      setFormData({
+        nome: modelo.nome,
+        servicos: modelo.servicos,
+        contratoTexto: modelo.contratoTexto || '',
+        contratoId: modelo.contratoId || '',
+        chavePix: modelo.chavePix || '',
+        linkPagamento: modelo.linkPagamento || '',
+        whatsappComprovante: modelo.whatsappComprovante || '',
+        fluxo: modelo.fluxo ?? INITIAL_CRIAR_MODELO_FORM.fluxo,
+        signatureConfig: modelo.signatureConfig,
+      });
+      setElementos(modelo.elementos);
+      setPageLayout(normalizePageLayout(modelo.pageLayout));
+    };
+    void (async () => {
+      const cached = store.getModelos().find((m) => m.id === editId);
+      if (cached?.elementos?.length) {
+        applyModelo(cached);
+        return;
       }
-    }
-  }, [initialData]);
+      const full = await fetchModeloById(editId);
+      if (full) applyModelo(full);
+    })();
+  }, [initialData?.editId]);
 
   const handleSave = async (finalElements: BuilderElement[], finalPageLayout: BuilderPageLayout) => {
     if (hasUnresolvedImagePrompts(finalElements)) {

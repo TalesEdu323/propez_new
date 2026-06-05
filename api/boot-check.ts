@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import pg from 'pg';
-import { getConfigBootErrors } from '../src/server/env.js';
+import { getConfigBootErrors, isMailConfigured, loadConfig } from '../src/server/env.js';
 
 const DB_PING_TIMEOUT_MS = 3_000;
 
@@ -49,6 +49,45 @@ export default async function handler(
       : undefined;
 
   const ok = bootErrors.length === 0 && db.dbOk;
+
+  let mail: {
+    provider: string;
+    configured: boolean;
+    from: string;
+    smtpHost: string | null;
+    hasResendKey: boolean;
+    warnings: string[];
+  } | undefined;
+
+  if (bootErrors.length === 0) {
+    try {
+      const config = loadConfig();
+      const mailConfig = config.mail;
+      const mailWarnings: string[] = [];
+      if (!isMailConfigured(mailConfig)) {
+        mailWarnings.push(
+          config.nodeEnv === 'production'
+            ? 'Provedor de e-mail não configurado — auth e envios falham com 503.'
+            : 'E-mail em modo simulação (provider=none).',
+        );
+      } else if (process.env.VERCEL === '1' && mailConfig.provider === 'smtp') {
+        mailWarnings.push(
+          'Vercel + SMTP: prefira RESEND_API_KEY e MAIL_PROVIDER=resend para envio confiável em serverless.',
+        );
+      }
+      mail = {
+        provider: mailConfig.provider,
+        configured: isMailConfigured(mailConfig),
+        from: mailConfig.from,
+        smtpHost: mailConfig.smtp?.host ?? null,
+        hasResendKey: Boolean(mailConfig.resendApiKey),
+        warnings: mailWarnings,
+      };
+    } catch {
+      mail = undefined;
+    }
+  }
+
   const payload = {
     ok,
     nodeEnv: process.env.NODE_ENV ?? null,
@@ -60,6 +99,7 @@ export default async function handler(
     hasPooler: db.hasPooler,
     migrationHint,
     bootErrors,
+    ...(mail ? { mail } : {}),
   };
 
   res.statusCode = ok ? 200 : 503;

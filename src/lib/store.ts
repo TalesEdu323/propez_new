@@ -16,9 +16,14 @@
  */
 import type { BuilderElement, BuilderPageLayout } from '../types/builder';
 import { normalizePageLayout } from './pageLayout';
-import { sanitizePageLayoutForApi, sanitizeWhatsappComprovante } from './sanitizeModeloPayload';
+import {
+  sanitizePageLayoutForApi,
+  sanitizeWhatsappComprovante,
+  stripElementosForApi,
+  warnIfElementosPayloadLarge,
+} from './sanitizeModeloPayload';
 import type { ProposalFlowConfig } from '../types/proposalFlow';
-import { api } from './apiClient';
+import { api, ApiError } from './apiClient';
 import { normalizeUuidOrNull } from './normalizeUuid';
 import { notifyStoreSaveError } from './storeSaveFeedback';
 import {
@@ -442,7 +447,7 @@ export async function hydrateStore(force = false): Promise<void> {
     const [clientes, servicos, modelos, propostas, contratos, usage] = await Promise.all([
       hydrateFetch<ApiCliente[]>('clientes', '/api/clientes', []),
       hydrateFetch<ApiServico[]>('servicos', '/api/servicos', []),
-      hydrateFetch<ApiModelo[]>('modelos', '/api/modelos', []),
+      hydrateFetch<ApiModelo[]>('modelos', '/api/modelos/summary', []),
       hydrateFetch<ApiProposta[]>('propostas', '/api/propostas/summary', []),
       hydrateFetch<ApiContrato[]>('contratos', '/api/contratos', []),
       hydrateFetch<PlanUsage>('usage', '/api/usage/current', emptyUsage()),
@@ -483,7 +488,7 @@ export async function refreshEntity(key: Exclude<StoreKey, 'propez_user_config'>
       break;
     }
     case 'propez_modelos': {
-      const list = await api.get<ApiModelo[]>('/api/modelos').catch(() => []);
+      const list = await api.get<ApiModelo[]>('/api/modelos/summary').catch(() => []);
       cache.modelos = (list ?? []).map(fromApiModelo);
       break;
     }
@@ -529,6 +534,56 @@ function replaceCacheItem<T extends { id: string }>(list: T[], oldId: string, ne
 
 function removeCacheItem<T extends { id: string }>(list: T[], id: string): T[] {
   return list.filter((i) => i.id !== id);
+}
+
+function mergeModeloAfterSave(local: ModeloProposta, api: ModeloProposta): ModeloProposta {
+  return {
+    ...local,
+    id: api.id,
+    nome: api.nome ?? local.nome,
+    servicos: api.servicos?.length ? api.servicos : local.servicos,
+    contratoId: api.contratoId ?? local.contratoId,
+    chavePix: api.chavePix ?? local.chavePix,
+    linkPagamento: api.linkPagamento ?? local.linkPagamento,
+    whatsappComprovante: api.whatsappComprovante ?? local.whatsappComprovante,
+    tier: api.tier ?? local.tier,
+    fluxo: api.fluxo ?? local.fluxo,
+    data_criacao: api.data_criacao ?? local.data_criacao,
+    elementos: local.elementos,
+    pageLayout: local.pageLayout,
+    contratoTexto: local.contratoTexto,
+    signatureConfig: local.signatureConfig,
+  };
+}
+
+async function postModeloWithRetry(body: Record<string, unknown>): Promise<ApiModelo> {
+  const delays = [0, 1000, 3000];
+  let lastErr: unknown;
+  for (const delay of delays) {
+    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+    try {
+      return await api.post<ApiModelo>('/api/modelos', body);
+    } catch (err) {
+      lastErr = err;
+      if (!(err instanceof ApiError) || ![502, 503, 504].includes(err.status)) throw err;
+    }
+  }
+  throw lastErr;
+}
+
+async function patchModeloWithRetry(id: string, body: Record<string, unknown>): Promise<ApiModelo> {
+  const delays = [0, 1000, 3000];
+  let lastErr: unknown;
+  for (const delay of delays) {
+    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+    try {
+      return await api.patch<ApiModelo>(`/api/modelos/${id}`, body);
+    } catch (err) {
+      lastErr = err;
+      if (!(err instanceof ApiError) || ![502, 503, 504].includes(err.status)) throw err;
+    }
+  }
+  throw lastErr;
 }
 
 async function diffSave<T extends { id: string }, TPayload>(
@@ -580,7 +635,11 @@ async function diffSave<T extends { id: string }, TPayload>(
         impl
           .create(impl.toPayload(item))
           .then((saved) => {
-            setList(replaceCacheItem(getList(), id, saved));
+            const next =
+              key === 'propez_modelos'
+                ? mergeModeloAfterSave(item as ModeloProposta, saved as ModeloProposta)
+                : saved;
+            setList(replaceCacheItem(getList(), id, next));
             notify(key);
           })
           .catch((err) => {
@@ -595,7 +654,11 @@ async function diffSave<T extends { id: string }, TPayload>(
         impl
           .update(id, impl.toPayload(item))
           .then((saved) => {
-            setList(replaceCacheItem(getList(), id, saved));
+            const next =
+              key === 'propez_modelos'
+                ? mergeModeloAfterSave(item as ModeloProposta, saved as ModeloProposta)
+                : saved;
+            setList(replaceCacheItem(getList(), id, next));
             notify(key);
           })
           .catch((err) => {
@@ -689,9 +752,11 @@ interface ModeloPayload {
 }
 const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
   toPayload: (m) => {
+    const elementos = stripElementosForApi(m.elementos ?? []);
+    warnIfElementosPayloadLarge(elementos);
     const payload: ModeloPayload = {
       nome: m.nome,
-      elementos: m.elementos ?? [],
+      elementos,
       pageLayout: sanitizePageLayoutForApi(m.pageLayout ?? normalizePageLayout(null)),
       servicos: (m.servicos ?? [])
         .map((sid) => normalizeUuidOrNull(sid))
@@ -709,8 +774,9 @@ const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
     }
     return payload;
   },
-  create: async (p) => fromApiModelo(await api.post<ApiModelo>('/api/modelos', p as unknown as Record<string, unknown>)),
-  update: async (id, p) => fromApiModelo(await api.patch<ApiModelo>(`/api/modelos/${id}`, p as unknown as Record<string, unknown>)),
+  create: async (p) => fromApiModelo(await postModeloWithRetry(p as unknown as Record<string, unknown>)),
+  update: async (id, p) =>
+    fromApiModelo(await patchModeloWithRetry(id, p as unknown as Record<string, unknown>)),
   delete: async (id) => {
     await api.delete(`/api/modelos/${id}`);
   },
@@ -1060,6 +1126,24 @@ export async function updateProposta(id: string, patch: Partial<Proposta>): Prom
   cache.propostas = cache.propostas.map((p) => (p.id === id ? saved : p));
   notify('propez_propostas');
   return saved;
+}
+
+/** Carrega modelo completo (com elementos) e atualiza o cache. */
+export async function fetchModeloById(id: string): Promise<ModeloProposta | null> {
+  try {
+    const saved = fromApiModelo(await api.get<ApiModelo>(`/api/modelos/${id}`));
+    const idx = cache.modelos.findIndex((m) => m.id === id);
+    if (idx >= 0) {
+      cache.modelos = cache.modelos.map((m) => (m.id === id ? saved : m));
+    } else {
+      cache.modelos = [saved, ...cache.modelos];
+    }
+    notify('propez_modelos');
+    return saved;
+  } catch (err) {
+    console.error('[fetchModeloById] falha:', err);
+    return null;
+  }
 }
 
 /** Carrega proposta completa (com elementos) e atualiza o cache. */

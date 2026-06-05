@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizePageLayoutForApi, sanitizeWhatsappComprovante } from '../sanitizeModeloPayload';
+import { sanitizePageLayoutForApi, sanitizeWhatsappComprovante, stripElementosForApi } from '../sanitizeModeloPayload';
 
 describe('sanitizeModeloPayload', () => {
   it('sanitizeWhatsappComprovante mantém só dígitos até 20 chars', () => {
@@ -24,5 +24,22 @@ describe('sanitizeModeloPayload', () => {
       maxContentWidth: 960,
     });
     expect(layout.maxContentWidth).toBe(960);
+  });
+
+  it('stripElementosForApi remove prompts internos e preserva URLs https', () => {
+    const result = stripElementosForApi([
+      {
+        id: '1',
+        type: 'image',
+        props: {
+          url: 'https://example.com/photo.jpg',
+          imageGeneratePrompt: 'office scene',
+          imageSearchQuery: 'office',
+        },
+      },
+    ]);
+    expect(result[0].props.url).toBe('https://example.com/photo.jpg');
+    expect(result[0].props.imageGeneratePrompt).toBeUndefined();
+    expect(result[0].props.imageSearchQuery).toBeUndefined();
   });
 });
