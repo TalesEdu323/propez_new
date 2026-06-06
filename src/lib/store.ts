@@ -558,8 +558,6 @@ function mergeModeloAfterSave(local: ModeloProposta, api: ModeloProposta): Model
 }
 
 const MODELO_RETRY_DELAYS_MS = [0, 2000, 5000, 8000];
-/** Payloads acima disso usam create em duas fases (metadados + elementos) para evitar timeout. */
-const MODELO_TWO_PHASE_ELEMENTOS_BYTES = 120_000;
 
 async function retryModeloRequest(
   fn: () => Promise<ApiModelo>,
@@ -585,24 +583,34 @@ async function patchModeloWithRetry(id: string, body: Record<string, unknown>): 
   return retryModeloRequest(() => api.patch<ApiModelo>(`/api/modelos/${id}`, body));
 }
 
-function modeloElementosBytes(elementos: BuilderElement[]): number {
-  try {
-    return JSON.stringify(elementos).length;
-  } catch {
-    return 0;
-  }
-}
-
+/**
+ * Cria modelo em duas fases quando há layout visual:
+ * 1) POST leve (metadados, elementos vazios) — evita timeout em cold start
+ * 2) PATCH com elementos + pageLayout
+ */
 async function createModeloWithRetry(payload: ModeloPayload): Promise<ApiModelo> {
   const elementos = payload.elementos ?? [];
-  const elementosBytes = modeloElementosBytes(elementos);
-  const record = payload as unknown as Record<string, unknown>;
+  const hasLayout = elementos.length > 0 || payload.pageLayout != null;
 
-  if (elementosBytes <= MODELO_TWO_PHASE_ELEMENTOS_BYTES) {
-    return postModeloWithRetry(record);
+  if (!hasLayout) {
+    return postModeloWithRetry(payload as unknown as Record<string, unknown>);
   }
 
-  const shell: Record<string, unknown> = { ...record, elementos: [] };
+  const shell: Record<string, unknown> = {
+    id: payload.id,
+    nome: payload.nome,
+    servicos: payload.servicos,
+    contratoId: payload.contratoId,
+    contratoTexto: payload.contratoTexto,
+    chavePix: payload.chavePix,
+    linkPagamento: payload.linkPagamento,
+    whatsappComprovante: payload.whatsappComprovante,
+    tier: payload.tier,
+    fluxo: payload.fluxo,
+    signatureConfig: payload.signatureConfig,
+    elementos: [],
+  };
+
   const created = await postModeloWithRetry(shell);
   const patchBody: Record<string, unknown> = { elementos };
   if (payload.pageLayout) patchBody.pageLayout = payload.pageLayout;

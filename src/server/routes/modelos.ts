@@ -57,6 +57,35 @@ function logModeloPostMetrics(params: {
   console.log('[modelos] POST', JSON.stringify(params))
 }
 
+function logModeloPgError(context: string, err: unknown): void {
+  const pg = err as { code?: string; column?: string; constraint?: string; detail?: string; message?: string }
+  console.error(
+    `[modelos/${context}] pg code=${pg.code ?? '-'} column=${pg.column ?? '-'} constraint=${pg.constraint ?? '-'} detail=${pg.detail ?? pg.message ?? '-'}`,
+  )
+}
+
+function modeloErrorResponse(err: unknown): { status: number; error: string } {
+  const pg = err as { code?: string }
+  if (pg.code === '23503') {
+    return { status: 400, error: 'Contrato ou serviço vinculado não existe mais. Atualize o modelo e tente novamente.' }
+  }
+  if (pg.code === '42703') {
+    return { status: 503, error: 'Banco de dados desatualizado. Contate o suporte para aplicar as migrações.' }
+  }
+  if (pg.code === '22P02') {
+    return { status: 400, error: 'Dados do modelo em formato inválido. Recarregue a página e tente novamente.' }
+  }
+  return { status: 500, error: 'Erro ao salvar modelo. Tente novamente em alguns segundos.' }
+}
+
+function payloadByteLength(raw: unknown): number {
+  try {
+    return Buffer.byteLength(JSON.stringify(raw ?? {}), 'utf8')
+  } catch {
+    return 0
+  }
+}
+
 export function createModelosRouter(deps: {
   pool: Pool
   config: EnvironmentConfig
@@ -108,7 +137,7 @@ export function createModelosRouter(deps: {
 
     try {
       const rawBody = req.body ?? {}
-      const payloadBytes = Buffer.byteLength(JSON.stringify(rawBody), 'utf8')
+      const payloadBytes = payloadByteLength(rawBody)
       if (payloadBytes > MAX_PAYLOAD_BYTES) {
         return res.status(413).json({
           error: 'Payload muito grande. Reduza o conteúdo do modelo ou use um template de contrato em vez de texto inline.',
@@ -125,15 +154,14 @@ export function createModelosRouter(deps: {
         req.auth.orgId,
         d.pageLayout as Record<string, unknown> | undefined,
       )
-      const elementosJson = JSON.stringify(d.elementos)
+      const elementosValue = d.elementos ?? []
+      const fluxoValue = d.fluxo ?? { steps: ['approve', 'sign', 'pay'] as const }
       const contratoTextoBytes = contratoTexto ? Buffer.byteLength(contratoTexto, 'utf8') : 0
-      const fluxoJson = JSON.stringify(d.fluxo ?? { steps: ['approve', 'sign', 'pay'] })
-      const signatureJson = d.signatureConfig != null ? JSON.stringify(d.signatureConfig) : null
 
       const insertParams = [
         d.nome,
-        elementosJson,
-        JSON.stringify(pageLayout),
+        elementosValue,
+        pageLayout,
         d.servicos,
         d.contratoId ?? null,
         contratoTexto,
@@ -141,8 +169,8 @@ export function createModelosRouter(deps: {
         d.linkPagamento ?? null,
         d.whatsappComprovante ?? null,
         d.tier,
-        fluxoJson,
-        signatureJson,
+        fluxoValue,
+        d.signatureConfig ?? null,
       ]
 
       let rows: Record<string, unknown>[]
@@ -189,80 +217,103 @@ export function createModelosRouter(deps: {
       logModeloPostMetrics({
         orgId: req.auth.orgId,
         durationMs: Date.now() - t0,
-        elementosBytes: Buffer.byteLength(elementosJson, 'utf8'),
+        elementosBytes: payloadByteLength(elementosValue),
         contratoTextoBytes,
         idempotent: Boolean(d.id),
       })
 
       return res.status(201).json(serializeModeloSummary(rows[0]))
     } catch (err) {
-      console.error('[modelos] POST falhou:', err)
-      return res.status(500).json({
-        error: 'Erro ao salvar modelo. Tente novamente em alguns segundos.',
-      })
+      logModeloPgError('POST', err)
+      const { status, error } = modeloErrorResponse(err)
+      return res.status(status).json({ error })
     }
   })
 
   router.patch('/:id', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
-    const parsed = patchSchema.safeParse(req.body)
-    if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
-    const d = parsed.data
 
-    const patchContratoId = 'contratoId' in d ? (d.contratoId ?? null) : undefined
-    const patchContratoTexto =
-      'contratoId' in d || 'contratoTexto' in d
-        ? resolveContratoTextoForPersist(
-            patchContratoId !== undefined ? patchContratoId : d.contratoId,
-            'contratoTexto' in d ? d.contratoTexto : null,
-          )
-        : undefined
+    try {
+      const rawBody = req.body ?? {}
+      const payloadBytes = payloadByteLength(rawBody)
+      if (payloadBytes > MAX_PAYLOAD_BYTES) {
+        return res.status(413).json({
+          error: 'Payload muito grande. Reduza o conteúdo do modelo ou use um template de contrato em vez de texto inline.',
+        })
+      }
 
-    const { rows } = await pool.query(
-      `UPDATE modelos_propostas SET
-         nome = COALESCE($3, nome),
-         elementos = CASE WHEN $4::boolean THEN $5::jsonb ELSE elementos END,
-         page_layout = CASE WHEN $6::boolean THEN $7::jsonb ELSE page_layout END,
-         servicos = CASE WHEN $8::boolean THEN $9::uuid[] ELSE servicos END,
-         contrato_id = CASE WHEN $10::boolean THEN $11 ELSE contrato_id END,
-         contrato_texto = CASE WHEN $12::boolean THEN $13 ELSE contrato_texto END,
-         chave_pix = CASE WHEN $14::boolean THEN $15 ELSE chave_pix END,
-         link_pagamento = CASE WHEN $16::boolean THEN $17 ELSE link_pagamento END,
-         whatsapp_comprovante = CASE WHEN $18::boolean THEN $19 ELSE whatsapp_comprovante END,
-         tier = COALESCE($20, tier),
-         fluxo = CASE WHEN $21::boolean THEN $22::jsonb ELSE fluxo END,
-         signature_config = CASE WHEN $23::boolean THEN $24::jsonb ELSE signature_config END
-       WHERE organization_id = $1 AND id = $2
-       RETURNING ${MODEL_WRITE_RETURN}`,
-      [
-        req.auth.orgId,
-        req.params.id,
-        d.nome ?? null,
-        d.elementos !== undefined,
-        d.elementos !== undefined ? JSON.stringify(d.elementos) : null,
-        d.pageLayout !== undefined,
-        d.pageLayout !== undefined ? JSON.stringify(d.pageLayout) : null,
-        d.servicos !== undefined,
-        d.servicos ?? null,
-        'contratoId' in d,
-        d.contratoId ?? null,
-        patchContratoTexto !== undefined,
-        patchContratoTexto ?? null,
-        'chavePix' in d,
-        d.chavePix ?? null,
-        'linkPagamento' in d,
-        d.linkPagamento ?? null,
-        'whatsappComprovante' in d,
-        d.whatsappComprovante ?? null,
-        d.tier ?? null,
-        d.fluxo !== undefined,
-        d.fluxo !== undefined ? JSON.stringify(d.fluxo) : null,
-        d.signatureConfig !== undefined,
-        d.signatureConfig !== undefined ? JSON.stringify(d.signatureConfig) : null,
-      ],
-    )
-    if (!rows[0]) return res.status(404).json({ error: 'Modelo não encontrado' })
-    return res.json(serializeModeloSummary(rows[0]))
+      const parsed = patchSchema.safeParse(rawBody)
+      if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
+      const d = parsed.data
+
+      const patchContratoId = 'contratoId' in d ? (d.contratoId ?? null) : undefined
+      const patchContratoTexto =
+        'contratoId' in d || 'contratoTexto' in d
+          ? resolveContratoTextoForPersist(
+              patchContratoId !== undefined ? patchContratoId : d.contratoId,
+              'contratoTexto' in d ? d.contratoTexto : null,
+            )
+          : undefined
+
+      const patchPageLayout =
+        d.pageLayout !== undefined
+          ? await resolvePageLayoutForPersist(
+              pool,
+              req.auth.orgId,
+              d.pageLayout as Record<string, unknown> | undefined,
+            )
+          : undefined
+
+      const { rows } = await pool.query(
+        `UPDATE modelos_propostas SET
+           nome = COALESCE($3, nome),
+           elementos = CASE WHEN $4::boolean THEN $5::jsonb ELSE elementos END,
+           page_layout = CASE WHEN $6::boolean THEN $7::jsonb ELSE page_layout END,
+           servicos = CASE WHEN $8::boolean THEN $9::uuid[] ELSE servicos END,
+           contrato_id = CASE WHEN $10::boolean THEN $11 ELSE contrato_id END,
+           contrato_texto = CASE WHEN $12::boolean THEN $13 ELSE contrato_texto END,
+           chave_pix = CASE WHEN $14::boolean THEN $15 ELSE chave_pix END,
+           link_pagamento = CASE WHEN $16::boolean THEN $17 ELSE link_pagamento END,
+           whatsapp_comprovante = CASE WHEN $18::boolean THEN $19 ELSE whatsapp_comprovante END,
+           tier = COALESCE($20, tier),
+           fluxo = CASE WHEN $21::boolean THEN $22::jsonb ELSE fluxo END,
+           signature_config = CASE WHEN $23::boolean THEN $24::jsonb ELSE signature_config END
+         WHERE organization_id = $1 AND id = $2
+         RETURNING ${MODEL_WRITE_RETURN}`,
+        [
+          req.auth.orgId,
+          req.params.id,
+          d.nome ?? null,
+          d.elementos !== undefined,
+          d.elementos !== undefined ? d.elementos : null,
+          d.pageLayout !== undefined,
+          patchPageLayout ?? null,
+          d.servicos !== undefined,
+          d.servicos ?? null,
+          'contratoId' in d,
+          d.contratoId ?? null,
+          patchContratoTexto !== undefined,
+          patchContratoTexto ?? null,
+          'chavePix' in d,
+          d.chavePix ?? null,
+          'linkPagamento' in d,
+          d.linkPagamento ?? null,
+          'whatsappComprovante' in d,
+          d.whatsappComprovante ?? null,
+          d.tier ?? null,
+          d.fluxo !== undefined,
+          d.fluxo !== undefined ? d.fluxo : null,
+          d.signatureConfig !== undefined,
+          d.signatureConfig !== undefined ? d.signatureConfig : null,
+        ],
+      )
+      if (!rows[0]) return res.status(404).json({ error: 'Modelo não encontrado' })
+      return res.json(serializeModeloSummary(rows[0]))
+    } catch (err) {
+      logModeloPgError('PATCH', err)
+      const { status, error } = modeloErrorResponse(err)
+      return res.status(status).json({ error })
+    }
   })
 
   router.delete('/:id', async (req: Request, res: Response) => {

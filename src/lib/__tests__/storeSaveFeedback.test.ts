@@ -17,6 +17,13 @@ describe('storeSaveFeedback', () => {
     expect(formatStoreSaveError(err)).toContain('servidor demorou');
   });
 
+  it('formats 500 with mensagem do body quando disponível', () => {
+    const err = new ApiError(500, 'Internal Server Error', {
+      error: 'Contrato ou serviço vinculado não existe mais. Atualize o modelo e tente novamente.',
+    });
+    expect(formatStoreSaveError(err)).toContain('Contrato ou serviço');
+  });
+
   it('notifies subscribers with entity label', () => {
     const fn = vi.fn();
     const unsub = subscribeStoreSaveErrors(fn);
