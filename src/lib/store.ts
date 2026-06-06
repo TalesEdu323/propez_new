@@ -557,13 +557,18 @@ function mergeModeloAfterSave(local: ModeloProposta, api: ModeloProposta): Model
   };
 }
 
-async function postModeloWithRetry(body: Record<string, unknown>): Promise<ApiModelo> {
-  const delays = [0, 1000, 3000];
+const MODELO_RETRY_DELAYS_MS = [0, 2000, 5000, 8000];
+/** Payloads acima disso usam create em duas fases (metadados + elementos) para evitar timeout. */
+const MODELO_TWO_PHASE_ELEMENTOS_BYTES = 120_000;
+
+async function retryModeloRequest(
+  fn: () => Promise<ApiModelo>,
+): Promise<ApiModelo> {
   let lastErr: unknown;
-  for (const delay of delays) {
+  for (const delay of MODELO_RETRY_DELAYS_MS) {
     if (delay > 0) await new Promise((r) => setTimeout(r, delay));
     try {
-      return await api.post<ApiModelo>('/api/modelos', body);
+      return await fn();
     } catch (err) {
       lastErr = err;
       if (!(err instanceof ApiError) || ![502, 503, 504].includes(err.status)) throw err;
@@ -572,19 +577,36 @@ async function postModeloWithRetry(body: Record<string, unknown>): Promise<ApiMo
   throw lastErr;
 }
 
+async function postModeloWithRetry(body: Record<string, unknown>): Promise<ApiModelo> {
+  return retryModeloRequest(() => api.post<ApiModelo>('/api/modelos', body));
+}
+
 async function patchModeloWithRetry(id: string, body: Record<string, unknown>): Promise<ApiModelo> {
-  const delays = [0, 1000, 3000];
-  let lastErr: unknown;
-  for (const delay of delays) {
-    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
-    try {
-      return await api.patch<ApiModelo>(`/api/modelos/${id}`, body);
-    } catch (err) {
-      lastErr = err;
-      if (!(err instanceof ApiError) || ![502, 503, 504].includes(err.status)) throw err;
-    }
+  return retryModeloRequest(() => api.patch<ApiModelo>(`/api/modelos/${id}`, body));
+}
+
+function modeloElementosBytes(elementos: BuilderElement[]): number {
+  try {
+    return JSON.stringify(elementos).length;
+  } catch {
+    return 0;
   }
-  throw lastErr;
+}
+
+async function createModeloWithRetry(payload: ModeloPayload): Promise<ApiModelo> {
+  const elementos = payload.elementos ?? [];
+  const elementosBytes = modeloElementosBytes(elementos);
+  const record = payload as unknown as Record<string, unknown>;
+
+  if (elementosBytes <= MODELO_TWO_PHASE_ELEMENTOS_BYTES) {
+    return postModeloWithRetry(record);
+  }
+
+  const shell: Record<string, unknown> = { ...record, elementos: [] };
+  const created = await postModeloWithRetry(shell);
+  const patchBody: Record<string, unknown> = { elementos };
+  if (payload.pageLayout) patchBody.pageLayout = payload.pageLayout;
+  return patchModeloWithRetry(created.id, patchBody);
 }
 
 async function diffSave<T extends { id: string }, TPayload>(
@@ -778,7 +800,7 @@ const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
     }
     return payload;
   },
-  create: async (p) => fromApiModelo(await postModeloWithRetry(p as unknown as Record<string, unknown>)),
+  create: async (p) => fromApiModelo(await createModeloWithRetry(p)),
   update: async (id, p) =>
     fromApiModelo(await patchModeloWithRetry(id, p as unknown as Record<string, unknown>)),
   delete: async (id) => {

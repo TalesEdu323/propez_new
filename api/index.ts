@@ -1,6 +1,25 @@
+import type { Application } from 'express';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { getConfigBootErrors } from '../src/server/env.js';
 import { getExpressApp } from '../src/server/vercelHandler.js';
+
+/**
+ * Aguarda o Express concluir a resposta antes de encerrar a função serverless.
+ * Sem isso, a Vercel pode cortar a execução e devolver 504 em rotas async lentas.
+ */
+function runExpress(
+  app: Application,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    res.once('finish', resolve);
+    res.once('close', resolve);
+    res.once('error', reject);
+    app(req, res);
+  });
+}
+
 /**
  * Entrada serverless Vercel — todas as requisições /api/* são reencaminhadas aqui
  * via rewrites em vercel.json.
@@ -11,7 +30,7 @@ export default async function handler(
 ): Promise<void> {
   try {
     const app = await getExpressApp();
-    app(req, res);
+    await runExpress(app, req, res);
   } catch (err) {
     console.error('[vercel] handler error:', err);
     const bootErrors = getConfigBootErrors();

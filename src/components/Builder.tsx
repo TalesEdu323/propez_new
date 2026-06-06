@@ -337,7 +337,11 @@ export default function Builder({
         return;
       }
     }
-    await (onSave as BuilderSaveHandler)(elements, pageLayout);
+    try {
+      await (onSave as BuilderSaveHandler)(elements, pageLayout);
+    } catch {
+      /* onSave deve tratar erros (ex.: saveError no CriarModelo); evita rejeição não tratada no debugger */
+    }
   };
 
   const selectedElement = selectedId ? findElementRecursiveTree(elements, selectedId) : undefined;

@@ -106,94 +106,101 @@ export function createModelosRouter(deps: {
     const t0 = Date.now()
     if (!req.auth) return res.status(401).end()
 
-    const rawBody = req.body ?? {}
-    const payloadBytes = Buffer.byteLength(JSON.stringify(rawBody), 'utf8')
-    if (payloadBytes > MAX_PAYLOAD_BYTES) {
-      return res.status(413).json({
-        error: 'Payload muito grande. Reduza o conteúdo do modelo ou use um template de contrato em vez de texto inline.',
+    try {
+      const rawBody = req.body ?? {}
+      const payloadBytes = Buffer.byteLength(JSON.stringify(rawBody), 'utf8')
+      if (payloadBytes > MAX_PAYLOAD_BYTES) {
+        return res.status(413).json({
+          error: 'Payload muito grande. Reduza o conteúdo do modelo ou use um template de contrato em vez de texto inline.',
+        })
+      }
+
+      const parsed = bodySchema.safeParse(rawBody)
+      if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
+      const d = parsed.data
+
+      const contratoTexto = resolveContratoTextoForPersist(d.contratoId, d.contratoTexto)
+      const pageLayout = await resolvePageLayoutForPersist(
+        pool,
+        req.auth.orgId,
+        d.pageLayout as Record<string, unknown> | undefined,
+      )
+      const elementosJson = JSON.stringify(d.elementos)
+      const contratoTextoBytes = contratoTexto ? Buffer.byteLength(contratoTexto, 'utf8') : 0
+      const fluxoJson = JSON.stringify(d.fluxo ?? { steps: ['approve', 'sign', 'pay'] })
+      const signatureJson = d.signatureConfig != null ? JSON.stringify(d.signatureConfig) : null
+
+      const insertParams = [
+        d.nome,
+        elementosJson,
+        JSON.stringify(pageLayout),
+        d.servicos,
+        d.contratoId ?? null,
+        contratoTexto,
+        d.chavePix ?? null,
+        d.linkPagamento ?? null,
+        d.whatsappComprovante ?? null,
+        d.tier,
+        fluxoJson,
+        signatureJson,
+      ]
+
+      let rows: Record<string, unknown>[]
+
+      if (d.id) {
+        const { rows: upsertRows } = await pool.query(
+          `INSERT INTO modelos_propostas
+             (id, organization_id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
+              chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config)
+           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::uuid[], $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb)
+           ON CONFLICT (id) DO UPDATE SET
+             nome = EXCLUDED.nome,
+             elementos = EXCLUDED.elementos,
+             page_layout = EXCLUDED.page_layout,
+             servicos = EXCLUDED.servicos,
+             contrato_id = EXCLUDED.contrato_id,
+             contrato_texto = EXCLUDED.contrato_texto,
+             chave_pix = EXCLUDED.chave_pix,
+             link_pagamento = EXCLUDED.link_pagamento,
+             whatsapp_comprovante = EXCLUDED.whatsapp_comprovante,
+             tier = EXCLUDED.tier,
+             fluxo = EXCLUDED.fluxo,
+             signature_config = EXCLUDED.signature_config
+           WHERE modelos_propostas.organization_id = EXCLUDED.organization_id
+           RETURNING ${MODEL_WRITE_RETURN}`,
+          [d.id, req.auth.orgId, ...insertParams],
+        )
+        if (!upsertRows[0]) {
+          return res.status(409).json({ error: 'ID de modelo já existe em outra organização' })
+        }
+        rows = upsertRows
+      } else {
+        const { rows: insertRows } = await pool.query(
+          `INSERT INTO modelos_propostas
+             (organization_id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
+              chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config)
+           VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::uuid[], $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb)
+           RETURNING ${MODEL_WRITE_RETURN}`,
+          [req.auth.orgId, ...insertParams],
+        )
+        rows = insertRows
+      }
+
+      logModeloPostMetrics({
+        orgId: req.auth.orgId,
+        durationMs: Date.now() - t0,
+        elementosBytes: Buffer.byteLength(elementosJson, 'utf8'),
+        contratoTextoBytes,
+        idempotent: Boolean(d.id),
+      })
+
+      return res.status(201).json(serializeModeloSummary(rows[0]))
+    } catch (err) {
+      console.error('[modelos] POST falhou:', err)
+      return res.status(500).json({
+        error: 'Erro ao salvar modelo. Tente novamente em alguns segundos.',
       })
     }
-
-    const parsed = bodySchema.safeParse(rawBody)
-    if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
-    const d = parsed.data
-
-    const contratoTexto = resolveContratoTextoForPersist(d.contratoId, d.contratoTexto)
-    const pageLayout = await resolvePageLayoutForPersist(
-      pool,
-      req.auth.orgId,
-      d.pageLayout as Record<string, unknown> | undefined,
-    )
-    const elementosJson = JSON.stringify(d.elementos)
-    const contratoTextoBytes = contratoTexto ? Buffer.byteLength(contratoTexto, 'utf8') : 0
-    const fluxoJson = JSON.stringify(d.fluxo ?? { steps: ['approve', 'sign', 'pay'] })
-    const signatureJson = d.signatureConfig != null ? JSON.stringify(d.signatureConfig) : null
-
-    const insertParams = [
-      d.nome,
-      elementosJson,
-      JSON.stringify(pageLayout),
-      d.servicos,
-      d.contratoId ?? null,
-      contratoTexto,
-      d.chavePix ?? null,
-      d.linkPagamento ?? null,
-      d.whatsappComprovante ?? null,
-      d.tier,
-      fluxoJson,
-      signatureJson,
-    ]
-
-    let rows: Record<string, unknown>[]
-
-    if (d.id) {
-      const { rows: upsertRows } = await pool.query(
-        `INSERT INTO modelos_propostas
-           (id, organization_id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
-            chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config)
-         VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::uuid[], $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb)
-         ON CONFLICT (id) DO UPDATE SET
-           nome = EXCLUDED.nome,
-           elementos = EXCLUDED.elementos,
-           page_layout = EXCLUDED.page_layout,
-           servicos = EXCLUDED.servicos,
-           contrato_id = EXCLUDED.contrato_id,
-           contrato_texto = EXCLUDED.contrato_texto,
-           chave_pix = EXCLUDED.chave_pix,
-           link_pagamento = EXCLUDED.link_pagamento,
-           whatsapp_comprovante = EXCLUDED.whatsapp_comprovante,
-           tier = EXCLUDED.tier,
-           fluxo = EXCLUDED.fluxo,
-           signature_config = EXCLUDED.signature_config
-         WHERE modelos_propostas.organization_id = EXCLUDED.organization_id
-         RETURNING ${MODEL_WRITE_RETURN}`,
-        [d.id, req.auth.orgId, ...insertParams],
-      )
-      if (!upsertRows[0]) {
-        return res.status(409).json({ error: 'ID de modelo já existe em outra organização' })
-      }
-      rows = upsertRows
-    } else {
-      const { rows: insertRows } = await pool.query(
-        `INSERT INTO modelos_propostas
-           (organization_id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
-            chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config)
-         VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::uuid[], $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb)
-         RETURNING ${MODEL_WRITE_RETURN}`,
-        [req.auth.orgId, ...insertParams],
-      )
-      rows = insertRows
-    }
-
-    logModeloPostMetrics({
-      orgId: req.auth.orgId,
-      durationMs: Date.now() - t0,
-      elementosBytes: Buffer.byteLength(elementosJson, 'utf8'),
-      contratoTextoBytes,
-      idempotent: Boolean(d.id),
-    })
-
-    return res.status(201).json(serializeModeloSummary(rows[0]))
   })
 
   router.patch('/:id', async (req: Request, res: Response) => {
