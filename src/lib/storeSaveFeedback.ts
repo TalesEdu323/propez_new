@@ -27,6 +27,12 @@ export function subscribeStoreSaveErrors(listener: SaveErrorListener): () => voi
 
 export function formatStoreSaveError(err: unknown): string {
   if (err instanceof ApiError) {
+    if (err.status === 504) {
+      return 'O servidor demorou para responder. Tente salvar novamente. Se persistir, reduza o conteúdo do contrato inline ou entre em contato com o suporte.';
+    }
+    if (err.status === 413) {
+      return 'O modelo é grande demais para salvar. Use um template de contrato em vez de colar o texto inteiro, ou reduza o conteúdo do layout.';
+    }
     const body = err.body;
     if (body && typeof body === 'object' && 'details' in body) {
       return `${err.message} (${JSON.stringify((body as { details: unknown }).details)})`;

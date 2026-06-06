@@ -54,6 +54,19 @@ export function stripElementosForApi(elementos: BuilderElement[]): BuilderElemen
   });
 }
 
+/**
+ * Quando há template de contrato (contratoId), não envia texto duplicado ao servidor.
+ * O texto é resolvido via FK na criação de propostas.
+ */
+export function resolveContratoTextoForApi(
+  contratoId: string | null | undefined,
+  contratoTexto: string | null | undefined,
+): string | null {
+  if (contratoId) return null;
+  if (contratoTexto == null || contratoTexto === '') return null;
+  return contratoTexto;
+}
+
 /** Alerta se o payload de elementos for excessivamente grande (>500KB serializado). */
 export function warnIfElementosPayloadLarge(elementos: BuilderElement[]): void {
   try {

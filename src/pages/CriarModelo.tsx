@@ -90,6 +90,10 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
   }, [initialData?.editId]);
 
   const handleSave = async (finalElements: BuilderElement[], finalPageLayout: BuilderPageLayout) => {
+    if (flowHasStep(formData.fluxo, 'sign') && !formData.contratoId) {
+      alert('Selecione um template de contrato no passo "Contrato Padrão" antes de salvar.');
+      return;
+    }
     if (hasUnresolvedImagePrompts(finalElements)) {
       alert('Resolva as imagens pendentes no passo "Imagens e banners" antes de salvar o modelo.');
       return;
@@ -247,6 +251,10 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
       if (needsContractStep) setStep(3);
       else goToImagensOrBuilder();
     } else if (step === 3) {
+      if (!formData.contratoId) {
+        alert('Por favor, selecione um template de contrato.');
+        return;
+      }
       goToImagensOrBuilder();
     } else if (step === IMAGENS_STEP) {
       if (hasUnresolvedImagePrompts(elementos)) {

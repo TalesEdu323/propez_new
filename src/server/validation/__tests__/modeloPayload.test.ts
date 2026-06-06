@@ -42,4 +42,13 @@ describe('modeloBodySchema', () => {
     });
     expect(parsed.success).toBe(false);
   });
+
+  it('aceita id UUID opcional para create idempotente', () => {
+    const parsed = modeloBodySchema.safeParse({
+      ...validBase,
+      id: '550e8400-e29b-41d4-a716-446655440000',
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.id).toBe('550e8400-e29b-41d4-a716-446655440000');
+  });
 });

@@ -15,6 +15,7 @@ const optionalUuid = z.preprocess(
 );
 
 export const modeloBodySchema = z.object({
+  id: z.string().uuid().optional(),
   nome: z.string().trim().min(1).max(200),
   elementos: z.array(builderElement).default([]),
   pageLayout: modeloPageLayoutSchema.optional(),

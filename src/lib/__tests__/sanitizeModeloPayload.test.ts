@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizePageLayoutForApi, sanitizeWhatsappComprovante, stripElementosForApi } from '../sanitizeModeloPayload';
+import {
+  resolveContratoTextoForApi,
+  sanitizePageLayoutForApi,
+  sanitizeWhatsappComprovante,
+  stripElementosForApi,
+} from '../sanitizeModeloPayload';
 
 describe('sanitizeModeloPayload', () => {
   it('sanitizeWhatsappComprovante mantém só dígitos até 20 chars', () => {
@@ -41,5 +46,12 @@ describe('sanitizeModeloPayload', () => {
     expect(result[0].props.url).toBe('https://example.com/photo.jpg');
     expect(result[0].props.imageGeneratePrompt).toBeUndefined();
     expect(result[0].props.imageSearchQuery).toBeUndefined();
+  });
+
+  it('resolveContratoTextoForApi omite texto quando contratoId está definido', () => {
+    const templateId = '550e8400-e29b-41d4-a716-446655440000';
+    expect(resolveContratoTextoForApi(templateId, 'Contrato longo duplicado...')).toBeNull();
+    expect(resolveContratoTextoForApi(null, 'Texto inline')).toBe('Texto inline');
+    expect(resolveContratoTextoForApi(undefined, '')).toBeNull();
   });
 });

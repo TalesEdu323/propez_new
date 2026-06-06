@@ -17,6 +17,7 @@
 import type { BuilderElement, BuilderPageLayout } from '../types/builder';
 import { normalizePageLayout } from './pageLayout';
 import {
+  resolveContratoTextoForApi,
   sanitizePageLayoutForApi,
   sanitizeWhatsappComprovante,
   stripElementosForApi,
@@ -737,6 +738,7 @@ const contratoApi: EntityApi<ContratoTemplate, ContratoPayload> = {
 };
 
 interface ModeloPayload {
+  id?: string;
   nome: string;
   elementos: BuilderElement[];
   pageLayout?: BuilderPageLayout;
@@ -754,15 +756,17 @@ const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
   toPayload: (m) => {
     const elementos = stripElementosForApi(m.elementos ?? []);
     warnIfElementosPayloadLarge(elementos);
+    const contratoId = normalizeUuidOrNull(m.contratoId);
     const payload: ModeloPayload = {
+      id: m.id,
       nome: m.nome,
       elementos,
       pageLayout: sanitizePageLayoutForApi(m.pageLayout ?? normalizePageLayout(null)),
       servicos: (m.servicos ?? [])
         .map((sid) => normalizeUuidOrNull(sid))
         .filter((sid): sid is string => sid !== null),
-      contratoId: normalizeUuidOrNull(m.contratoId),
-      contratoTexto: m.contratoTexto ?? null,
+      contratoId,
+      contratoTexto: resolveContratoTextoForApi(contratoId, m.contratoTexto ?? null),
       chavePix: m.chavePix ?? null,
       linkPagamento: m.linkPagamento ?? null,
       whatsappComprovante: sanitizeWhatsappComprovante(m.whatsappComprovante),

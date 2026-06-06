@@ -12,6 +12,11 @@ describe('storeSaveFeedback', () => {
     expect(formatStoreSaveError(err)).toBe('Dados inválidos');
   });
 
+  it('formats 504 with mensagem amigável', () => {
+    const err = new ApiError(504, 'Gateway Timeout');
+    expect(formatStoreSaveError(err)).toContain('servidor demorou');
+  });
+
   it('notifies subscribers with entity label', () => {
     const fn = vi.fn();
     const unsub = subscribeStoreSaveErrors(fn);

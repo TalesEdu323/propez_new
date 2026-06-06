@@ -37,12 +37,13 @@ export async function runMigrations(pool: Pool, sqlDir: string): Promise<void> {
   await ensureMigrationTable(pool)
   const applied = await getAppliedMigrations(pool)
 
-  for (const f of files) {
-    if (applied.has(f)) {
-      console.log(`[migrations] skip ${f}`)
-      continue
-    }
+  const pending = files.filter((f) => !applied.has(f))
+  if (pending.length === 0) {
+    console.log(`[migrations] skip all (${files.length} applied, fast-path)`)
+    return
+  }
 
+  for (const f of pending) {
     const fullPath = path.join(sqlDir, f)
     const sql = fs.readFileSync(fullPath, 'utf8')
     try {
