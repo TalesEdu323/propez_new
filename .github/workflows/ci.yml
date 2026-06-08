@@ -25,9 +25,13 @@ jobs:
       - name: Server module imports (boot safety)
         run: npm run check:server-imports
 
-      - name: Typecheck (informative)
+      # Legado: centenas de erros TS pré-existentes — endurecer quando limpo
+      - name: Typecheck
         run: npm run typecheck
         continue-on-error: true
+
+      - name: ESLint
+        run: npm run lint:eslint
 
       # Smoke HTTP opcional: só falha o job se INTEGRATION_CHECK=true e o servidor estiver acessível.
       - name: Check integrations (optional)

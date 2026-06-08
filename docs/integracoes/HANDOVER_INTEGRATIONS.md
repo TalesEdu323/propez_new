@@ -11,7 +11,7 @@ O **ProSync** é o CRM externo que fornece leads para o Propez e recebe atualiza
 - `src/pages/PropezFluido.tsx`: Implementa o botão de importação de leads do ProSync.
 - `src/pages/VisualizarProposta.tsx`: Notifica o ProSync quando uma proposta é aprovada/recusada.
 
-### Próximos Passos para o Cursor:
+### Próximos passos:
 1.  **Substituir Mocks**: No arquivo `src/services/crmApi.ts`, trocar as respostas estáticas por chamadas `fetch` reais usando `import.meta.env.VITE_PROSYNC_API_URL`.
 2.  **Mapeamento de Campos**: Garantir que os campos do lead do ProSync (ex: `company_name`) sejam mapeados corretamente para o objeto `Cliente` do Propez.
 3.  **Sincronização Bidirecional**: Implementar um webhook no backend (`server.ts`) que receba atualizações do ProSync (ex: lead excluído ou atualizado).
@@ -26,7 +26,7 @@ O **Rubrica** é o serviço responsável pela coleta de assinaturas digitais nos
 - `src/services/rubricaApi.ts`: Contém a lógica de envio de documentos para assinatura.
 - `src/pages/VisualizarProposta.tsx`: Dispara o envio para o Rubrica assim que o cliente clica em "Aprovar Proposta".
 
-### Próximos Passos para o Cursor:
+### Próximos passos:
 1.  **Fluxo de Assinatura**: Atualmente, o app apenas envia o documento. É necessário implementar a captura do `signingUrl` retornado pelo Rubrica e exibi-lo ao usuário ou redirecioná-lo.
 2.  **Status da Assinatura**: Criar um endpoint no `server.ts` para receber webhooks do Rubrica informando quando o documento foi assinado.
 3.  **Download do PDF Assinado**: Após a assinatura, o Rubrica fornece um link para o PDF final. O Propez deve armazenar esse link na proposta (`pago: true` ou um novo campo `assinado: true`).

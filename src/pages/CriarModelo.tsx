@@ -17,6 +17,7 @@ import { hydrateStarterImagePrompts } from '../lib/hydrateStarterImagePrompts';
 import { mergeServiceLayouts } from '../lib/mergeServiceLayouts';
 import { hasModelImageSlots } from '../lib/modelImageSlots';
 import { hasUnresolvedImagePrompts } from '../lib/modelImagePrompts';
+import { parseFluidoStep } from '../lib/parseFluidoStep';
 import type { CriarModeloStepDescriptor } from './criarModelo/types';
 import { INITIAL_CRIAR_MODELO_FORM } from './criarModelo/types';
 import { CriarModeloStepper } from './criarModelo/CriarModeloStepper';
@@ -127,13 +128,8 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
 
       const fluidoReturn =
         typeof initialData?.fluidoReturn === 'string' ? initialData.fluidoReturn : undefined;
-      const fluidoStep =
-        typeof initialData?.fluidoStep === 'number'
-          ? initialData.fluidoStep
-          : initialData?.fluidoStep != null
-            ? Number(initialData.fluidoStep)
-            : undefined;
-      if (fluidoReturn && fluidoReturn === newModelo.id && fluidoStep != null && !Number.isNaN(fluidoStep)) {
+      const fluidoStep = parseFluidoStep(initialData?.fluidoStep);
+      if (fluidoReturn && fluidoReturn === newModelo.id && fluidoStep != null) {
         navigate('propez-fluido', { fluidoReturn, fluidoStep });
       } else {
         navigate('modelos');

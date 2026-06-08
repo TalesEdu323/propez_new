@@ -66,7 +66,7 @@ Ao criar o primeiro usuário:
 
 ### Variáveis de ambiente relacionadas
 
-Ver [`env.example`](../env.example) — precisa de:
+Ver [`.env.example`](../.env.example) — precisa de:
 
 - `DATABASE_URL` — Neon do Propez
 - `JWT_SECRET` — segredo do token de acesso (obrigatório em prod)

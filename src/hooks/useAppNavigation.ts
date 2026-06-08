@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { APP_BASE_PATH } from '../lib/appPaths';
+import { parseFluidoStep } from '../lib/parseFluidoStep';
 import type { AppRoute, NavigateFn, RouteParams } from '../types/navigation';
 
 const DEFAULT_ROUTE: AppRoute = 'dashboard';
@@ -24,10 +25,8 @@ function paramsFromSearchParams(searchParams: URLSearchParams): {
   if (tab === 'loja' || tab === 'meus') params.tab = tab;
   if (targetPlan) params.targetPlan = targetPlan;
   if (fluidoReturn) params.fluidoReturn = fluidoReturn;
-  if (fluidoStep) {
-    const step = Number(fluidoStep);
-    if (!Number.isNaN(step)) params.fluidoStep = step;
-  }
+  const step = parseFluidoStep(fluidoStep);
+  if (step != null) params.fluidoStep = step;
   return { route, params };
 }
 

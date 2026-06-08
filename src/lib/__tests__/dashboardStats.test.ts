@@ -5,8 +5,8 @@ import {
   defaultDateFilterState,
   filterPropostasInRange,
   getFilterRange,
-} from './dashboardStats';
-import type { Proposta } from './store';
+} from '../dashboardStats';
+import type { Proposta } from '../store';
 
 function mockProposta(
   partial: Pick<Proposta, 'id' | 'status' | 'valor' | 'data_criacao'>,

@@ -101,7 +101,7 @@ export interface ModeloProposta {
 
 export interface Proposta {
   id: string;
-  cliente_id: string;
+  cliente_id: string | null;
   cliente_nome: string;
   clienteEmail?: string;
   modelo_id?: string;
@@ -373,7 +373,7 @@ function fromApiModelo(a: ApiModelo): ModeloProposta {
 function fromApiProposta(a: ApiProposta): Proposta {
   return {
     id: a.id,
-    cliente_id: a.cliente_id ?? '',
+    cliente_id: a.cliente_id ?? null,
     cliente_nome: a.cliente_nome ?? '',
     clienteEmail: a.clienteEmail?.trim() || undefined,
     modelo_id: a.modelo_id ?? undefined,
@@ -928,7 +928,6 @@ function buildUserConfig(org: CurrentOrg | null, usage: PlanUsage): UserConfig {
     billingCycle: (org.billingCycle ?? undefined) as UserConfig['billingCycle'],
     stripeCustomerId: org.stripeCustomerId ?? undefined,
     stripeSubscriptionId: org.stripeSubscriptionId ?? undefined,
-    segment: org.segment ?? undefined,
     usage,
     isPro: (org.plan ?? 'free') !== 'free',
   };

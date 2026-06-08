@@ -14,6 +14,7 @@ Aplicação web para criação, envio e acompanhamento de propostas comerciais c
 
 ```
 propez_new/
+|-- api/                # handlers serverless (Vercel)
 |-- src/                # frontend + backend da aplicação
 |   |-- components/     # componentes reutilizáveis
 |   |-- pages/          # páginas e fluxos de tela
@@ -22,8 +23,9 @@ propez_new/
 |   `-- services/       # clientes para integrações externas
 |-- docs/               # documentação técnica e runbooks
 |-- scripts/            # scripts de apoio e validação
-|-- sql/                # migrations e SQL de apoio
-|-- server.ts           # bootstrap do servidor
+|-- sql/                # migrations automáticas no boot
+|-- .github/            # CI e templates
+|-- server.ts           # bootstrap do servidor (dev/prod Node)
 `-- package.json        # scripts e dependências
 ```
 
@@ -38,7 +40,7 @@ propez_new/
 1. Instale dependências:
    - `npm install`
 2. Crie seu arquivo de ambiente:
-   - copie `env.example` para `.env`
+   - copie `.env.example` para `.env`
 3. Preencha as variáveis obrigatórias (ver seção [Variáveis de ambiente](#variáveis-de-ambiente)).
 4. Rode o projeto:
    - `npm run dev`
@@ -60,7 +62,7 @@ No boot, [`src/server/startupDiagnostics.ts`](src/server/startupDiagnostics.ts) 
 
 ### Dev local
 
-1. Copiar `env.example` para `.env` e preencher os campos marcados com `<PREENCHER>`.
+1. Copiar `.env.example` para `.env` e preencher os campos marcados com `<PREENCHER>`.
 2. Para receber webhooks externos (ProSync, Stripe, Rubrica) em dev, expor a porta com um túnel público (`ngrok http 3000`) e ajustar `APP_URL` para a URL pública.
 
 ### Produção
@@ -135,3 +137,8 @@ para gestão da plataforma. Ele só fica visível para usuários marcados como
 - Manter documentação nova dentro de `docs/`
 - Usar nomes de arquivo descritivos e consistentes (ex.: `kebab-case`)
 - Evitar arquivos temporários na raiz do repositório
+
+## Licença
+
+Software proprietário da Taggo. Todos os direitos reservados. Ver [LICENSE](LICENSE).
+Uso não autorizado é proibido.

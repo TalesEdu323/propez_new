@@ -115,7 +115,7 @@ if (missing.length > 0 || placeholders.length > 0) {
   console.error(
     '\n[check-deploy-env] Corrija no painel Vercel (Production + Preview) ou no .env local.',
   );
-  console.error('Template: env.example na raiz do repositório.');
+  console.error('Template: .env.example na raiz do repositório.');
   process.exit(1);
 }
 

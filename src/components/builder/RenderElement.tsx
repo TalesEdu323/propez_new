@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  AlertCircle, ArrowRight, ChevronDown, ChevronLeft,
+  ArrowRight,
   Maximize2, PlayCircle, Star
 } from 'lucide-react';
 import type { BuilderElement, BuilderPageLayout, BuilderViewport } from '../../types/builder';
@@ -148,30 +148,30 @@ export function RenderElement({
   switch (type) {
     case 'heading':
       return (
-        <motion.h2 
+        <motion.h2
           {...getAnimationProps(props.animation || 'fade-up')}
-          className={`${props.size} ${props.weight} tracking-tight`} 
+          className={`${props.size} ${props.weight} tracking-tight`}
           style={{ color: props.color, textAlign: props.align }}
         >
           {props.text}
         </motion.h2>
       );
-    
+
     case 'paragraph':
       return (
-        <motion.p 
+        <motion.p
           {...getAnimationProps(props.animation || 'fade-up')}
-          className={`${props.size} leading-relaxed`} 
+          className={`${props.size} leading-relaxed`}
           style={{ color: props.color, textAlign: props.align }}
         >
           {props.text}
         </motion.p>
       );
-    
+
     case 'button':
       if (!shouldRenderApproveCta('button', props, proposalDecision)) return null;
       return (
-        <motion.button 
+        <motion.button
           {...getAnimationProps(props.animation || 'scale')}
           {...proposalClickProps('button', props, previewMode, onProposalAction)}
           whileHover={{ scale: 1.02, y: -2 }}
@@ -182,7 +182,7 @@ export function RenderElement({
           {props.text}
         </motion.button>
       );
-    
+
     case 'logo': {
       const logoSrc = (props.logoUrl as string) || theme.logoUrl;
       const align = props.align === 'left' ? 'justify-start' : props.align === 'right' ? 'justify-end' : 'justify-center';
@@ -226,7 +226,7 @@ export function RenderElement({
         </motion.div>
       );
     }
-    
+
     case 'divider': {
       const dividerMargin = parseInt(String(props.margin ?? '32'), 10);
       return (
@@ -239,16 +239,16 @@ export function RenderElement({
         </motion.div>
       );
     }
-    
+
     case 'grid':
       return (
-        <div 
+        <div
           className={`grid ${gridColsClass(String(props.columns), viewport)} ${props.radius}`}
-          style={{ 
-            gap: `${props.gap}px`, 
+          style={{
+            gap: `${props.gap}px`,
             padding: `${props.padding}px`,
             margin: props.margin && props.margin !== '0' ? `${props.margin}px` : undefined,
-            backgroundColor: props.bgColor 
+            backgroundColor: props.bgColor
           }}
         >
           {element.children?.map(child => (
@@ -260,9 +260,9 @@ export function RenderElement({
     case 'container':
     case 'column':
       return (
-        <div 
+        <div
           className={`flex flex-col ${props.radius} ${props.shadow} h-full`}
-          style={{ 
+          style={{
             padding: `${props.padding}px`,
             margin: props.margin && props.margin !== '0' ? `${props.margin}px` : undefined,
             backgroundColor: props.bgColor,
@@ -277,12 +277,12 @@ export function RenderElement({
 
     case 'spacer':
       return <div style={{ height: `${props.height}px`, width: '100%' }} />;
-    
+
     case 'video':
       // Basic check to ensure it's an embed URL if it's youtube
       const videoUrl = props.url.includes('watch?v=') ? props.url.replace('watch?v=', 'embed/') : props.url;
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
           className={`w-full aspect-video overflow-hidden ${props.radius} ${props.shadow} glass-panel border border-black/5 flex items-center justify-center relative group`}
         >
@@ -295,13 +295,13 @@ export function RenderElement({
           )}
         </motion.div>
       );
-    
+
     case 'card':
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
           whileHover={{ y: -5 }}
-          className={`flex flex-col md:flex-row overflow-hidden ${props.radius} ${props.shadow} glass-panel border border-black/5 transition-all duration-500`} 
+          className={`flex flex-col md:flex-row overflow-hidden ${props.radius} ${props.shadow} glass-panel border border-black/5 transition-all duration-500`}
           style={{ backgroundColor: props.bgColor }}
         >
           <div className="md:w-2/5 h-64 md:h-auto relative overflow-hidden">
@@ -323,7 +323,7 @@ export function RenderElement({
             <p className="text-zinc-600 mb-8 leading-relaxed text-lg">{props.description}</p>
             {shouldRenderApproveCta('card', props, proposalDecision) && (
             <div>
-              <motion.button 
+              <motion.button
                 {...proposalClickProps('card', props, previewMode, onProposalAction)}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -336,7 +336,7 @@ export function RenderElement({
           </div>
         </motion.div>
       );
-    
+
     case 'stats': {
       const statItems = normalizeStatsItems(props);
       const cols = statItems.length <= 1 ? 'grid-cols-1' : statItems.length === 2 ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3';
@@ -383,7 +383,7 @@ export function RenderElement({
           />
         </motion.div>
       );
-    
+
     case 'animated_text':
       return (
         <motion.div {...getAnimationProps(props.animation || 'fade-up')} className="w-full">
@@ -545,7 +545,7 @@ export function RenderElement({
             <h2 className="text-4xl font-bold text-white mb-12 text-center">{props.title}</h2>
             <div className="grid md:grid-cols-2 gap-8">
               {props.services?.map((service: any, i: number) => (
-                <motion.div 
+                <motion.div
                   key={i}
                   initial={{ opacity: 0, scale: 0.95 }}
                   whileInView={{ opacity: 1, scale: 1 }}
@@ -604,7 +604,7 @@ export function RenderElement({
     case 'marketing_cta':
       return (
         <div className="py-24 px-8 text-center" style={{ backgroundColor: '#0a0a0a' }}>
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             whileInView={{ opacity: 1, scale: 1 }}
             className="max-w-3xl mx-auto"
@@ -631,9 +631,9 @@ export function RenderElement({
 
     case 'navbar':
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
-          className="flex items-center justify-between py-5 px-8 glass-panel border-b border-black/5 backdrop-blur-2xl sticky top-0 z-50" 
+          className="flex items-center justify-between py-5 px-8 glass-panel border-b border-black/5 backdrop-blur-2xl sticky top-0 z-50"
           style={{ backgroundColor: props.bgColor }}
         >
           <div className="flex items-center gap-3">
@@ -651,11 +651,11 @@ export function RenderElement({
           </div>
           <div className="hidden md:flex items-center gap-8">
             {props.links.map((link: string, idx: number) => (
-              <motion.a 
+              <motion.a
                 whileHover={{ scale: 1.05 }}
-                key={idx} 
-                href="#" 
-                className="text-sm font-semibold hover:text-blue-600 transition-colors" 
+                key={idx}
+                href="#"
+                className="text-sm font-semibold hover:text-blue-600 transition-colors"
                 style={{ color: props.textColor }}
               >
                 {link}
@@ -663,7 +663,7 @@ export function RenderElement({
             ))}
           </div>
           {shouldRenderApproveCta('navbar', props, proposalDecision) && (
-          <motion.button 
+          <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             {...proposalClickProps('navbar', props, previewMode, onProposalAction)}
@@ -689,14 +689,14 @@ export function RenderElement({
     case 'feature_grid': {
       const features = props.features ?? props.items ?? [];
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
-          className={`grid ${featureGridColsClass(String(props.columns ?? '3'), viewport)} gap-8 py-12`} 
+          className={`grid ${featureGridColsClass(String(props.columns ?? '3'), viewport)} gap-8 py-12`}
           style={{ backgroundColor: props.bgColor }}
         >
           {features.map((feature: any, idx: number) => (
-            <motion.div 
-              key={idx} 
+            <motion.div
+              key={idx}
               whileHover={{ y: -10 }}
               className="flex flex-col p-8 rounded-[2rem] glass-panel border border-black/5 hover:bg-white hover:border-black/10 hover:shadow-xl transition-all duration-500 group"
             >
@@ -714,14 +714,14 @@ export function RenderElement({
     case 'gallery':
       const galCols = props.columns === '1' ? 'grid-cols-1' : props.columns === '2' ? 'grid-cols-2' : props.columns === '4' ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2 md:grid-cols-3';
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
-          className={`grid ${galCols} py-8`} 
+          className={`grid ${galCols} py-8`}
           style={{ gap: `${props.gap}px` }}
         >
           {props.images.map((img: string, idx: number) => (
-            <motion.div 
-              key={idx} 
+            <motion.div
+              key={idx}
               whileHover={{ scale: 1.02, zIndex: 10 }}
               className={`relative aspect-square overflow-hidden ${props.radius} shadow-sm group border border-black/5`}
             >
@@ -738,7 +738,7 @@ export function RenderElement({
 
     case 'funnel':
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
           className="flex flex-col items-center gap-4 w-full py-12 px-8"
         >
@@ -746,13 +746,13 @@ export function RenderElement({
           {props.stages.map((stage: any, idx: number) => {
             const width = 100 - (idx * (50 / Math.max(1, props.stages.length - 1)));
             return (
-              <motion.div 
-                key={idx} 
+              <motion.div
+                key={idx}
                 initial={{ opacity: 0, x: -50 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.1, type: "spring" }}
                 whileHover={{ scale: 1.02 }}
-                className="flex items-center justify-between px-8 py-5 rounded-2xl text-white shadow-lg border border-black/5 backdrop-blur-md relative overflow-hidden group" 
+                className="flex items-center justify-between px-8 py-5 rounded-2xl text-white shadow-lg border border-black/5 backdrop-blur-md relative overflow-hidden group"
                 style={{ width: `${width}%`, backgroundColor: props.color, opacity: 1 - (idx * 0.1) }}
               >
                 <div className="absolute inset-0 bg-white/0 group-hover:bg-white/20 transition-colors duration-300" />
@@ -768,13 +768,13 @@ export function RenderElement({
       const listIcon = (props.listIcon as string) ?? DEFAULT_LIST_ICON;
       const items = normalizeIconItems(props.items, listIcon);
       return (
-        <motion.ul 
+        <motion.ul
           {...getAnimationProps('fade-up')}
           className="space-y-6 py-6"
         >
           {items.map((item, idx: number) => (
-            <motion.li 
-              key={idx} 
+            <motion.li
+              key={idx}
               initial={{ opacity: 0, x: -20 }}
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ delay: idx * 0.1 }}
@@ -792,10 +792,10 @@ export function RenderElement({
 
     case 'pricing':
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
           whileHover={{ y: -10 }}
-          className="glass-panel border border-black/5 rounded-[2.5rem] p-10 shadow-lg max-w-sm mx-auto flex flex-col my-8 relative overflow-hidden group" 
+          className="glass-panel border border-black/5 rounded-[2.5rem] p-10 shadow-lg max-w-sm mx-auto flex flex-col my-8 relative overflow-hidden group"
           style={{ backgroundColor: props.bgColor }}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-white/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -815,11 +815,11 @@ export function RenderElement({
             ))}
           </ul>
           {shouldRenderApproveCta('pricing', props, proposalDecision) && (
-          <motion.button 
+          <motion.button
             {...proposalClickProps('pricing', props, previewMode, onProposalAction)}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="w-full py-5 rounded-2xl font-bold text-white shadow-md mt-auto relative z-10 border border-black/10 backdrop-blur-md text-lg" 
+            className="w-full py-5 rounded-2xl font-bold text-white shadow-md mt-auto relative z-10 border border-black/10 backdrop-blur-md text-lg"
             style={{ backgroundColor: props.buttonColor }}
           >
             {props.buttonText}
@@ -830,10 +830,10 @@ export function RenderElement({
 
     case 'testimonial':
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
           whileHover={{ scale: 1.02 }}
-          className="p-10 md:p-12 rounded-[2.5rem] shadow-lg relative mt-10 glass-panel border border-black/5 group" 
+          className="p-10 md:p-12 rounded-[2.5rem] shadow-lg relative mt-10 glass-panel border border-black/5 group"
           style={{ backgroundColor: props.bgColor }}
         >
           <div className="absolute -top-8 left-10 w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-md transform -rotate-6 group-hover:rotate-0 transition-transform duration-300">
@@ -855,22 +855,22 @@ export function RenderElement({
     case 'timeline': {
       const timelineSteps = props.steps ?? props.items ?? [];
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
-          className="relative border-l-4 ml-4 md:ml-10 py-6 space-y-12" 
+          className="relative border-l-4 ml-4 md:ml-10 py-6 space-y-12"
           style={{ borderColor: props.color }}
         >
           {timelineSteps.map((step: any, idx: number) => (
-            <motion.div 
-              key={idx} 
+            <motion.div
+              key={idx}
               initial={{ opacity: 0, x: -30 }}
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ delay: idx * 0.2 }}
               className="relative pl-10 group"
             >
-              <div 
-                className="absolute -left-[14px] top-1.5 w-6 h-6 rounded-full border-4 border-white shadow-sm group-hover:scale-125 transition-transform duration-300" 
-                style={{ backgroundColor: props.color }} 
+              <div
+                className="absolute -left-[14px] top-1.5 w-6 h-6 rounded-full border-4 border-white shadow-sm group-hover:scale-125 transition-transform duration-300"
+                style={{ backgroundColor: props.color }}
               />
               <div className="glass-panel p-6 rounded-2xl border border-black/5 hover:border-black/10 transition-colors bg-white/50">
                 <h4 className="text-2xl font-bold text-zinc-900 mb-3 tracking-tight">{step.title}</h4>
@@ -896,7 +896,7 @@ export function RenderElement({
 
     case 'whatsapp_button':
       return (
-        <motion.a 
+        <motion.a
           {...getAnimationProps('pulse')}
           whileHover={{ scale: 1.1, rotate: 5 }}
           whileTap={{ scale: 0.9 }}
@@ -974,12 +974,12 @@ export function RenderElement({
             <span style={{ color: props.color }} className="text-lg">{props.percentage}%</span>
           </div>
           <div className="w-full rounded-full overflow-hidden glass-panel border border-black/5 shadow-inner" style={{ backgroundColor: props.bgColor, height: `${props.height}px` }}>
-            <motion.div 
+            <motion.div
               initial={{ width: 0 }}
               whileInView={{ width: `${props.percentage}%` }}
               transition={{ duration: 1.5, ease: "easeOut" }}
               viewport={{ once: true }}
-              className="h-full rounded-full relative overflow-hidden" 
+              className="h-full rounded-full relative overflow-hidden"
               style={{ backgroundColor: props.color }}
             >
               <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]" style={{ backgroundImage: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)' }} />
@@ -990,7 +990,7 @@ export function RenderElement({
 
     case 'star_rating':
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
           className={`flex gap-2 justify-${props.align === 'left' ? 'start' : props.align === 'right' ? 'end' : 'center'}`}
         >
@@ -1002,9 +1002,9 @@ export function RenderElement({
               transition={{ delay: idx * 0.1, type: "spring" }}
               whileHover={{ scale: 1.2, rotate: 15 }}
             >
-              <Star 
-                className={`${idx < parseInt(props.rating) ? 'fill-current drop-shadow-sm' : 'text-zinc-300'}`} 
-                style={{ width: `${props.size}px`, height: `${props.size}px`, color: idx < parseInt(props.rating) ? props.color : undefined }} 
+              <Star
+                className={`${idx < parseInt(props.rating) ? 'fill-current drop-shadow-sm' : 'text-zinc-300'}`}
+                style={{ width: `${props.size}px`, height: `${props.size}px`, color: idx < parseInt(props.rating) ? props.color : undefined }}
               />
             </motion.div>
           ))}
@@ -1013,9 +1013,9 @@ export function RenderElement({
 
     case 'google_map':
       return (
-        <motion.div 
+        <motion.div
           {...getAnimationProps('fade-up')}
-          className={`w-full overflow-hidden shadow-lg glass-panel border border-black/5 ${props.radius} p-2`} 
+          className={`w-full overflow-hidden shadow-lg glass-panel border border-black/5 ${props.radius} p-2`}
           style={{ height: `${props.height}px` }}
         >
           <iframe
@@ -1104,7 +1104,7 @@ export function RenderElement({
     case 'toast_notification':
       return (
         <AnimatePresence>
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}

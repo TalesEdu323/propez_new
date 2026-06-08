@@ -35,6 +35,7 @@ import type { NavigateFn, RouteParams } from '../types/navigation';
 import { mergeServiceLayouts } from '../lib/mergeServiceLayouts';
 import { hasUnresolvedImagePrompts } from '../lib/modelImagePrompts';
 import { iaApi } from '../lib/iaApi';
+import { parseFluidoStep } from '../lib/parseFluidoStep';
 
 const TOTAL_WIZARD_STEPS = 4;
 /** Passo após o último do wizard (tela de sucesso). */
@@ -193,7 +194,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
         setFormData(prev => ({
           ...prev,
           modeloId: prop.modelo_id || '',
-          clienteId: prop.cliente_id,
+          clienteId: prop.cliente_id ?? '',
           clienteNome: prop.cliente_nome,
           prosyncLeadId: prop.prosyncLeadId || '',
           servicos: prop.servicos || [],
@@ -221,9 +222,8 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
   useEffect(() => {
     if (returnHandledRef.current) return;
     const modeloId = typeof initialData?.fluidoReturn === 'string' ? initialData.fluidoReturn : '';
-    const returnStep =
-      typeof initialData?.fluidoStep === 'number' ? initialData.fluidoStep : Number(initialData?.fluidoStep);
-    if (!modeloId || Number.isNaN(returnStep)) return;
+    const returnStep = parseFluidoStep(initialData?.fluidoStep);
+    if (!modeloId || returnStep == null) return;
     returnHandledRef.current = true;
 
     void (async () => {
@@ -301,7 +301,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
 
     const newProposta: Proposta = {
       id: newPropostaId,
-      cliente_id: resolvedClienteId ?? '',
+      cliente_id: resolvedClienteId ?? null,
       cliente_nome: formData.clienteNome,
       clienteEmail: formData.clienteEmail?.trim() || undefined,
       modelo_id: modeloId,

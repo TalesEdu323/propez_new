@@ -27,6 +27,19 @@ import { normalizeEmailBranding } from '../mail/layout.js'
 
 const builderElement = z.object({}).passthrough()
 
+const optionalUuid = z.preprocess(
+  (v) => (v === '' || v == null ? null : v),
+  z.string().uuid().nullable().optional(),
+)
+
+function descontoToCentsCreate(desconto: number | undefined): number {
+  return typeof desconto === 'number' && Number.isFinite(desconto) ? Math.round(desconto * 100) : 0
+}
+
+function descontoToCentsPatch(desconto: number | undefined): number | null {
+  return typeof desconto === 'number' && Number.isFinite(desconto) ? Math.round(desconto * 100) : null
+}
+
 const statusSchema = z.enum(['pendente', 'aprovada', 'recusada'])
 
 const pageLayoutSchema = z.object({
@@ -38,9 +51,9 @@ const pageLayoutSchema = z.object({
 const bodySchema = z.object({
   /** UUID gerado no cliente para alinhar cache/link antes do INSERT (opcional). */
   id: z.string().uuid().optional(),
-  cliente_id: z.string().uuid().optional().nullable(),
+  cliente_id: optionalUuid,
   cliente_nome: z.string().max(200).default(''),
-  modelo_id: z.string().uuid().optional().nullable(),
+  modelo_id: optionalUuid,
   servicos: z.array(z.string().uuid()).default([]),
   valor: z.number().min(0),
   desconto: z.number().min(0).optional(),
@@ -251,7 +264,7 @@ export function createPropostasRouter(deps: {
           d.modelo_id ?? null,
           d.servicos,
           Math.round(d.valor * 100),
-          d.desconto != null ? Math.round(d.desconto * 100) : 0,
+          descontoToCentsCreate(d.desconto),
           d.recorrente ?? false,
           d.ciclo_recorrencia ?? null,
           d.duracao_recorrencia ?? null,
@@ -373,7 +386,7 @@ export function createPropostasRouter(deps: {
           d.servicos !== undefined,
           d.servicos ?? null,
           d.valor != null ? Math.round(d.valor * 100) : null,
-          d.desconto != null ? Math.round(d.desconto * 100) : null,
+          descontoToCentsPatch(d.desconto),
           d.recorrente ?? null,
           'ciclo_recorrencia' in d,
           d.ciclo_recorrencia ?? null,

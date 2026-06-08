@@ -38,7 +38,8 @@ Marque cada item antes de promover para produção:
 - [ ] `STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_YEARLY`, `STRIPE_PRICE_BUSINESS_MONTHLY`, `STRIPE_PRICE_BUSINESS_YEARLY`
 - [ ] `MAIL_FROM` + (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` **ou** `RESEND_API_KEY`) — auth + alertas de proposta/contrato
 - [ ] `APP_URL` público e acessível (logo em e-mails: `{APP_URL}/logo.svg`)
-- [ ] Migração `sql/007_notifications.sql` aplicada no boot (tabela `notifications`, colunas `propostas.cliente_email` / `viewed_at`)
+- [ ] Migração `sql/007b_notifications.sql` aplicada no boot (tabela `notifications`, colunas `propostas.cliente_email` / `viewed_at`)
+- [ ] Se o banco já tinha migrations `014_*` / `020_*` antigas: rodar `npm run migrate:rename-records` uma vez antes do deploy (ver [`sql/README.md`](../sql/README.md))
 - [ ] `PROSYNC_API_URL` (default global) + `PROSYNC_WEBHOOK_SECRET` (webhook inbound Propez)
 - [ ] `RUBRICA_API_URL` (default global) — chaves `ps_live_` / `dm_live_` por organização em **Configurações → Integrações** (não é obrigatório `PROSYNC_API_KEY` / `RUBRICA_API_KEY` na Vercel)
 - [ ] `JWT_SECRET` (>= 32 chars) — também habilita cifra das chaves por org no banco
@@ -141,9 +142,8 @@ Usa as rewrites do `vercel.json` (API + SPA). Para dev com HMR, continue com
 - Se **todas** as rotas `/api/*` retornam 500 ou 503, o boot do Express falhou (env ausente,
   migrations ou bug de import no código). Rode localmente `npm run check:server-imports` e
   `npm run check:deploy-env -- --production` antes do redeploy.
-- Após a migração `.env.example` → [`env.example`](../env.example): o `.env` local **não**
-  vai para o Git. Copie cada variável para **Vercel → Environment Variables** (Production **e**
-  Preview). Use `cp env.example .env` só na máquina local.
+- O `.env` local **não** vai para o Git. Copie cada variável para **Vercel → Environment
+  Variables** (Production **e** Preview). Use `cp .env.example .env` só na máquina local.
 
 ### Render / Railway / Fly.io
 
@@ -246,8 +246,8 @@ Tipos: `proposal_approved`, `proposal_rejected`, `contract_sent`, `contract_sign
 
 ## Segurança de segredos
 
-- Nunca commitar `.env` nem `.env.example`. O `.gitignore` ignora ambos.
-- O template versionado é [`env.example`](../env.example) (só placeholders
+- Nunca commitar `.env` (segredos reais). O `.gitignore` ignora `.env` e variantes locais.
+- O template versionado é [`.env.example`](../.env.example) (só placeholders
   `<PREENCHER>`). Auditar a cada PR que mexer em variáveis.
 - Em produção, preferir o gerenciador de segredos nativo (Secret Manager no
   GCP, AWS Secrets Manager, Vercel Encrypted, Render Secret Files).
