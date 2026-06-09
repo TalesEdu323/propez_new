@@ -56,6 +56,7 @@ import {
   createAffiliateTrackingRouter,
 } from './routes/affiliateTracking.js';
 import { errorHandler } from './errorHandler.js';
+import { createApiErrorTrackingMiddleware } from './services/apiErrorTracking.js';
 import { logStartupIntegrationDiagnostics } from './startupDiagnostics.js';
 
 /**
@@ -124,28 +125,7 @@ export async function createApp(): Promise<{ app: Application; config: ReturnTyp
   // Health/boot-check públicos — antes de rotas autenticadas (diagnóstico Vercel).
   app.use('/api', createHealthRouter({ pool, integrationsConfig, config }));
 
-  app.use((req, res, next) => {
-    const start = Date.now();
-    res.on('finish', () => {
-      if (res.statusCode < 500) return;
-      // Falhas de proxy de integração (upstream/config) não são bugs da aplicação
-      if (req.path.startsWith('/api/integrations')) return;
-      const routePattern = req.route?.path
-        ? `${req.baseUrl || ''}${req.route.path}`
-        : req.path;
-      pool
-        .query(
-          `INSERT INTO api_error_stats (stat_date, route_pattern, status_code, error_count)
-           VALUES (CURRENT_DATE, $1, $2, 1)
-           ON CONFLICT (stat_date, route_pattern, status_code)
-           DO UPDATE SET error_count = api_error_stats.error_count + 1`,
-          [routePattern.slice(0, 200), res.statusCode],
-        )
-        .catch(() => {});
-      void start;
-    });
-    next();
-  });
+  app.use(createApiErrorTrackingMiddleware(pool));
 
   // 4) Auth (rate-limit mais restrito para proteger login/register)
   const authLimiter = createRateLimit({ windowMs: 60_000, max: 30 });

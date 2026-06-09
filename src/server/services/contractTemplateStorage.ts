@@ -51,6 +51,17 @@ async function readTemplatePdfFromDb(ref: TemplatePdfRef): Promise<Buffer | null
   return bufferFromRow(rows[0]?.pdf_data);
 }
 
+/** Verifica se o template tem bytes PDF persistidos no banco. */
+export async function templatePdfExists(ref: TemplatePdfRef): Promise<boolean> {
+  await ensureContratoTemplatePdfColumn(ref.pool);
+  const { rows } = await ref.pool.query<{ has_bytes: boolean }>(
+    `SELECT (pdf_data IS NOT NULL AND length(pdf_data) > 0) AS has_bytes
+     FROM contratos_templates WHERE organization_id = $1 AND id = $2`,
+    [ref.orgId, ref.contratoId],
+  );
+  return rows[0]?.has_bytes === true;
+}
+
 async function writeTemplatePdfToDb(ref: TemplatePdfRef, buffer: Buffer): Promise<void> {
   await ensureContratoTemplatePdfColumn(ref.pool);
   const result = await ref.pool.query(
@@ -99,13 +110,24 @@ export async function readTemplatePdf(ref: TemplatePdfRef): Promise<Buffer> {
   const fromDb = await readTemplatePdfFromDb(ref);
   if (fromDb && fromDb.length > 0) return fromDb;
 
+  if (usesDbPdfStorage()) {
+    console.warn('[contractTemplateStorage] PDF ausente no BYTEA (serverless)', {
+      contratoId: ref.contratoId,
+      orgId: ref.orgId,
+      pdfPath: ref.pdfPath ?? null,
+    });
+    throw new Error('PDF do template de contrato não encontrado');
+  }
+
   const rel = ref.pdfPath ?? templatePdfRelativePath(ref.orgId, ref.contratoId);
-  if (!usesDbPdfStorage() || ref.pdfPath) {
-    try {
-      return await readFile(absoluteFromRelative(rel));
-    } catch {
-      /* try below */
-    }
+  try {
+    return await readFile(absoluteFromRelative(rel));
+  } catch {
+    console.warn('[contractTemplateStorage] PDF ausente no disco', {
+      contratoId: ref.contratoId,
+      orgId: ref.orgId,
+      pdfPath: ref.pdfPath ?? rel,
+    });
   }
 
   throw new Error('PDF do template de contrato não encontrado');

@@ -6,6 +6,7 @@ import { fetchAllOrgsWithHealth, computeOrgHealthScore } from '../services/healt
 import { isOrgActiveForMrr, mrrBrlForPlan } from '../services/mrrPricing.js'
 import { computeCurrentMrr } from '../services/mrrSnapshot.js'
 import { createStripeClient, fetchStripeDunningSummary } from '../services/stripeMetrics.js'
+import { fetchApiErrorLogs } from '../services/apiErrorTracking.js'
 
 export function registerAdminAnalyticsRoutes(
   router: Router,
@@ -487,6 +488,23 @@ export function registerAdminAnalyticsRoutes(
       })
     } catch (err) {
       return res.status(500).json({ error: 'Erro ao buscar operações' })
+    }
+  })
+
+  router.get('/operations/error-logs', async (req: Request, res: Response) => {
+    const route = typeof req.query.route === 'string' ? req.query.route.trim() : ''
+    if (!route) {
+      return res.status(400).json({ error: 'Parâmetro route é obrigatório' })
+    }
+    const daysRaw = Number(req.query.days ?? 7)
+    const days = Number.isFinite(daysRaw) ? Math.min(Math.max(daysRaw, 1), 30) : 7
+    const limitRaw = Number(req.query.limit ?? 50)
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 50
+    try {
+      const logs = await fetchApiErrorLogs(pool, route, days, limit)
+      return res.json({ logs, route, days })
+    } catch {
+      return res.status(500).json({ error: 'Erro ao buscar logs' })
     }
   })
 

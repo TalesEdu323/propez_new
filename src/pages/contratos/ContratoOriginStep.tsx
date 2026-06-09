@@ -40,8 +40,8 @@ export function ContratoOriginStep({ onChooseText, onChoosePdf }: ContratoOrigin
           <div>
             <h3 className="text-xl font-semibold text-zinc-900">Enviar PDF</h3>
             <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
-              Faça upload do documento final em PDF. Na próxima etapa, informe o título do modelo
-              antes de enviar o arquivo.
+              Faça upload do PDF na área de arrastar e soltar. O título do modelo será preenchido
+              pelo nome do arquivo e você pode editá-lo depois.
             </p>
           </div>
         </button>

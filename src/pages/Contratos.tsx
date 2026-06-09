@@ -8,6 +8,7 @@ import { AiBriefPromptModal } from '../components/ia/AiBriefPromptModal';
 import { api, apiFetch, ApiError } from '../lib/apiClient';
 import { blobToPdfPreviewSource } from '../lib/pdfPreview';
 import type { PdfPreviewSource } from '../lib/pdfPreview';
+import { titleFromPdfFilename } from '../lib/contratoPdfTitle';
 import type { Marcador } from '../lib/documents/positioningTypes';
 import {
   defaultTemplateSigners,
@@ -43,6 +44,9 @@ export default function Contratos() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [pendingFileSize, setPendingFileSize] = useState<number | null>(null);
+  const [pendingFileName, setPendingFileName] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -51,6 +55,18 @@ export default function Contratos() {
   const orgName = userConfig.nome || 'Empresa';
   const templateSigners = defaultTemplateSigners(orgName);
   const positioningSigners = templateSignersToPositioning(templateSigners);
+
+  const shouldLoadPreview = useCallback(
+    (contrato: Partial<ContratoTemplate> | null, srcType: 'text' | 'pdf'): boolean => {
+      if (!contrato?.id) return false;
+      if (srcType === 'text') return true;
+      return (
+        contrato.sourceType === 'pdf' &&
+        ((contrato.pageCount ?? 0) > 0 || !!contrato.pdfFileName)
+      );
+    },
+    [],
+  );
 
   const loadPreview = useCallback(async (contratoId: string) => {
     setPreviewLoading(true);
@@ -108,10 +124,14 @@ export default function Contratos() {
       setPreviewError(null);
       return;
     }
-    if (currentContrato?.id) {
+    if (shouldLoadPreview(currentContrato, sourceType) && currentContrato?.id) {
       void loadPreview(currentContrato.id);
+    } else if (sourceType === 'pdf') {
+      setPreviewFile(null);
+      setPreviewError(null);
+      setPreviewLoading(false);
     }
-  }, [isEditing, wizardStep, currentContrato?.id, currentContrato?.sourceType, loadPreview]);
+  }, [isEditing, wizardStep, currentContrato, sourceType, loadPreview, shouldLoadPreview]);
 
   useEffect(() => {
     if (!currentContrato) return;
@@ -148,20 +168,35 @@ export default function Contratos() {
     setSourceType('text');
   };
 
-  const ensureSavedDraft = async (): Promise<ContratoTemplate | null> => {
-    if (!currentContrato?.titulo?.trim()) {
+  const ensureSavedDraft = async (opts?: {
+    titulo?: string;
+  }): Promise<ContratoTemplate | null> => {
+    const titulo = (opts?.titulo ?? currentContrato?.titulo)?.trim();
+    if (!titulo) {
       showToast('Informe o título do contrato.');
       return null;
     }
 
-    if (currentContrato.id) {
-      return currentContrato as ContratoTemplate;
+    if (currentContrato?.id) {
+      if (opts?.titulo && opts.titulo !== currentContrato.titulo?.trim()) {
+        const updated = await api.patch<ContratoTemplate>(`/api/contratos/${currentContrato.id}`, {
+          titulo,
+        });
+        setCurrentContrato(updated);
+        store.saveContratos(
+          contratos
+            .filter((c): c is ContratoTemplate => !!c?.id)
+            .map((c) => (c.id === updated.id ? updated : c)),
+        );
+        return updated;
+      }
+      return { ...currentContrato, titulo } as ContratoTemplate;
     }
 
     const saved = await api.post<ContratoTemplate>('/api/contratos', {
-      titulo: currentContrato.titulo.trim(),
-      texto: currentContrato.texto || '',
-      sourceType,
+      titulo,
+      texto: currentContrato?.texto || '',
+      sourceType: sourceType === 'pdf' ? 'text' : sourceType,
     });
     setCurrentContrato(saved);
     store.saveContratos([
@@ -172,7 +207,18 @@ export default function Contratos() {
   };
 
   const handleUploadPdf = async (file: File) => {
-    const saved = await ensureSavedDraft();
+    const inferred = titleFromPdfFilename(file.name);
+    const titulo = currentContrato?.titulo?.trim() || inferred;
+
+    if (!currentContrato?.titulo?.trim()) {
+      setCurrentContrato((prev) => ({ ...prev, titulo }));
+    }
+
+    setUploadError(null);
+    setPendingFileSize(file.size);
+    setPendingFileName(file.name);
+
+    const saved = await ensureSavedDraft({ titulo });
     if (!saved) return;
 
     setUploading(true);
@@ -192,11 +238,14 @@ export default function Contratos() {
       const updated: ContratoTemplate = {
         ...saved,
         ...data,
+        titulo: saved.titulo || titulo,
         sourceType: 'pdf',
         pageCount: data.pageCount ?? saved.pageCount ?? 1,
       };
       setCurrentContrato(updated);
       setSourceType('pdf');
+      setUploadError(null);
+      setPendingFileName(null);
       store.saveContratos(
         contratos.some((c) => c?.id === updated.id)
           ? contratos
@@ -206,10 +255,31 @@ export default function Contratos() {
       );
       void loadPreview(updated.id);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Erro ao enviar PDF');
+      const msg = err instanceof Error ? err.message : 'Erro ao enviar PDF';
+      setUploadError(msg);
+      showToast(msg);
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleRemovePdf = () => {
+    setPreviewFile(null);
+    setPreviewError(null);
+    setUploadError(null);
+    setPendingFileSize(null);
+    setPendingFileName(null);
+    setCurrentContrato((prev) =>
+      prev
+        ? {
+            ...prev,
+            sourceType: 'text',
+            pdfFileName: undefined,
+            pageCount: undefined,
+          }
+        : prev,
+    );
+    setSourceType('pdf');
   };
 
   const persistContent = async (): Promise<ContratoTemplate | null> => {
@@ -253,7 +323,9 @@ export default function Contratos() {
     if (!saved) return;
     const savedCfg = parseSavedSignatureConfig(saved.signatureConfig, orgName, pageCount);
     if (savedCfg.fields.length === 0) setMarcadores([]);
-    void loadPreview(saved.id);
+    if (shouldLoadPreview(saved, sourceType)) {
+      void loadPreview(saved.id);
+    }
     setWizardStep('signature');
   };
 
@@ -404,7 +476,11 @@ export default function Contratos() {
                 isNewContrato={!!isNewContrato}
                 onOpenAi={() => setAiOpen(true)}
                 uploading={uploading}
+                uploadError={uploadError}
+                pendingFileSize={pendingFileSize}
+                pendingFileName={pendingFileName}
                 onUploadPdf={(f) => void handleUploadPdf(f)}
+                onRemovePdf={handleRemovePdf}
                 previewFile={previewFile}
                 previewLoading={previewLoading}
                 previewError={previewError}

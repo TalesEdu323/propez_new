@@ -24,6 +24,7 @@ import {
   warnIfElementosPayloadLarge,
 } from './sanitizeModeloPayload';
 import type { ProposalFlowConfig } from '../types/proposalFlow';
+import { parseProposalFlow } from '../types/proposalFlow';
 import { api, ApiError } from './apiClient';
 import { normalizeUuidOrNull } from './normalizeUuid';
 import { notifyStoreSaveError } from './storeSaveFeedback';
@@ -789,7 +790,7 @@ const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
     const contratoId = normalizeUuidOrNull(m.contratoId);
     const payload: ModeloPayload = {
       id: m.id,
-      nome: m.nome,
+      nome: m.nome.trim(),
       elementos,
       pageLayout: sanitizePageLayoutForApi(m.pageLayout ?? normalizePageLayout(null)),
       servicos: (m.servicos ?? [])
@@ -801,7 +802,7 @@ const modeloApi: EntityApi<ModeloProposta, ModeloPayload> = {
       linkPagamento: m.linkPagamento ?? null,
       whatsappComprovante: sanitizeWhatsappComprovante(m.whatsappComprovante),
       tier: m.tier ?? 'free',
-      fluxo: m.fluxo ?? { steps: ['approve', 'sign', 'pay'] },
+      fluxo: parseProposalFlow(m.fluxo),
     };
     if (m.signatureConfig != null) {
       payload.signatureConfig = m.signatureConfig;

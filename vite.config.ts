@@ -12,7 +12,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icone.svg', 'logo.svg'],
+        includeAssets: ['icone.svg', 'logo.svg', 'pdf.worker.min.mjs'],
         workbox: {
           navigateFallback: 'index.html',
           navigateFallbackDenylist: [/^\/assets\//, /^\/api\//],

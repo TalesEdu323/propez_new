@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Document, Page } from 'react-pdf';
 import {
   ChevronLeft,
   ChevronRight,
@@ -17,10 +16,8 @@ import {
   getSignerColorByIndex,
   hexToRgba,
 } from '../../lib/documents/positioningConstants';
-import { setupPdfWorker } from '../../lib/pdfSetup';
+import { PdfDocumentPages } from './PdfDocumentPages';
 import type { PdfPreviewSource } from '../../lib/pdfPreview';
-
-setupPdfWorker();
 
 const PAGE_ASPECT = 1123 / 794;
 
@@ -53,7 +50,7 @@ export function RubricaSignaturePositioningPanel({
   setMarcadores,
   selectedSignerId,
   onSelectSigner,
-  documentPages,
+  documentPages: _documentPages,
   currentPage,
   onCurrentPageChange,
   pdfFile,
@@ -63,7 +60,7 @@ export function RubricaSignaturePositioningPanel({
 }: RubricaSignaturePositioningPanelProps) {
   const [pendingClick, setPendingClick] = useState<PendingClick | null>(null);
   const [pageWidth, setPageWidth] = useState(794);
-  const [numPages, setNumPages] = useState(documentPages);
+  const [loadedPages, setLoadedPages] = useState<number | null>(null);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef<{
@@ -83,8 +80,8 @@ export function RubricaSignaturePositioningPanel({
   } | null>(null);
 
   useEffect(() => {
-    setNumPages(Math.max(documentPages, numPages));
-  }, [documentPages, numPages]);
+    setLoadedPages(null);
+  }, [pdfFile]);
 
   useEffect(() => {
     if (signers.length > 0 && !selectedSignerId) {
@@ -219,7 +216,7 @@ export function RubricaSignaturePositioningPanel({
     };
   }, [getPageRect, marcadores, setMarcadores]);
 
-  const totalPages = Math.max(1, numPages || documentPages);
+  const totalPages = loadedPages ?? 0;
   const pageHeight = pageWidth * PAGE_ASPECT;
 
   const chooserPortal =
@@ -312,20 +309,19 @@ export function RubricaSignaturePositioningPanel({
           ) : loading || !pdfFile ? (
             <p className="text-center text-sm text-zinc-400 py-12">Carregando documento…</p>
           ) : (
-            <Document
+            <PdfDocumentPages
               file={pdfFile}
-              onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-              onLoadError={() => setNumPages(0)}
+              pageWidth={pageWidth}
+              onLoadSuccess={setLoadedPages}
+              onLoadError={() => setLoadedPages(0)}
               loading={<p className="text-center text-sm text-zinc-400">Renderizando PDF…</p>}
               error={
                 <p className="text-center text-sm text-red-600 py-12">
                   Não foi possível exibir o documento. Volte à etapa de conteúdo e envie o PDF novamente.
                 </p>
               }
-            >
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+              renderPageWrap={(pageNum, page) => (
                 <div
-                  key={pageNum}
                   ref={(el) => {
                     pageRefs.current[pageNum] = el;
                   }}
@@ -334,7 +330,7 @@ export function RubricaSignaturePositioningPanel({
                   onClick={(e) => handleCanvasClick(e, pageNum)}
                   role="presentation"
                 >
-                  <Page pageNumber={pageNum} width={pageWidth} renderTextLayer={false} renderAnnotationLayer={false} />
+                  {page}
                   {marcadores
                     .filter((m) => m.page === pageNum)
                     .map((field) => {
@@ -399,12 +395,12 @@ export function RubricaSignaturePositioningPanel({
                       );
                     })}
                 </div>
-              ))}
-            </Document>
+              )}
+            />
           )}
         </div>
 
-        {totalPages > 1 && pdfFile && (
+        {totalPages > 1 && loadedPages != null && pdfFile && (
           <nav className="w-12 shrink-0 border-l border-zinc-200 flex flex-col items-center justify-center gap-2 py-4">
             <button
               type="button"

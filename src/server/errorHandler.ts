@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { captureUnhandledErrorDetail } from './services/apiErrorTracking.js';
 
 /**
  * Error handler global. Deve ser registrado por último, após todas as rotas.
@@ -15,5 +16,6 @@ export function errorHandler(
     return;
   }
   console.error('Unhandled server error:', error);
+  captureUnhandledErrorDetail(error, res);
   res.status(500).json({ error: 'Erro interno do servidor' });
 }

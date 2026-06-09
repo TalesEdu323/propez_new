@@ -18,6 +18,7 @@ import { isPdfBuffer } from '../../lib/pdfPreview.js'
 import {
   deleteTemplatePdf,
   readTemplatePdf,
+  templatePdfExists,
   uploadPdfErrorMessage,
   writeTemplatePdf,
   type TemplatePdfRef,
@@ -140,9 +141,13 @@ export function createContratosRouter(deps: {
 
     try {
       if (row.source_type === 'pdf') {
-        const buf = await readTemplatePdf(
-          templatePdfRef(pool, req.auth.orgId, req.params.id, row.pdf_path),
-        )
+        const ref = templatePdfRef(pool, req.auth.orgId, req.params.id, row.pdf_path)
+        if (!(await templatePdfExists(ref))) {
+          return res.status(404).json({
+            error: 'PDF não enviado ou perdido. Envie o arquivo novamente na etapa de conteúdo.',
+          })
+        }
+        const buf = await readTemplatePdf(ref)
         res.setHeader('Content-Type', 'application/pdf')
         res.setHeader('Content-Disposition', 'inline; filename="contrato-preview.pdf"')
         return res.send(buf)
@@ -162,10 +167,12 @@ export function createContratosRouter(deps: {
       return res.send(pdf)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.error('[contratos/preview-pdf] erro:', err)
+      if (!/não encontrado/i.test(msg)) {
+        console.error('[contratos/preview-pdf] erro:', err)
+      }
       if (/não encontrado/i.test(msg)) {
         return res.status(404).json({
-          error: 'PDF não encontrado. Envie o arquivo novamente na etapa de conteúdo.',
+          error: 'PDF não enviado ou perdido. Envie o arquivo novamente na etapa de conteúdo.',
         })
       }
       return res.status(500).json({ error: 'Erro ao gerar preview do contrato' })

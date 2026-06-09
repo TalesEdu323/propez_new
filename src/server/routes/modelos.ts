@@ -145,7 +145,13 @@ export function createModelosRouter(deps: {
       }
 
       const parsed = bodySchema.safeParse(rawBody)
-      if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
+      if (!parsed.success) {
+        console.warn('[modelos/POST] payload inválido', {
+          orgId: req.auth.orgId,
+          details: parsed.error.flatten(),
+        })
+        return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
+      }
       const d = parsed.data
 
       const contratoTexto = resolveContratoTextoForPersist(d.contratoId, d.contratoTexto)
@@ -243,7 +249,14 @@ export function createModelosRouter(deps: {
       }
 
       const parsed = patchSchema.safeParse(rawBody)
-      if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
+      if (!parsed.success) {
+        console.warn('[modelos/PATCH] payload inválido', {
+          modeloId: req.params.id,
+          orgId: req.auth.orgId,
+          details: parsed.error.flatten(),
+        })
+        return res.status(400).json({ error: 'Dados inválidos', details: parsed.error.flatten() })
+      }
       const d = parsed.data
 
       const patchContratoId = 'contratoId' in d ? (d.contratoId ?? null) : undefined

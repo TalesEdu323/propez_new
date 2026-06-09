@@ -91,6 +91,10 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
   }, [initialData?.editId]);
 
   const handleSave = async (finalElements: BuilderElement[], finalPageLayout: BuilderPageLayout) => {
+    if (!formData.nome?.trim()) {
+      alert('Informe o nome do modelo antes de salvar.');
+      return;
+    }
     if (flowHasStep(formData.fluxo, 'sign') && !formData.contratoId) {
       alert('Selecione um template de contrato no passo "Contrato Padrão" antes de salvar.');
       return;
@@ -102,7 +106,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
 
     const newModelo: ModeloProposta = {
       id: initialData?.editId || createId(),
-      nome: formData.nome,
+      nome: formData.nome.trim(),
       servicos: formData.servicos,
       contratoTexto: formData.contratoTexto,
       contratoId: formData.contratoId || undefined,
