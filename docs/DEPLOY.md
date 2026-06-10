@@ -244,6 +244,25 @@ node scripts/test-business-email.mjs seu@email.com proposal_approved
 
 Tipos: `proposal_approved`, `proposal_rejected`, `contract_sent`, `contract_signed`, `proposal_paid`.
 
+## Contratos PDF legados (Vercel / Neon)
+
+Na Vercel, o PDF do template de contrato persiste em `contratos_templates.pdf_data`
+(BYTEA). Registros criados antes da migration `022` ou com upload perdido podem
+ter `source_type = 'pdf'` sem bytes — o preview retorna 404 até **re-upload manual**.
+
+Diagnóstico no Neon SQL Editor:
+
+```sql
+SELECT id, organization_id, titulo, pdf_file_name, page_count,
+       (pdf_data IS NOT NULL AND length(pdf_data) > 0) AS has_bytes
+FROM contratos_templates
+WHERE source_type = 'pdf'
+ORDER BY created_at DESC;
+```
+
+- `has_bytes = false` → abrir o contrato no app e usar **Substituir PDF** na etapa de conteúdo.
+- Não há backfill automático: o arquivo original não existe mais no disco efêmero da Vercel.
+
 ## Segurança de segredos
 
 - Nunca commitar `.env` (segredos reais). O `.gitignore` ignora `.env` e variantes locais.

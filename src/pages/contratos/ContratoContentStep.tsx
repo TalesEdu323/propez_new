@@ -132,7 +132,7 @@ export function ContratoContentStep({
         </>
       )}
 
-      {(previewLoading || previewFile || previewError) && (
+      {(sourceType === 'pdf' || previewLoading || previewFile || previewError) && (
         <div>
           <h3 className="text-sm font-bold text-zinc-900 mb-2">Preview do documento</h3>
           <div
@@ -140,10 +140,20 @@ export function ContratoContentStep({
             className="rounded-2xl border border-black/10 overflow-hidden bg-zinc-100 flex justify-center min-h-[200px]"
           >
             {previewError ? (
-              <p className="p-8 text-center text-sm text-zinc-500">{previewError}</p>
-            ) : previewLoading || !previewFile ? (
+              <div className="p-8 text-center space-y-3 max-w-md mx-auto">
+                <p className="text-sm text-zinc-600">{previewError}</p>
+                {sourceType === 'pdf' &&
+                  (/pdf|envie|perdido|não encontrado/i.test(previewError) ||
+                    previewError.includes('etapa de conteúdo')) && (
+                    <p className="text-sm font-medium text-blue-700">
+                      Envie o PDF novamente na área &quot;Qual documento será usado no modelo?&quot;
+                      acima — use Substituir PDF se já houver um arquivo listado.
+                    </p>
+                  )}
+              </div>
+            ) : previewLoading ? (
               <p className="p-8 text-center text-sm text-zinc-400">Gerando preview…</p>
-            ) : (
+            ) : previewFile ? (
               <PdfDocumentPages
                 file={previewFile}
                 pageWidth={previewWidth}
@@ -153,7 +163,11 @@ export function ContratoContentStep({
                   <p className="p-8 text-sm text-zinc-500">Não foi possível exibir o preview.</p>
                 }
               />
-            )}
+            ) : sourceType === 'pdf' ? (
+              <p className="p-8 text-center text-sm text-zinc-500">
+                Envie um PDF acima para visualizar a primeira página aqui.
+              </p>
+            ) : null}
           </div>
         </div>
       )}

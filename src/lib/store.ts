@@ -551,10 +551,10 @@ function mergeModeloAfterSave(local: ModeloProposta, api: ModeloProposta): Model
     tier: api.tier ?? local.tier,
     fluxo: api.fluxo ?? local.fluxo,
     data_criacao: api.data_criacao ?? local.data_criacao,
-    elementos: local.elementos,
-    pageLayout: local.pageLayout,
-    contratoTexto: local.contratoTexto,
-    signatureConfig: local.signatureConfig,
+    elementos: Array.isArray(api.elementos) ? api.elementos : local.elementos,
+    pageLayout: api.pageLayout ?? local.pageLayout,
+    contratoTexto: api.contratoTexto !== undefined ? api.contratoTexto : local.contratoTexto,
+    signatureConfig: api.signatureConfig !== undefined ? api.signatureConfig : local.signatureConfig,
   };
 }
 
@@ -584,38 +584,10 @@ async function patchModeloWithRetry(id: string, body: Record<string, unknown>): 
   return retryModeloRequest(() => api.patch<ApiModelo>(`/api/modelos/${id}`, body));
 }
 
-/**
- * Cria modelo em duas fases quando há layout visual:
- * 1) POST leve (metadados, elementos vazios) — evita timeout em cold start
- * 2) PATCH com elementos + pageLayout
- */
 async function createModeloWithRetry(payload: ModeloPayload): Promise<ApiModelo> {
-  const elementos = payload.elementos ?? [];
-  const hasLayout = elementos.length > 0 || payload.pageLayout != null;
-
-  if (!hasLayout) {
-    return postModeloWithRetry(payload as unknown as Record<string, unknown>);
-  }
-
-  const shell: Record<string, unknown> = {
-    id: payload.id,
-    nome: payload.nome,
-    servicos: payload.servicos,
-    contratoId: payload.contratoId,
-    contratoTexto: payload.contratoTexto,
-    chavePix: payload.chavePix,
-    linkPagamento: payload.linkPagamento,
-    whatsappComprovante: payload.whatsappComprovante,
-    tier: payload.tier,
-    fluxo: payload.fluxo,
-    signatureConfig: payload.signatureConfig,
-    elementos: [],
-  };
-
-  const created = await postModeloWithRetry(shell);
-  const patchBody: Record<string, unknown> = { elementos };
-  if (payload.pageLayout) patchBody.pageLayout = payload.pageLayout;
-  return patchModeloWithRetry(created.id, patchBody);
+  JSON.stringify(payload.elementos ?? []);
+  if (payload.pageLayout) JSON.stringify(payload.pageLayout);
+  return postModeloWithRetry(payload as unknown as Record<string, unknown>);
 }
 
 async function diffSave<T extends { id: string }, TPayload>(

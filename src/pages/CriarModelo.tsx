@@ -129,6 +129,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
     setSaveError(null);
     try {
       await store.saveModelosAsync(nextList);
+      await fetchModeloById(newModelo.id);
 
       const fluidoReturn =
         typeof initialData?.fluidoReturn === 'string' ? initialData.fluidoReturn : undefined;

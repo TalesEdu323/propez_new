@@ -4,6 +4,7 @@ import type { Pool } from 'pg'
 import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import { serializeModelo, serializeModeloSummary } from '../db/serializers.js'
+import { toJsonbParam } from '../db/jsonbParam.js'
 import { fetchOrgBrand, mergePageLayoutWithOrgBrand } from '../services/orgBrandDefaults.js'
 import { modeloBodySchema, modeloPatchSchema } from '../validation/modeloPayload.js'
 
@@ -11,9 +12,6 @@ const MODEL_SELECT = `id, nome, elementos, page_layout, servicos, contrato_id, c
               chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config, created_at`
 
 const MODEL_SUMMARY_SELECT = `id, nome, servicos, contrato_id, chave_pix, link_pagamento,
-              whatsapp_comprovante, tier, fluxo, created_at`
-
-const MODEL_WRITE_RETURN = `id, nome, servicos, contrato_id, chave_pix, link_pagamento,
               whatsapp_comprovante, tier, fluxo, created_at`
 
 const MAX_PAYLOAD_BYTES = 1_000_000
@@ -57,10 +55,15 @@ function logModeloPostMetrics(params: {
   console.log('[modelos] POST', JSON.stringify(params))
 }
 
-function logModeloPgError(context: string, err: unknown): void {
+function logModeloPgError(
+  context: string,
+  err: unknown,
+  extra?: Record<string, unknown>,
+): void {
   const pg = err as { code?: string; column?: string; constraint?: string; detail?: string; message?: string }
+  const suffix = extra ? ` ${JSON.stringify(extra)}` : ''
   console.error(
-    `[modelos/${context}] pg code=${pg.code ?? '-'} column=${pg.column ?? '-'} constraint=${pg.constraint ?? '-'} detail=${pg.detail ?? pg.message ?? '-'}`,
+    `[modelos/${context}] pg code=${pg.code ?? '-'} column=${pg.column ?? '-'} constraint=${pg.constraint ?? '-'} detail=${pg.detail ?? pg.message ?? '-'}${suffix}`,
   )
 }
 
@@ -166,8 +169,8 @@ export function createModelosRouter(deps: {
 
       const insertParams = [
         d.nome,
-        elementosValue,
-        pageLayout,
+        toJsonbParam(elementosValue),
+        toJsonbParam(pageLayout),
         d.servicos,
         d.contratoId ?? null,
         contratoTexto,
@@ -175,8 +178,8 @@ export function createModelosRouter(deps: {
         d.linkPagamento ?? null,
         d.whatsappComprovante ?? null,
         d.tier,
-        fluxoValue,
-        d.signatureConfig ?? null,
+        toJsonbParam(fluxoValue),
+        d.signatureConfig != null ? toJsonbParam(d.signatureConfig) : null,
       ]
 
       let rows: Record<string, unknown>[]
@@ -201,7 +204,7 @@ export function createModelosRouter(deps: {
              fluxo = EXCLUDED.fluxo,
              signature_config = EXCLUDED.signature_config
            WHERE modelos_propostas.organization_id = EXCLUDED.organization_id
-           RETURNING ${MODEL_WRITE_RETURN}`,
+           RETURNING ${MODEL_SELECT}`,
           [d.id, req.auth.orgId, ...insertParams],
         )
         if (!upsertRows[0]) {
@@ -214,7 +217,7 @@ export function createModelosRouter(deps: {
              (organization_id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
               chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config)
            VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::uuid[], $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb)
-           RETURNING ${MODEL_WRITE_RETURN}`,
+           RETURNING ${MODEL_SELECT}`,
           [req.auth.orgId, ...insertParams],
         )
         rows = insertRows
@@ -228,7 +231,7 @@ export function createModelosRouter(deps: {
         idempotent: Boolean(d.id),
       })
 
-      return res.status(201).json(serializeModeloSummary(rows[0]))
+      return res.status(201).json(serializeModelo(rows[0]))
     } catch (err) {
       logModeloPgError('POST', err)
       const { status, error } = modeloErrorResponse(err)
@@ -238,6 +241,8 @@ export function createModelosRouter(deps: {
 
   router.patch('/:id', async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
+
+    let patchJsonbFields: Record<string, unknown> | undefined
 
     try {
       const rawBody = req.body ?? {}
@@ -277,6 +282,19 @@ export function createModelosRouter(deps: {
             )
           : undefined
 
+      const patchJsonbContext = {
+        modeloId: req.params.id,
+        orgId: req.auth.orgId,
+        hasElementos: d.elementos !== undefined,
+        hasPageLayout: d.pageLayout !== undefined,
+        hasFluxo: d.fluxo !== undefined,
+        hasSignatureConfig: d.signatureConfig !== undefined,
+        elementosBytes: d.elementos !== undefined ? payloadByteLength(d.elementos) : 0,
+        pageLayoutBytes: patchPageLayout !== undefined ? payloadByteLength(patchPageLayout) : 0,
+      }
+      patchJsonbFields = patchJsonbContext
+      console.log('[modelos/PATCH] fields', JSON.stringify(patchJsonbContext))
+
       const { rows } = await pool.query(
         `UPDATE modelos_propostas SET
            nome = COALESCE($3, nome),
@@ -292,15 +310,15 @@ export function createModelosRouter(deps: {
            fluxo = CASE WHEN $21::boolean THEN $22::jsonb ELSE fluxo END,
            signature_config = CASE WHEN $23::boolean THEN $24::jsonb ELSE signature_config END
          WHERE organization_id = $1 AND id = $2
-         RETURNING ${MODEL_WRITE_RETURN}`,
+         RETURNING ${MODEL_SELECT}`,
         [
           req.auth.orgId,
           req.params.id,
           d.nome ?? null,
           d.elementos !== undefined,
-          d.elementos !== undefined ? d.elementos : null,
+          d.elementos !== undefined ? toJsonbParam(d.elementos) : null,
           d.pageLayout !== undefined,
-          patchPageLayout ?? null,
+          patchPageLayout !== undefined ? toJsonbParam(patchPageLayout) : null,
           d.servicos !== undefined,
           d.servicos ?? null,
           'contratoId' in d,
@@ -315,15 +333,16 @@ export function createModelosRouter(deps: {
           d.whatsappComprovante ?? null,
           d.tier ?? null,
           d.fluxo !== undefined,
-          d.fluxo !== undefined ? d.fluxo : null,
+          d.fluxo !== undefined ? toJsonbParam(d.fluxo) : null,
           d.signatureConfig !== undefined,
-          d.signatureConfig !== undefined ? d.signatureConfig : null,
+          d.signatureConfig !== undefined ? toJsonbParam(d.signatureConfig) : null,
         ],
       )
       if (!rows[0]) return res.status(404).json({ error: 'Modelo não encontrado' })
-      return res.json(serializeModeloSummary(rows[0]))
+      return res.json(serializeModelo(rows[0]))
     } catch (err) {
-      logModeloPgError('PATCH', err)
+      const pg = err as { code?: string }
+      logModeloPgError('PATCH', err, pg.code === '22P02' ? patchJsonbFields : undefined)
       const { status, error } = modeloErrorResponse(err)
       return res.status(status).json({ error })
     }

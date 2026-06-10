@@ -33,6 +33,13 @@ export function formatStoreSaveError(err: unknown): string {
     if (err.status === 413) {
       return 'O modelo é grande demais para salvar. Use um template de contrato em vez de colar o texto inteiro, ou reduza o conteúdo do layout.';
     }
+    if (err.status === 400) {
+      const body = err.body;
+      if (body && typeof body === 'object' && 'error' in body && typeof (body as { error: unknown }).error === 'string') {
+        return (body as { error: string }).error;
+      }
+      return 'Dados inválidos. Recarregue a página e tente salvar novamente.';
+    }
     if (err.status === 500) {
       const body = err.body;
       if (body && typeof body === 'object' && 'error' in body && typeof (body as { error: unknown }).error === 'string') {
