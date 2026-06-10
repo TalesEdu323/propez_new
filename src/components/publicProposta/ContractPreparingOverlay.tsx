@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertCircle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { PropezLogo } from '../PropezLogo';
 
 export type ContractPrepareOverlayState = 'preparing' | 'redirecting' | 'error';
 
@@ -67,10 +68,8 @@ export function ContractPreparingOverlay({ state, errorMessage, onRetry, retryin
           </>
         ) : (
           <>
-            <div className="relative w-16 h-16 mx-auto mb-6">
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
-                <Sparkles className="w-8 h-8 text-white" />
-              </div>
+            <div className="relative mx-auto mb-6 flex justify-center">
+              <PropezLogo height="sm" className="justify-center" />
               <Loader2 className="absolute -bottom-1 -right-1 w-7 h-7 text-zinc-900 animate-spin bg-white rounded-full p-0.5" />
             </div>
 

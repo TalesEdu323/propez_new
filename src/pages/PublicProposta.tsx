@@ -227,7 +227,14 @@ export default function PublicProposta({ token }: Props) {
           path = pathFromProposta(json.proposta, token);
           if (path) return path;
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof ApiError) {
+          const body = err.body as { proposta?: PublicProposta } | undefined;
+          if (body?.proposta) {
+            path = pathFromProposta(body.proposta, token);
+            if (path) return path;
+          }
+        }
         /* tenta polling abaixo */
       }
 

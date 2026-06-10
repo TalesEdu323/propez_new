@@ -267,13 +267,35 @@ export function createPublicPropostasRouter(deps: {
     }
     try {
       const { rows } = await pool.query(
-        `SELECT id, organization_id, status FROM propostas WHERE public_token = $1`,
+        `SELECT id, organization_id, status, contract_signing_url, rubrica_signing_url,
+                contract_sign_status, rubrica_status
+         FROM propostas WHERE public_token = $1`,
         [token],
       );
       const row = rows[0];
       if (!row) return res.status(404).json({ error: 'Proposta não encontrada' });
       if (row.status !== 'aprovada') {
         return res.status(409).json({ error: 'Aprovação da proposta é necessária antes da assinatura' });
+      }
+
+      const existingSigningUrl = row.contract_signing_url ?? row.rubrica_signing_url;
+      const existingSignStatus = row.contract_sign_status ?? row.rubrica_status;
+      if (
+        existingSigningUrl &&
+        existingSignStatus !== 'failed' &&
+        existingSignStatus !== 'cancelled'
+      ) {
+        const { rows: fresh } = await pool.query(
+          `SELECT ${PROPOSTA_FIELDS} FROM propostas WHERE public_token = $1`,
+          [token],
+        );
+        if (!fresh[0]) return res.status(404).json({ error: 'Proposta não encontrada' });
+        return res.json({
+          ok: true,
+          signingUrl: existingSigningUrl,
+          proposta: serializeProposta(fresh[0]),
+          journey: buildJourneyPayload(fresh[0]),
+        });
       }
 
       await pool.query(

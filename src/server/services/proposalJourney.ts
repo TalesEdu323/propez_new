@@ -75,9 +75,14 @@ export async function triggerContractSignAfterApproval(deps: {
     contract_has_pdf_data: boolean;
     contrato_signature_config: unknown;
     contract_template_title: string | null;
+    contract_signing_url: string | null;
+    rubrica_signing_url: string | null;
+    contract_sign_status: string | null;
+    rubrica_status: string | null;
   }>(
     `SELECT p.contrato_texto, p.contrato_id, p.cliente_nome, p.cliente_email, p.cliente_documento, p.fluxo, p.public_token,
             p.valor_cents, p.desconto_cents,
+            p.contract_signing_url, p.rubrica_signing_url, p.contract_sign_status, p.rubrica_status,
             o.name AS org_name, o.cnpj AS org_cnpj, o.signature_url AS org_signature_url,
             m.signature_config AS modelo_signature_config,
             ct.source_type AS contract_source_type,
@@ -94,6 +99,16 @@ export async function triggerContractSignAfterApproval(deps: {
     [deps.proposalId],
   );
   const row = rows[0];
+
+  const existingSigningUrl = row?.contract_signing_url ?? row?.rubrica_signing_url;
+  const existingSignStatus = row?.contract_sign_status ?? row?.rubrica_status;
+  if (
+    existingSigningUrl &&
+    existingSignStatus !== 'failed' &&
+    existingSignStatus !== 'cancelled'
+  ) {
+    return { ok: true, signingUrl: existingSigningUrl };
+  }
   const sourceType = row?.contract_source_type === 'pdf' ? 'pdf' : 'text';
   const hasPdfTemplate =
     sourceType === 'pdf' && (!!row?.contract_pdf_path || !!row?.contract_has_pdf_data);
