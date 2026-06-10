@@ -245,24 +245,29 @@ node scripts/test-business-email.mjs seu@email.com proposal_approved
 
 Tipos: `proposal_approved`, `proposal_rejected`, `contract_sent`, `contract_signed`, `proposal_paid`.
 
-## Contratos PDF legados (Vercel / Neon)
+## Contratos PDF (Vercel Blob + legado BYTEA)
 
-Na Vercel, o PDF do template de contrato persiste em `contratos_templates.pdf_data`
-(BYTEA). Registros criados antes da migration `022` ou com upload perdido podem
-ter `source_type = 'pdf'` sem bytes — o preview retorna 404 até **re-upload manual**.
+Em produção, PDFs de template de contrato vão para **Vercel Blob** (`BLOB_READ_WRITE_TOKEN`); a URL pública fica em `contratos_templates.pdf_path`. Preview no app carrega direto do CDN (sem proxy `/preview-pdf`).
+
+Variáveis no painel Vercel (Production + Preview):
+
+- `BLOB_READ_WRITE_TOKEN` — usada pelo código (`@vercel/blob`)
+- `BLOB_STORE_ID` / `BLOB_WEBHOOK_PUBLIC_KEY` — auto-injetadas ao ligar o Blob Store; **não** referenciar no código
+
+Registros legados com `source_type = 'pdf'` sem URL Blob nem `pdf_data` → **re-upload manual** (Substituir PDF).
 
 Diagnóstico no Neon SQL Editor:
 
 ```sql
 SELECT id, organization_id, titulo, pdf_file_name, page_count,
+       pdf_path LIKE 'http%' AS is_blob_url,
        (pdf_data IS NOT NULL AND length(pdf_data) > 0) AS has_bytes
 FROM contratos_templates
 WHERE source_type = 'pdf'
 ORDER BY created_at DESC;
 ```
 
-- `has_bytes = false` → abrir o contrato no app e usar **Substituir PDF** na etapa de conteúdo.
-- Não há backfill automático: o arquivo original não existe mais no disco efêmero da Vercel.
+- `is_blob_url = false` e `has_bytes = false` → re-enviar o PDF na etapa de conteúdo.
 
 ## Segurança de segredos
 

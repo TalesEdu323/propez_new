@@ -77,6 +77,7 @@ export interface ContratoTemplate {
   titulo: string;
   texto: string;
   sourceType?: 'text' | 'pdf';
+  pdfPath?: string;
   pdfFileName?: string;
   pageCount?: number;
   signatureConfig?: unknown;
@@ -255,6 +256,7 @@ interface ApiContrato {
   titulo: string;
   texto: string;
   sourceType?: 'text' | 'pdf';
+  pdfPath?: string | null;
   pdfFileName?: string | null;
   pageCount?: number | null;
   signatureConfig?: unknown;
@@ -347,6 +349,7 @@ function fromApiContrato(a: ApiContrato): ContratoTemplate {
     titulo: a.titulo,
     texto: a.texto ?? '',
     sourceType: a.sourceType ?? 'text',
+    pdfPath: a.pdfPath ?? undefined,
     pdfFileName: a.pdfFileName ?? undefined,
     pageCount: a.pageCount ?? undefined,
     signatureConfig: a.signatureConfig ?? undefined,

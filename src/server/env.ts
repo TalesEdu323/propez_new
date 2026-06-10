@@ -124,6 +124,8 @@ export interface EnvironmentConfig {
    * is_platform_admin no DB. Usado como fallback para bootstrap.
    */
   platformAdminEmails: string[];
+  /** Vercel Blob — `BLOB_READ_WRITE_TOKEN` (Production/Preview). `BLOB_STORE_ID` é auto-injetado. */
+  blobReadWriteToken: string | null;
 }
 
 function getRequiredEnv(name: string): string {
@@ -279,6 +281,13 @@ export function loadConfig(): EnvironmentConfig {
     (process.env.TAGGO_SITE_URL || 'https://taggo.com.br').trim().replace(/\/+$/, '') ||
     'https://taggo.com.br';
 
+  const blobReadWriteToken = process.env.BLOB_READ_WRITE_TOKEN?.trim() || null;
+  if ((isProd || process.env.VERCEL === '1') && !blobReadWriteToken) {
+    console.warn(
+      '[env] BLOB_READ_WRITE_TOKEN ausente — upload de PDF de contrato usará BYTEA legado ou falhará.',
+    );
+  }
+
   return {
     appUrl,
     taggoSiteUrl,
@@ -313,5 +322,6 @@ export function loadConfig(): EnvironmentConfig {
       required: isProd,
     },
     platformAdminEmails,
+    blobReadWriteToken,
   };
 }

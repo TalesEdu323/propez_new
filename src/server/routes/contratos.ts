@@ -4,6 +4,7 @@ import type { Pool } from 'pg'
 import multer from 'multer'
 import { PDFDocument } from 'pdf-lib'
 import { z } from 'zod'
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import { serializeContrato } from '../db/serializers.js'
@@ -15,9 +16,11 @@ import {
   validateTemplateSignatureConfig,
 } from '../../lib/signatureConfig.js'
 import { isPdfBuffer } from '../../lib/pdfPreview.js'
+import { isAllowedBlobUrl, readPdfFromStorage } from '../storage/blobStorage.js'
 import {
   deleteTemplatePdf,
   readTemplatePdf,
+  registerTemplatePdfBlobUrl,
   templatePdfExists,
   uploadPdfErrorMessage,
   writeTemplatePdf,
@@ -77,6 +80,12 @@ const patchSchema = bodySchema.partial().extend({
   sourceType: z.enum(['text', 'pdf']).optional(),
 })
 
+const uploadFinalizeSchema = z.object({
+  blobUrl: z.string().url(),
+  fileName: z.string().min(1).max(200),
+  fileSize: z.number().int().min(1).max(10 * 1024 * 1024),
+})
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -125,6 +134,32 @@ export function sendPdfPreview(res: Response, buf: Buffer, filename: string): vo
   res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
   res.removeHeader('ETag')
   res.end(buf)
+}
+
+async function persistUploadedPdf(
+  pool: Pool,
+  orgId: string,
+  contratoId: string,
+  _buffer: Buffer,
+  safeName: string,
+  pageCount: number,
+  pdfPath: string,
+  existingPdfPath?: string | null,
+) {
+  await registerTemplatePdfBlobUrl(pool, orgId, contratoId, pdfPath, existingPdfPath)
+  const { rows: updated } = await pool.query(
+    `UPDATE contratos_templates SET
+       source_type = 'pdf',
+       pdf_path = $3,
+       pdf_file_name = $4,
+       page_count = $5,
+       texto = '',
+       pdf_data = NULL
+     WHERE organization_id = $1 AND id = $2
+     RETURNING ${CONTRATO_SELECT}`,
+    [orgId, contratoId, pdfPath, safeName, pageCount],
+  )
+  return updated[0]
 }
 
 export function createContratosRouter(deps: {
@@ -225,6 +260,91 @@ export function createContratosRouter(deps: {
     return res.status(201).json(serializeContrato(rows[0]))
   })
 
+  router.post('/:id/blob-token', express.json(), async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    if (!config.blobReadWriteToken) {
+      return res.status(503).json({ error: 'Armazenamento Blob não configurado (BLOB_READ_WRITE_TOKEN).' })
+    }
+
+    const row = await loadContratoRow(pool, req.auth.orgId, req.params.id)
+    if (!row) return res.status(404).json({ error: 'Contrato não encontrado' })
+
+    const body = req.body as HandleUploadBody
+    try {
+      const jsonResponse = await handleUpload({
+        token: config.blobReadWriteToken,
+        request: req,
+        body,
+        onBeforeGenerateToken: async () => ({
+          allowedContentTypes: ['application/pdf'],
+          maximumSizeInBytes: 10 * 1024 * 1024,
+          addRandomSuffix: false,
+          tokenPayload: JSON.stringify({
+            contratoId: req.params.id,
+            orgId: req.auth!.orgId,
+          }),
+        }),
+        onUploadCompleted: async ({ blob }) => {
+          console.info('[contratos/blob-token] upload concluído:', blob.url)
+        },
+      })
+      return res.json(jsonResponse)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[contratos/blob-token] erro:', err)
+      return res.status(400).json({ error: msg || 'Erro ao gerar token de upload' })
+    }
+  })
+
+  router.post('/:id/upload-finalize', express.json(), async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    const parsed = uploadFinalizeSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' })
+
+    const row = await loadContratoRow(pool, req.auth.orgId, req.params.id)
+    if (!row) return res.status(404).json({ error: 'Contrato não encontrado' })
+
+    const { blobUrl, fileName, fileSize } = parsed.data
+    if (!isAllowedBlobUrl(blobUrl)) {
+      return res.status(400).json({ error: 'URL do Blob inválida.' })
+    }
+
+    try {
+      const buffer = await readPdfFromStorage(blobUrl)
+      if (buffer.length > fileSize * 1.1 + 1024) {
+        return res.status(400).json({ error: 'Tamanho do arquivo inconsistente.' })
+      }
+      if (!isPdfBuffer(buffer)) {
+        return res.status(400).json({ error: 'O arquivo enviado não é um PDF válido.' })
+      }
+
+      let pageCount = 1
+      try {
+        const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true })
+        pageCount = pdfDoc.getPageCount()
+        if (pageCount === 0) return res.status(400).json({ error: 'PDF vazio' })
+      } catch (parseErr) {
+        console.warn('[contratos/upload-finalize] pdf-lib:', parseErr)
+      }
+
+      const safeName = fileName.replace(/[^\w\s.-]/g, '').slice(0, 120) || 'contrato.pdf'
+      const updated = await persistUploadedPdf(
+        pool,
+        req.auth.orgId,
+        req.params.id,
+        buffer,
+        safeName,
+        pageCount,
+        blobUrl,
+        row.pdf_path,
+      )
+      return res.json({ ...serializeContrato(updated), pageCount })
+    } catch (err) {
+      console.error('[contratos/upload-finalize] erro:', err)
+      return res.status(400).json({ error: uploadPdfErrorMessage(err) })
+    }
+  })
+
   router.post('/:id/upload-pdf', upload.single('file'), async (req: Request, res: Response) => {
     if (!req.auth) return res.status(401).end()
     const file = req.file
@@ -249,21 +369,26 @@ export function createContratosRouter(deps: {
         console.warn('[contratos/upload-pdf] pdf-lib não leu o arquivo; usando contagem padrão:', parseErr)
       }
 
-      const pdfPath = await writeTemplatePdf(pool, req.auth.orgId, req.params.id, file.buffer)
+      const pdfPath = await writeTemplatePdf(
+        pool,
+        req.auth.orgId,
+        req.params.id,
+        file.buffer,
+        row.pdf_path,
+      )
       const safeName = (file.originalname || 'contrato.pdf').replace(/[^\w\s.-]/g, '').slice(0, 120) || 'contrato.pdf'
 
-      const { rows: updated } = await pool.query(
-        `UPDATE contratos_templates SET
-           source_type = 'pdf',
-           pdf_path = $3,
-           pdf_file_name = $4,
-           page_count = $5,
-           texto = ''
-         WHERE organization_id = $1 AND id = $2
-         RETURNING ${CONTRATO_SELECT}`,
-        [req.auth.orgId, req.params.id, pdfPath, safeName, pageCount],
+      const updated = await persistUploadedPdf(
+        pool,
+        req.auth.orgId,
+        req.params.id,
+        file.buffer,
+        safeName,
+        pageCount,
+        pdfPath,
+        row.pdf_path,
       )
-      return res.json({ ...serializeContrato(updated[0]), pageCount })
+      return res.json({ ...serializeContrato(updated), pageCount })
     } catch (err) {
       const code = err && typeof err === 'object' && 'code' in err ? (err as { code: string }).code : ''
       console.error('[contratos/upload-pdf] erro:', { code, err })

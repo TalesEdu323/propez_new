@@ -9,6 +9,12 @@ import { api, apiFetch, ApiError } from '../lib/apiClient';
 import { blobToPdfPreviewSource, isPdfBuffer } from '../lib/pdfPreview';
 import type { PdfPreviewSource } from '../lib/pdfPreview';
 import { titleFromPdfFilename } from '../lib/contratoPdfTitle';
+import {
+  finalizeContratoPdfUpload,
+  shouldUseClientBlobUpload,
+  uploadContratoPdfToBlob,
+} from '../lib/client/contratoBlobUpload';
+import { buildPdfViewUrl, contratoHasRemotePdf } from '../lib/pdfViewUrl';
 import type { Marcador } from '../lib/documents/positioningTypes';
 import {
   defaultTemplateSigners,
@@ -53,7 +59,7 @@ export default function Contratos() {
   const loadedPreviewForRef = useRef<string | null>(null);
 
   const previewKey = currentContrato
-    ? `${currentContrato.id}:${currentContrato.sourceType}:${currentContrato.pageCount}:${currentContrato.pdfFileName}`
+    ? `${currentContrato.id}:${currentContrato.sourceType}:${currentContrato.pageCount}:${currentContrato.pdfFileName}:${currentContrato.pdfPath ?? ''}`
     : '';
 
   const isNewContrato = isEditing && !currentContrato?.id;
@@ -74,7 +80,10 @@ export default function Contratos() {
     [],
   );
 
-  const loadPreview = useCallback(async (contratoId: string, opts?: { force?: boolean }) => {
+  const loadPreview = useCallback(async (
+    contratoId: string,
+    opts?: { force?: boolean; pdfPath?: string | null },
+  ) => {
     if (!opts?.force && loadedPreviewForRef.current === previewKey && previewKey) {
       return;
     }
@@ -86,38 +95,54 @@ export default function Contratos() {
     setPreviewLoading(true);
     setPreviewError(null);
     try {
-      const fetchPreview = () =>
-        apiFetch(`/api/contratos/${contratoId}/preview-pdf?_=${Date.now()}`, {
-          method: 'GET',
-          cache: 'no-store',
-          signal: controller.signal,
-        });
+      const remoteUrl =
+        opts?.pdfPath && contratoHasRemotePdf(opts.pdfPath)
+          ? buildPdfViewUrl(opts.pdfPath)
+          : null;
 
-      let res = await fetchPreview();
-      if (res.status === 304) {
-        res = await fetchPreview();
-      }
-
-      if (!res.ok) {
-        if (res.status === 401) {
+      let blob: Blob;
+      if (remoteUrl) {
+        const res = await fetch(remoteUrl, { cache: 'no-store', signal: controller.signal });
+        if (!res.ok) {
           setPreviewFile(null);
           loadedPreviewForRef.current = null;
-          setPreviewError('Sessão expirada. Faça login novamente.');
+          setPreviewError('Não foi possível carregar o PDF do armazenamento.');
           return;
         }
-        const err = await res.json().catch(() => ({}));
-        const msg =
-          typeof err === 'object' && err && 'error' in err && typeof err.error === 'string'
-            ? err.error
-            : 'Não foi possível carregar o preview do contrato.';
-        setPreviewFile(null);
-        loadedPreviewForRef.current = null;
-        setPreviewError(msg);
-        return;
+        blob = await res.blob();
+      } else {
+        const fetchPreview = () =>
+          apiFetch(`/api/contratos/${contratoId}/preview-pdf?_=${Date.now()}`, {
+            method: 'GET',
+            cache: 'no-store',
+            signal: controller.signal,
+          });
+
+        let res = await fetchPreview();
+        if (res.status === 304) {
+          res = await fetchPreview();
+        }
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            setPreviewFile(null);
+            loadedPreviewForRef.current = null;
+            setPreviewError('Sessão expirada. Faça login novamente.');
+            return;
+          }
+          const err = await res.json().catch(() => ({}));
+          const msg =
+            typeof err === 'object' && err && 'error' in err && typeof err.error === 'string'
+              ? err.error
+              : 'Não foi possível carregar o preview do contrato.';
+          setPreviewFile(null);
+          loadedPreviewForRef.current = null;
+          setPreviewError(msg);
+          return;
+        }
+        blob = await res.blob();
       }
 
-      const ct = res.headers.get('content-type') || '';
-      const blob = await res.blob();
       if (blob.size < 5) {
         setPreviewFile(null);
         loadedPreviewForRef.current = null;
@@ -129,11 +154,7 @@ export default function Contratos() {
       if (!isPdfBuffer(buf)) {
         setPreviewFile(null);
         loadedPreviewForRef.current = null;
-        setPreviewError(
-          ct.includes('application/pdf')
-            ? 'O servidor não retornou um PDF válido.'
-            : 'PDF não encontrado ou inválido. Envie o arquivo novamente na etapa de conteúdo.',
-        );
+        setPreviewError('PDF não encontrado ou inválido. Envie o arquivo novamente na etapa de conteúdo.');
         return;
       }
 
@@ -177,7 +198,7 @@ export default function Contratos() {
       if (loadedPreviewForRef.current === previewKey && previewKey) {
         return;
       }
-      void loadPreview(contratoId);
+      void loadPreview(contratoId, { pdfPath: currentContrato?.pdfPath });
     } else if (sourceType === 'pdf') {
       setPreviewFile(null);
       setPreviewError(null);
@@ -278,23 +299,37 @@ export default function Contratos() {
 
     setUploading(true);
     try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await apiFetch(`/api/contratos/${saved.id}/upload-pdf`, {
-        method: 'POST',
-        body: form,
-      });
-      const data = (await res.json().catch(() => ({}))) as ContratoTemplate & {
-        error?: string;
-        pageCount?: number;
-      };
-      if (!res.ok) throw new Error(data.error || 'Falha no upload');
+      let data: ContratoTemplate & { error?: string; pageCount?: number };
+
+      if (shouldUseClientBlobUpload()) {
+        const { blobUrl } = await uploadContratoPdfToBlob(saved.id, file);
+        const finalized = await finalizeContratoPdfUpload(saved.id, {
+          blobUrl,
+          fileName: file.name,
+          fileSize: file.size,
+        });
+        data = finalized as ContratoTemplate & { pageCount?: number };
+      } else {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await apiFetch(`/api/contratos/${saved.id}/upload-pdf`, {
+          method: 'POST',
+          body: form,
+        });
+        data = (await res.json().catch(() => ({}))) as ContratoTemplate & {
+          error?: string;
+          pageCount?: number;
+        };
+        if (!res.ok) throw new Error(data.error || 'Falha no upload');
+      }
+
       if (!data.id) throw new Error('Resposta inválida do servidor.');
       const updated: ContratoTemplate = {
         ...saved,
         ...data,
         titulo: saved.titulo || titulo,
         sourceType: 'pdf',
+        pdfPath: data.pdfPath ?? saved.pdfPath,
         pageCount: data.pageCount ?? saved.pageCount ?? 1,
       };
       setCurrentContrato(updated);
@@ -385,8 +420,8 @@ export default function Contratos() {
   const handleReloadPreview = useCallback(() => {
     if (!currentContrato?.id) return;
     loadedPreviewForRef.current = null;
-    void loadPreview(currentContrato.id, { force: true });
-  }, [currentContrato?.id, loadPreview]);
+    void loadPreview(currentContrato.id, { force: true, pdfPath: currentContrato.pdfPath });
+  }, [currentContrato?.id, currentContrato?.pdfPath, loadPreview]);
 
   const handleConfirmSave = async () => {
     const saved = await persistContent();

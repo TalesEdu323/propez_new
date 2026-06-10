@@ -32,6 +32,7 @@ export interface SerializedContrato {
   titulo: string
   texto: string
   sourceType: 'text' | 'pdf'
+  pdfPath?: string
   pdfFileName?: string
   pageCount?: number
   signatureConfig?: unknown
@@ -129,6 +130,7 @@ export function serializeContrato(r: AnyRow): SerializedContrato {
     titulo: r.titulo,
     texto: r.texto ?? '',
     sourceType: (r.source_type === 'pdf' ? 'pdf' : 'text') as 'text' | 'pdf',
+    pdfPath: r.pdf_path ?? undefined,
     pdfFileName: r.pdf_file_name ?? undefined,
     pageCount: r.page_count != null ? Number(r.page_count) : undefined,
     signatureConfig: r.signature_config ?? undefined,
