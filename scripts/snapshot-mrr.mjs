@@ -8,6 +8,7 @@
  */
 import 'dotenv/config';
 import pg from 'pg';
+import { poolSslOption } from './lib/dbSsl.mjs';
 
 const { DATABASE_URL } = process.env;
 if (!DATABASE_URL) {
@@ -17,7 +18,7 @@ if (!DATABASE_URL) {
 
 const pool = new pg.Pool({
   connectionString: DATABASE_URL,
-  ssl: DATABASE_URL.includes('sslmode=require') ? { rejectUnauthorized: false } : undefined,
+  ssl: poolSslOption(DATABASE_URL),
 });
 
 const PLAN_MRR = { free: 0, pro: 8900, business: 24900 };

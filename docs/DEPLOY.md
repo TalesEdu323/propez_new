@@ -30,7 +30,7 @@ Marque cada item antes de promover para produção:
 - [ ] `NODE_ENV=production`
 - [ ] `APP_URL=https://<dominio-real>` (HTTPS, sem barra no final)
 - [ ] `PORT` ajustado para o que a plataforma exige (Cloud Run injeta `PORT`)
-- [ ] `DATABASE_URL` apontando para Neon/Postgres real com `sslmode=require`
+- [ ] `DATABASE_URL` apontando para Neon/Postgres real com `sslmode=verify-full` (evita warning pg v8→v9; o app também normaliza `require` → `verify-full` no boot)
 - [ ] `JWT_SECRET` novo, gerado com `openssl rand -hex 64` (NÃO reusar valor de dev)
 - [ ] `SESSION_COOKIE_NAME` (default `propez_session` está ok; troque só se houver outro PropEZ no mesmo domínio)
 - [ ] `STRIPE_SECRET_KEY` em modo live (`sk_live_...`)
@@ -133,7 +133,8 @@ Usa as rewrites do `vercel.json` (API + SPA). Para dev com HMR, continue com
 - `APP_URL` deve ser o domínio público final (webhooks Stripe/ProSync no mesmo host).
 - Copie as mesmas variáveis para o ambiente **Preview** (URLs `*.vercel.app`), não só
   Production — senão login e `/api/health` falham com 500 no preview.
-- `DATABASE_URL`: preferir o endpoint **pooler** do Neon (`…-pooler.…neon.tech`).
+- `DATABASE_URL`: preferir o endpoint **pooler** do Neon (`…-pooler.…neon.tech`) com `sslmode=verify-full`.
+  Se ainda estiver `sslmode=require`, troque na Vercel (Production + Preview) e redeploy; o código também normaliza no boot.
 - **Deployment Protection** (Settings → Deployment Protection): em previews protegidos,
   ficheiros estáticos como `manifest.webmanifest` podem devolver **401** antes de chegar à app.
   Desative a proteção no preview ou use o domínio de produção para testar.

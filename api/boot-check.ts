@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import pg from 'pg';
 import { getConfigBootErrors, isMailConfigured, loadConfig } from '../src/server/env.js';
+import { normalizeDatabaseUrl } from '../src/server/db/databaseUrl.js';
 
 const DB_PING_TIMEOUT_MS = 3_000;
 
@@ -12,7 +13,7 @@ async function pingDatabase(): Promise<{ dbOk: boolean; dbError: string | null; 
 
   const hasPooler = dbUrl.includes('-pooler');
   const pool = new pg.Pool({
-    connectionString: dbUrl,
+    connectionString: normalizeDatabaseUrl(dbUrl),
     max: 1,
     connectionTimeoutMillis: DB_PING_TIMEOUT_MS,
     ssl: { rejectUnauthorized: false },

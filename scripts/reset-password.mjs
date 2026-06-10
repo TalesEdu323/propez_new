@@ -11,6 +11,7 @@ import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
+import { poolSslOption } from './lib/dbSsl.mjs';
 
 const args = process.argv.slice(2);
 let email = '';
@@ -38,7 +39,7 @@ if (!DATABASE_URL) {
 
 const pool = new pg.Pool({
   connectionString: DATABASE_URL,
-  ssl: DATABASE_URL.includes('sslmode=require') ? { rejectUnauthorized: false } : undefined,
+  ssl: poolSslOption(DATABASE_URL),
 });
 
 async function main() {

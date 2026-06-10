@@ -7,6 +7,7 @@
 
 import 'dotenv/config';
 import pg from 'pg';
+import { poolSslOption } from './lib/dbSsl.mjs';
 
 const args = process.argv.slice(2);
 let email = '';
@@ -20,9 +21,7 @@ if (!email) {
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('sslmode=require')
-    ? { rejectUnauthorized: false }
-    : undefined,
+  ssl: poolSslOption(process.env.DATABASE_URL || ''),
 });
 
 const { rows } = await pool.query(

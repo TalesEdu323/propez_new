@@ -4,13 +4,15 @@ import { fileURLToPath } from 'url';
 import pg from 'pg';
 import type { EnvironmentConfig } from './env.js';
 import { runMigrations } from './db/migrations.js';
+import { normalizeDatabaseUrl } from './db/databaseUrl.js';
 
 const { Pool } = pg;
 
 export function createPool(config: EnvironmentConfig): pg.Pool {
   const isServerless = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+  const connectionString = normalizeDatabaseUrl(config.databaseUrl);
   return new Pool({
-    connectionString: config.databaseUrl,
+    connectionString,
     // Neon + Vercel: poucas conexões por instância; use DATABASE_URL com "-pooler" no host.
     max: isServerless ? 1 : 10,
     idleTimeoutMillis: isServerless ? 5_000 : 30_000,

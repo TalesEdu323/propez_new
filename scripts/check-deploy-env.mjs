@@ -41,7 +41,8 @@ function isPlaceholder(value) {
     lower.includes('<preencher') ||
     lower.includes('change-me') ||
     lower.includes('your_') ||
-    v === 'postgresql://USER:PASSWORD@HOST/DB?sslmode=require'
+    v === 'postgresql://USER:PASSWORD@HOST/DB?sslmode=require' ||
+    v === 'postgresql://USER:PASSWORD@HOST/DB?sslmode=verify-full'
   );
 }
 
@@ -105,6 +106,11 @@ if (productionMode || process.env.VERCEL === '1') {
 }
 
 const dbUrl = process.env.DATABASE_URL || '';
+if (dbUrl.includes('sslmode=require')) {
+  console.warn(
+    '[check-deploy-env] DATABASE_URL usa sslmode=require — prefira sslmode=verify-full (warning pg v8; o app normaliza no boot).',
+  );
+}
 if (dbUrl && !dbUrl.includes('-pooler') && (process.env.VERCEL === '1' || productionMode)) {
   console.warn(
     '[check-deploy-env] DATABASE_URL sem "-pooler" no host — prefira o endpoint pooler do Neon na Vercel.',
