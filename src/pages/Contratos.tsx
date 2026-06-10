@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Search, FileText, Trash2, ChevronRight, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { store, ContratoTemplate } from '../lib/store';
@@ -6,7 +6,7 @@ import { useContratos, useUserConfig } from '../hooks/useStoreEntity';
 import { formatDateBR } from '../lib/format';
 import { AiBriefPromptModal } from '../components/ia/AiBriefPromptModal';
 import { api, apiFetch, ApiError } from '../lib/apiClient';
-import { blobToPdfPreviewSource } from '../lib/pdfPreview';
+import { blobToPdfPreviewSource, isPdfBuffer } from '../lib/pdfPreview';
 import type { PdfPreviewSource } from '../lib/pdfPreview';
 import { titleFromPdfFilename } from '../lib/contratoPdfTitle';
 import type { Marcador } from '../lib/documents/positioningTypes';
@@ -49,6 +49,12 @@ export default function Contratos() {
   const [pendingFileName, setPendingFileName] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const previewAbortRef = useRef<AbortController | null>(null);
+  const loadedPreviewForRef = useRef<string | null>(null);
+
+  const previewKey = currentContrato
+    ? `${currentContrato.id}:${currentContrato.sourceType}:${currentContrato.pageCount}:${currentContrato.pdfFileName}`
+    : '';
 
   const isNewContrato = isEditing && !currentContrato?.id;
   const pageCount = currentContrato?.pageCount ?? 1;
@@ -68,14 +74,34 @@ export default function Contratos() {
     [],
   );
 
-  const loadPreview = useCallback(async (contratoId: string) => {
+  const loadPreview = useCallback(async (contratoId: string, opts?: { force?: boolean }) => {
+    if (!opts?.force && loadedPreviewForRef.current === previewKey && previewKey) {
+      return;
+    }
+
+    previewAbortRef.current?.abort();
+    const controller = new AbortController();
+    previewAbortRef.current = controller;
+
     setPreviewLoading(true);
     setPreviewError(null);
     try {
-      const res = await apiFetch(`/api/contratos/${contratoId}/preview-pdf`, { method: 'GET' });
+      const fetchPreview = () =>
+        apiFetch(`/api/contratos/${contratoId}/preview-pdf?_=${Date.now()}`, {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+
+      let res = await fetchPreview();
+      if (res.status === 304) {
+        res = await fetchPreview();
+      }
+
       if (!res.ok) {
         if (res.status === 401) {
           setPreviewFile(null);
+          loadedPreviewForRef.current = null;
           setPreviewError('Sessão expirada. Faça login novamente.');
           return;
         }
@@ -85,27 +111,46 @@ export default function Contratos() {
             ? err.error
             : 'Não foi possível carregar o preview do contrato.';
         setPreviewFile(null);
+        loadedPreviewForRef.current = null;
         setPreviewError(msg);
         return;
       }
+
       const ct = res.headers.get('content-type') || '';
       const blob = await res.blob();
-      const source = await blobToPdfPreviewSource(blob);
-      if (!source && !ct.includes('application/pdf')) {
+      if (blob.size < 5) {
         setPreviewFile(null);
-        setPreviewError(
-          'PDF não encontrado ou inválido. Envie o arquivo novamente na etapa de conteúdo.',
-        );
-        return;
-      }
-      if (!source) {
-        setPreviewFile(null);
+        loadedPreviewForRef.current = null;
         setPreviewError('O servidor não retornou um PDF válido.');
         return;
       }
+
+      const buf = await blob.arrayBuffer();
+      if (!isPdfBuffer(buf)) {
+        setPreviewFile(null);
+        loadedPreviewForRef.current = null;
+        setPreviewError(
+          ct.includes('application/pdf')
+            ? 'O servidor não retornou um PDF válido.'
+            : 'PDF não encontrado ou inválido. Envie o arquivo novamente na etapa de conteúdo.',
+        );
+        return;
+      }
+
+      const source = await blobToPdfPreviewSource(blob);
+      if (!source) {
+        setPreviewFile(null);
+        loadedPreviewForRef.current = null;
+        setPreviewError('O servidor não retornou um PDF válido.');
+        return;
+      }
+
       setPreviewFile(source);
+      loadedPreviewForRef.current = previewKey || contratoId;
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       setPreviewFile(null);
+      loadedPreviewForRef.current = null;
       if (e instanceof ApiError && e.status === 401) {
         setPreviewError('Sessão expirada. Faça login novamente.');
       } else {
@@ -114,24 +159,32 @@ export default function Contratos() {
         );
       }
     } finally {
-      setPreviewLoading(false);
+      if (previewAbortRef.current === controller) {
+        setPreviewLoading(false);
+      }
     }
-  }, []);
+  }, [previewKey]);
 
   useEffect(() => {
     if (!isEditing || wizardStep === 'choose') {
       setPreviewFile(null);
       setPreviewError(null);
+      loadedPreviewForRef.current = null;
       return;
     }
-    if (shouldLoadPreview(currentContrato, sourceType) && currentContrato?.id) {
-      void loadPreview(currentContrato.id);
+    const contratoId = currentContrato?.id;
+    if (shouldLoadPreview(currentContrato, sourceType) && contratoId) {
+      if (loadedPreviewForRef.current === previewKey && previewKey) {
+        return;
+      }
+      void loadPreview(contratoId);
     } else if (sourceType === 'pdf') {
       setPreviewFile(null);
       setPreviewError(null);
       setPreviewLoading(false);
+      loadedPreviewForRef.current = null;
     }
-  }, [isEditing, wizardStep, currentContrato, sourceType, loadPreview, shouldLoadPreview]);
+  }, [isEditing, wizardStep, previewKey, sourceType, loadPreview, shouldLoadPreview, currentContrato?.id]);
 
   useEffect(() => {
     if (!currentContrato) return;
@@ -149,6 +202,8 @@ export default function Contratos() {
   };
 
   const resetEditor = () => {
+    previewAbortRef.current?.abort();
+    loadedPreviewForRef.current = null;
     setIsEditing(false);
     setCurrentContrato(null);
     setWizardStep('choose');
@@ -253,7 +308,6 @@ export default function Contratos() {
               .map((c) => (c.id === updated.id ? updated : c))
           : [updated, ...contratos.filter((c): c is ContratoTemplate => !!c?.id)],
       );
-      void loadPreview(updated.id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao enviar PDF';
       setUploadError(msg);
@@ -264,6 +318,8 @@ export default function Contratos() {
   };
 
   const handleRemovePdf = () => {
+    previewAbortRef.current?.abort();
+    loadedPreviewForRef.current = null;
     setPreviewFile(null);
     setPreviewError(null);
     setUploadError(null);
@@ -323,11 +379,14 @@ export default function Contratos() {
     if (!saved) return;
     const savedCfg = parseSavedSignatureConfig(saved.signatureConfig, orgName, pageCount);
     if (savedCfg.fields.length === 0) setMarcadores([]);
-    if (shouldLoadPreview(saved, sourceType)) {
-      void loadPreview(saved.id);
-    }
     setWizardStep('signature');
   };
+
+  const handleReloadPreview = useCallback(() => {
+    if (!currentContrato?.id) return;
+    loadedPreviewForRef.current = null;
+    void loadPreview(currentContrato.id, { force: true });
+  }, [currentContrato?.id, loadPreview]);
 
   const handleConfirmSave = async () => {
     const saved = await persistContent();
@@ -500,6 +559,7 @@ export default function Contratos() {
                 previewLoading={previewLoading}
                 previewError={previewError}
                 onNotify={showToast}
+                onReloadPreview={handleReloadPreview}
               />
             )}
           </div>

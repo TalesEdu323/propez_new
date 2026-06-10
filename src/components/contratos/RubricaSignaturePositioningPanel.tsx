@@ -34,6 +34,7 @@ export interface RubricaSignaturePositioningPanelProps {
   loading?: boolean;
   error?: string | null;
   onNotify?: (message: string) => void;
+  onReloadPreview?: () => void;
 }
 
 type PendingClick = { xPct: number; yPct: number; page: number };
@@ -57,6 +58,7 @@ export function RubricaSignaturePositioningPanel({
   loading,
   error,
   onNotify,
+  onReloadPreview,
 }: RubricaSignaturePositioningPanelProps) {
   const [pendingClick, setPendingClick] = useState<PendingClick | null>(null);
   const [pageWidth, setPageWidth] = useState(794);
@@ -305,9 +307,31 @@ export function RubricaSignaturePositioningPanel({
       <div className="flex-1 flex min-w-0 rounded-2xl border border-black/10 overflow-hidden bg-[#EBEEF2]">
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 max-h-[70vh]">
           {error ? (
-            <p className="text-center text-sm text-red-600 py-12">{error}</p>
+            <div className="text-center py-12 space-y-4">
+              <p className="text-sm text-red-600">{error}</p>
+              {onReloadPreview ? (
+                <button
+                  type="button"
+                  onClick={onReloadPreview}
+                  className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
+                >
+                  Recarregar preview
+                </button>
+              ) : null}
+            </div>
           ) : loading || !pdfFile ? (
-            <p className="text-center text-sm text-zinc-400 py-12">Carregando documento…</p>
+            <div className="text-center py-12 space-y-4">
+              <p className="text-sm text-zinc-400">Carregando documento…</p>
+              {!loading && !pdfFile && onReloadPreview ? (
+                <button
+                  type="button"
+                  onClick={onReloadPreview}
+                  className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
+                >
+                  Recarregar preview
+                </button>
+              ) : null}
+            </div>
           ) : (
             <PdfDocumentPages
               file={pdfFile}
@@ -316,9 +340,21 @@ export function RubricaSignaturePositioningPanel({
               onLoadError={() => setLoadedPages(0)}
               loading={<p className="text-center text-sm text-zinc-400">Renderizando PDF…</p>}
               error={
-                <p className="text-center text-sm text-red-600 py-12">
-                  Não foi possível exibir o documento. Volte à etapa de conteúdo e envie o PDF novamente.
-                </p>
+                <div className="text-center py-12 space-y-4">
+                  <p className="text-sm text-red-600">
+                    Não foi possível exibir o documento. Volte à etapa de conteúdo e envie o PDF
+                    novamente.
+                  </p>
+                  {onReloadPreview ? (
+                    <button
+                      type="button"
+                      onClick={onReloadPreview}
+                      className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
+                    >
+                      Recarregar preview
+                    </button>
+                  ) : null}
+                </div>
               }
               renderPageWrap={(pageNum, page) => (
                 <div

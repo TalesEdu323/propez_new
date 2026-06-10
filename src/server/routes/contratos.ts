@@ -116,6 +116,17 @@ async function getOrgContext(pool: Pool, orgId: string) {
   return { org, orgSignature }
 }
 
+/** Envia PDF inline sem ETag — evita 304 Not Modified com corpo vazio no fetch. */
+export function sendPdfPreview(res: Response, buf: Buffer, filename: string): void {
+  res.status(200)
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
+  res.removeHeader('ETag')
+  res.end(buf)
+}
+
 export function createContratosRouter(deps: {
   pool: Pool
   config: EnvironmentConfig
@@ -148,9 +159,7 @@ export function createContratosRouter(deps: {
           })
         }
         const buf = await readTemplatePdf(ref)
-        res.setHeader('Content-Type', 'application/pdf')
-        res.setHeader('Content-Disposition', 'inline; filename="contrato-preview.pdf"')
-        return res.send(buf)
+        return sendPdfPreview(res, buf, 'contrato-preview.pdf')
       }
 
       const { org, orgSignature } = await getOrgContext(pool, req.auth.orgId)
@@ -162,9 +171,7 @@ export function createContratosRouter(deps: {
         companyCnpj: org?.cnpj ?? undefined,
         orgSignatureDataUri: orgSignature,
       })
-      res.setHeader('Content-Type', 'application/pdf')
-      res.setHeader('Content-Disposition', 'inline; filename="contrato-preview.pdf"')
-      return res.send(pdf)
+      return sendPdfPreview(res, pdf, 'contrato-preview.pdf')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       if (!/não encontrado/i.test(msg)) {
@@ -190,9 +197,7 @@ export function createContratosRouter(deps: {
         templatePdfRef(pool, req.auth.orgId, req.params.id, row.pdf_path),
       )
       const name = row.pdf_file_name || 'contrato.pdf'
-      res.setHeader('Content-Type', 'application/pdf')
-      res.setHeader('Content-Disposition', `inline; filename="${name}"`)
-      return res.send(buf)
+      return sendPdfPreview(res, buf, name)
     } catch {
       return res.status(404).json({ error: 'Arquivo PDF não encontrado' })
     }

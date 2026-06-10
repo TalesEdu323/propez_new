@@ -15,6 +15,7 @@ export interface ContratoSignatureStepProps {
   previewLoading: boolean;
   previewError: string | null;
   onNotify: (message: string) => void;
+  onReloadPreview?: () => void;
 }
 
 export function ContratoSignatureStep(props: ContratoSignatureStepProps) {
@@ -38,6 +39,7 @@ export function ContratoSignatureStep(props: ContratoSignatureStepProps) {
         loading={props.previewLoading}
         error={props.previewError}
         onNotify={props.onNotify}
+        onReloadPreview={props.onReloadPreview}
       />
     </div>
   );
