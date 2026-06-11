@@ -105,7 +105,7 @@ export function RubricaSignaturePositioningPanel({
     updateWidth();
     window.addEventListener('resize', updateWidth);
     return () => window.removeEventListener('resize', updateWidth);
-  }, [pdfFile]);
+  }, [pdfSource, previewReloadKey]);
 
   const getPageRect = useCallback((pageNum: number) => {
     return pageRefs.current[pageNum]?.getBoundingClientRect() ?? null;

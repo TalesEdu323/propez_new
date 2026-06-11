@@ -23,8 +23,7 @@ export function lazyWithRetry<T extends ComponentType<unknown>>(
         return await factory();
       } catch (err) {
         lastError = err;
-        const canRetry = isChunkLoadError(err) || attempt < retries - 1;
-        if (!canRetry) break;
+        if (!isChunkLoadError(err) || attempt === retries - 1) break;
         await wait(delayMs * (attempt + 1));
       }
     }

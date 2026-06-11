@@ -223,7 +223,7 @@ export default function AuthenticatedApp() {
           variants={pageVariants}
           className="h-dvh min-h-0 w-full max-w-full overflow-hidden bg-[#F5F5F7]"
         >
-          <Suspense fallback={loadingFallback}>{pageContent}</Suspense>
+          {pageContent}
         </motion.div>
       </AnimatePresence>
       </OrgBrandProvider>
@@ -247,7 +247,7 @@ export default function AuthenticatedApp() {
     return (
       <Suspense fallback={loadingFallback}>
         <AdminLayout navigate={navigate} current={route}>
-          <Suspense fallback={loadingFallback}>{pageContent}</Suspense>
+          {pageContent}
         </AdminLayout>
       </Suspense>
     );
@@ -349,7 +349,7 @@ export default function AuthenticatedApp() {
         <div className="h-full w-full relative flex-1 min-h-0">
           <AnimatePresence mode="wait">
             <motion.div key={route} initial="initial" animate="animate" exit="exit" variants={pageVariants} className="min-h-full">
-              <Suspense fallback={loadingFallback}>{pageContent}</Suspense>
+              {pageContent}
             </motion.div>
           </AnimatePresence>
         </div>
