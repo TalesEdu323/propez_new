@@ -6,7 +6,7 @@ import { useContratos, useUserConfig } from '../hooks/useStoreEntity';
 import { formatDateBR } from '../lib/format';
 import { AiBriefPromptModal } from '../components/ia/AiBriefPromptModal';
 import { api, apiFetch, ApiError } from '../lib/apiClient';
-import { blobToPdfPreviewSource, isPdfBuffer } from '../lib/pdfPreview';
+import { loadContratoPreviewPdf } from '../lib/client/contratoPreviewLoader';
 import type { PdfPreviewSource } from '../lib/pdfPreview';
 import { useContratoPdfUpload } from '../hooks/useContratoPdfUpload';
 import type { Marcador } from '../lib/documents/positioningTypes';
@@ -79,27 +79,9 @@ export default function Contratos() {
     window.setTimeout(() => setToast(null), 4000);
   };
 
-  const {
-    uploading,
-    uploadError,
-    uploadProgress,
-    pendingFileName,
-    pendingFileSize,
-    uploadPdf,
-    removePdf,
-    setUploadError,
-  } = useContratoPdfUpload({
-    currentContrato,
-    setCurrentContrato,
-    contratos,
-    sourceType,
-    setSourceType,
-    onError: showToast,
-  });
-
   const loadPreview = useCallback(async (
     contratoId: string,
-    opts?: { force?: boolean; sourceType?: 'text' | 'pdf' },
+    opts?: { force?: boolean; sourceType?: 'text' | 'pdf'; pdfPath?: string | null },
   ) => {
     if (!opts?.force && loadedPreviewForRef.current === previewKey && previewKey) {
       return;
@@ -116,72 +98,23 @@ export default function Contratos() {
     const isStale = () => previewRequestIdRef.current !== requestId;
 
     try {
-      const fetchPdf = (path: string) => {
-        const run = () =>
-          apiFetch(`${path}?_=${Date.now()}`, {
-            method: 'GET',
-            cache: 'no-store',
-            signal: controller.signal,
-          });
-        return run().then(async (res) => (res.status === 304 ? run() : res));
-      };
-
-      let res = await fetchPdf(`/api/contratos/${contratoId}/preview-pdf`);
-      if (!res.ok && opts?.sourceType === 'pdf') {
-        res = await fetchPdf(`/api/contratos/${contratoId}/pdf`);
-      }
+      const result = await loadContratoPreviewPdf({
+        contratoId,
+        pdfPath: opts?.pdfPath ?? currentContrato?.pdfPath,
+        sourceType: opts?.sourceType,
+        signal: controller.signal,
+      });
 
       if (isStale()) return;
 
-      if (!res.ok) {
-        if (res.status === 401) {
-          setPreviewFile(null);
-          loadedPreviewForRef.current = null;
-          setPreviewError('Sessão expirada. Faça login novamente.');
-          return;
-        }
-        const err = await res.json().catch(() => ({}));
-        const msg =
-          typeof err === 'object' && err && 'error' in err && typeof err.error === 'string'
-            ? err.error
-            : 'Não foi possível carregar o preview do contrato.';
+      if (!result.ok) {
         setPreviewFile(null);
         loadedPreviewForRef.current = null;
-        setPreviewError(msg);
+        setPreviewError(result.message);
         return;
       }
 
-      const blob = await res.blob();
-      if (isStale()) return;
-
-      if (blob.size < 5) {
-        setPreviewFile(null);
-        loadedPreviewForRef.current = null;
-        setPreviewError('O servidor não retornou um PDF válido.');
-        return;
-      }
-
-      const buf = await blob.arrayBuffer();
-      if (isStale()) return;
-
-      if (!isPdfBuffer(buf)) {
-        setPreviewFile(null);
-        loadedPreviewForRef.current = null;
-        setPreviewError('PDF não encontrado ou inválido. Envie o arquivo novamente na etapa de conteúdo.');
-        return;
-      }
-
-      const source = await blobToPdfPreviewSource(blob);
-      if (isStale()) return;
-
-      if (!source) {
-        setPreviewFile(null);
-        loadedPreviewForRef.current = null;
-        setPreviewError('O servidor não retornou um PDF válido.');
-        return;
-      }
-
-      setPreviewFile(source);
+      setPreviewFile(result.source);
       loadedPreviewForRef.current = previewKey || contratoId;
       setPreviewError(null);
     } catch (e) {
@@ -201,7 +134,33 @@ export default function Contratos() {
         setPreviewLoading(false);
       }
     }
-  }, [previewKey]);
+  }, [previewKey, currentContrato?.pdfPath]);
+
+  const {
+    uploading,
+    uploadError,
+    uploadProgress,
+    pendingFileName,
+    pendingFileSize,
+    uploadPdf,
+    removePdf,
+    setUploadError,
+  } = useContratoPdfUpload({
+    currentContrato,
+    setCurrentContrato,
+    contratos,
+    sourceType,
+    setSourceType,
+    onError: showToast,
+    onUploadSuccess: async (updated) => {
+      loadedPreviewForRef.current = null;
+      await loadPreview(updated.id, {
+        force: true,
+        sourceType: 'pdf',
+        pdfPath: updated.pdfPath,
+      });
+    },
+  });
 
   useEffect(() => {
     loadedPreviewForRef.current = null;
@@ -219,7 +178,7 @@ export default function Contratos() {
       if (loadedPreviewForRef.current === previewKey && previewKey) {
         return;
       }
-      void loadPreview(contratoId, { sourceType });
+      void loadPreview(contratoId, { sourceType, pdfPath: currentContrato?.pdfPath });
     } else if (sourceType === 'pdf' && !uploading && !pendingFileName) {
       setPreviewFile(null);
       setPreviewError(null);
@@ -234,6 +193,7 @@ export default function Contratos() {
     loadPreview,
     shouldLoadPreview,
     currentContrato?.id,
+    currentContrato?.pdfPath,
     uploading,
     pendingFileName,
   ]);
@@ -377,7 +337,7 @@ export default function Contratos() {
     const savedCfg = parseSavedSignatureConfig(saved.signatureConfig, orgName, pageCount);
     if (savedCfg.fields.length === 0) setMarcadores([]);
     loadedPreviewForRef.current = null;
-    await loadPreview(saved.id, { force: true, sourceType });
+    await loadPreview(saved.id, { force: true, sourceType, pdfPath: saved.pdfPath });
     setWizardStep('signature');
   };
 
@@ -387,8 +347,9 @@ export default function Contratos() {
     void loadPreview(currentContrato.id, {
       force: true,
       sourceType,
+      pdfPath: currentContrato.pdfPath,
     });
-  }, [currentContrato?.id, loadPreview, sourceType]);
+  }, [currentContrato?.id, currentContrato?.pdfPath, loadPreview, sourceType]);
 
   const handleConfirmSave = async () => {
     const saved = await persistContent();
@@ -498,6 +459,7 @@ export default function Contratos() {
                         await loadPreview(s.id, {
                           force: true,
                           sourceType,
+                          pdfPath: s.pdfPath,
                         });
                         setWizardStep('signature');
                       }

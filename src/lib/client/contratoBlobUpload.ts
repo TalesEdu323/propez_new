@@ -47,7 +47,7 @@ function blobPutUrl(pathname: string): string {
   return `${BLOB_API_URL}/${pathname.split('/').map(encodeURIComponent).join('/')}`;
 }
 
-function mapBlobTokenError(status: number, parsed: GenerateClientTokenResponse | null): string {
+export function mapBlobTokenError(status: number, parsed: GenerateClientTokenResponse | null): string {
   const serverMsg = typeof parsed?.error === 'string' ? parsed.error : '';
   if (status === 401) return 'Sessão expirada. Faça login novamente.';
   if (status === 503 && /BLOB_READ_WRITE_TOKEN|Blob não configurado/i.test(serverMsg)) {
