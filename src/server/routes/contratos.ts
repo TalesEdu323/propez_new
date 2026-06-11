@@ -24,6 +24,7 @@ import {
   readTemplatePdf,
   templatePdfExists,
   uploadPdfErrorMessage,
+  writeTemplatePdf,
   type TemplatePdfRef,
 } from '../services/contractTemplateStorage.js'
 
@@ -256,21 +257,27 @@ export function createContratosRouter(deps: {
   })
 
   router.post('/:id/blob-token', express.json(), async (req: Request, res: Response) => {
-    if (!req.auth) return authUnauthorized(res)
     if (!config.blobReadWriteToken) {
       return res.status(503).json({ error: 'Armazenamento Blob não configurado (BLOB_READ_WRITE_TOKEN).' })
     }
 
-    const row = await loadContratoRow(pool, req.auth.orgId, req.params.id)
-    if (!row) return res.status(404).json({ error: 'Contrato não encontrado' })
-
     const body = req.body as HandleUploadBody
+    const isUploadCompletedCallback =
+      body?.type === 'blob.upload-completed' && Boolean(req.get('x-vercel-signature'))
+
+    if (!isUploadCompletedCallback) {
+      if (!req.auth) return authUnauthorized(res)
+      const row = await loadContratoRow(pool, req.auth.orgId, req.params.id)
+      if (!row) return res.status(404).json({ error: 'Contrato não encontrado' })
+    }
+
     try {
       const jsonResponse = await handleUpload({
         token: config.blobReadWriteToken,
         request: req,
         body,
         onBeforeGenerateToken: async () => ({
+          access: 'public' as const,
           allowedContentTypes: ['application/pdf'],
           maximumSizeInBytes: 10 * 1024 * 1024,
           addRandomSuffix: false,
@@ -411,6 +418,15 @@ export function createContratosRouter(deps: {
       )
     }
 
+    if (d.sourceType === 'pdf') {
+      const pdfRef = templatePdfRef(pool, req.auth.orgId, req.params.id, existing.pdf_path)
+      if (!(await templatePdfExists(pdfRef))) {
+        return res.status(400).json({
+          error: 'Envie o arquivo PDF antes de salvar o contrato como PDF.',
+        })
+      }
+    }
+
     const { rows } = await pool.query(
       `UPDATE contratos_templates SET
          titulo = COALESCE($3, titulo),
@@ -453,6 +469,58 @@ export function createContratosRouter(deps: {
       req.params.id,
     ])
     return res.json({ ok: true })
+  })
+
+  router.post('/:id/duplicate', async (req: Request, res: Response) => {
+    if (!req.auth) return res.status(401).end()
+    const source = await loadContratoRow(pool, req.auth.orgId, req.params.id)
+    if (!source) return res.status(404).json({ error: 'Contrato não encontrado' })
+
+    const { rows } = await pool.query(
+      `INSERT INTO contratos_templates
+         (organization_id, titulo, texto, source_type, signature_config, page_count, pdf_file_name)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+       RETURNING ${CONTRATO_SELECT}`,
+      [
+        req.auth.orgId,
+        `${source.titulo} (cópia)`,
+        source.texto ?? '',
+        source.source_type ?? 'text',
+        source.signature_config != null ? JSON.stringify(source.signature_config) : null,
+        source.page_count ?? null,
+        source.pdf_file_name ?? null,
+      ],
+    )
+    const created = rows[0]
+    if (!created) return res.status(500).json({ error: 'Erro ao duplicar contrato' })
+
+    if (source.source_type === 'pdf') {
+      try {
+        const pdfBuf = await readTemplatePdf(
+          templatePdfRef(pool, req.auth.orgId, req.params.id, source.pdf_path),
+        )
+        const pdfPath = await writeTemplatePdf(
+          pool,
+          req.auth.orgId,
+          created.id,
+          pdfBuf,
+        )
+        await pool.query(
+          `UPDATE contratos_templates SET pdf_path = $3 WHERE organization_id = $1 AND id = $2`,
+          [req.auth.orgId, created.id, pdfPath],
+        )
+        created.pdf_path = pdfPath
+      } catch (err) {
+        console.error('[contratos/duplicate] erro ao copiar PDF:', err)
+        await pool.query(
+          `DELETE FROM contratos_templates WHERE organization_id = $1 AND id = $2`,
+          [req.auth.orgId, created.id],
+        )
+        return res.status(500).json({ error: 'Erro ao copiar PDF do contrato' })
+      }
+    }
+
+    return res.status(201).json(serializeContrato(created))
   })
 
   return router

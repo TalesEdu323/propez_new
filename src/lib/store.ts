@@ -1076,6 +1076,15 @@ export const store = {
       contratoApi,
     );
   },
+
+  duplicateContrato: async (id: string): Promise<ContratoTemplate> => {
+    const saved = fromApiContrato(
+      await api.post<ApiContrato>(`/api/contratos/${id}/duplicate`, {}),
+    );
+    cache.contratos = [saved, ...cache.contratos];
+    notify('propez_contratos');
+    return saved;
+  },
 };
 
 // ============================================================================

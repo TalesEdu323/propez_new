@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Search, FileText, Trash2, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Plus, Search, FileText, Trash2, ChevronRight, ArrowLeft, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { store, ContratoTemplate } from '../lib/store';
 import { useContratos, useUserConfig } from '../hooks/useStoreEntity';
@@ -319,6 +319,15 @@ export default function Contratos() {
       showToast('Envie um arquivo PDF antes de continuar.');
       return null;
     }
+    if (
+      sourceType === 'pdf' &&
+      !currentContrato.pdfPath &&
+      !currentContrato.pdfFileName &&
+      !(currentContrato.pageCount && currentContrato.pageCount > 0)
+    ) {
+      showToast('PDF não encontrado. Envie o arquivo novamente.');
+      return null;
+    }
 
     const draft = await ensureSavedDraft();
     if (!draft) return null;
@@ -391,7 +400,17 @@ export default function Contratos() {
   };
 
   const handleDelete = (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este contrato?')) return;
     store.saveContratos(contratos.filter((c): c is ContratoTemplate => !!c?.id && c.id !== id));
+  };
+
+  const handleDuplicate = async (id: string) => {
+    if (!window.confirm('Duplicar este contrato?')) return;
+    try {
+      await store.duplicateContrato(id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao duplicar contrato');
+    }
   };
 
   const filteredContratos = contratos.filter(
@@ -643,7 +662,31 @@ export default function Contratos() {
                             <span className="text-[9px] font-bold text-zinc-300 uppercase tracking-widest shrink-0 hidden sm:block">
                               {formatDateBR(contrato.data_criacao)}
                             </span>
-                            <ChevronRight className="w-4 h-4 text-zinc-300 shrink-0" />
+                            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleDuplicate(contrato.id);
+                                }}
+                                className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-50 rounded-xl transition-all"
+                                title="Duplicar"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(contrato.id);
+                                }}
+                                className="p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                title="Excluir"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-zinc-300 shrink-0 hidden sm:block" />
                           </motion.div>
                         );
                       }
@@ -662,16 +705,30 @@ export default function Contratos() {
                           <div className="w-12 h-12 sm:w-14 sm:h-14 bg-zinc-50 rounded-xl sm:rounded-2xl flex items-center justify-center group-hover:bg-zinc-900 group-hover:text-white transition-all duration-500 border border-black/[0.02]">
                             <FileText className="w-6 h-6 sm:w-7 sm:h-7" />
                           </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(contrato.id);
-                            }}
-                            className="p-2.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all md:opacity-0 group-hover:opacity-100"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-1 md:opacity-0 group-hover:opacity-100 transition-all">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleDuplicate(contrato.id);
+                              }}
+                              className="p-2.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-50 rounded-xl transition-all"
+                              title="Duplicar"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(contrato.id);
+                              }}
+                              className="p-2.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-2 mb-2">

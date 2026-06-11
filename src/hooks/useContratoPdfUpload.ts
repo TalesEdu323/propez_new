@@ -83,13 +83,6 @@ export function useContratoPdfUpload({
         });
 
         setCurrentContrato(saved);
-        store.saveContratos(
-          contratos.some((c) => c?.id === saved.id)
-            ? contratos
-                .filter((c): c is ContratoTemplate => !!c?.id)
-                .map((c) => (c.id === saved.id ? saved : c))
-            : [saved, ...contratos.filter((c): c is ContratoTemplate => !!c?.id)],
-        );
 
         const data = await uploadContratoTemplatePdf({
           contratoId: saved.id,
@@ -113,13 +106,11 @@ export function useContratoPdfUpload({
         setPendingFileName(null);
         setUploadProgress(100);
 
-        store.saveContratos(
-          contratos.some((c) => c?.id === updated.id)
-            ? contratos
-                .filter((c): c is ContratoTemplate => !!c?.id)
-                .map((c) => (c.id === updated.id ? updated : c))
-            : [updated, ...contratos.filter((c): c is ContratoTemplate => !!c?.id)],
-        );
+        const existingContratos = contratos.filter((c): c is ContratoTemplate => !!c?.id);
+        const nextContratos = existingContratos.some((c) => c.id === updated.id)
+          ? existingContratos.map((c) => (c.id === updated.id ? updated : c))
+          : [updated, ...existingContratos];
+        store.saveContratos(nextContratos);
 
         logContratoInfo('upload:ui-ok', {
           contratoId: updated.id,

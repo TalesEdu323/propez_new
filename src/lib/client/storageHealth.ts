@@ -17,14 +17,22 @@ export async function fetchStorageHealth(force = false): Promise<StorageHealth> 
     return cache.data;
   }
   try {
-    const res = await fetch('/api/health', { credentials: 'include', cache: 'no-store' });
-    if (!res.ok) {
+    const res = await fetch('/api/boot-check', { credentials: 'include', cache: 'no-store' });
+    let json: { storage?: Partial<StorageHealth> } = {};
+    try {
+      json = (await res.json()) as { storage?: Partial<StorageHealth> };
+    } catch {
       if (import.meta.env.PROD) {
         throw new Error('Não foi possível verificar o armazenamento. Tente novamente.');
       }
       return DEFAULT;
     }
-    const json = (await res.json()) as { storage?: Partial<StorageHealth> };
+    if (!json.storage && !res.ok) {
+      if (import.meta.env.PROD) {
+        throw new Error('Não foi possível verificar o armazenamento. Tente novamente.');
+      }
+      return DEFAULT;
+    }
     const data: StorageHealth = {
       hasBlobToken: Boolean(json.storage?.hasBlobToken),
       pdfMode: json.storage?.pdfMode ?? DEFAULT.pdfMode,

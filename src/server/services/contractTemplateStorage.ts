@@ -209,6 +209,9 @@ export function uploadPdfErrorMessage(err: unknown): string {
     return 'Não foi possível armazenar o PDF no servidor. Tente novamente.';
   }
   const msg = err instanceof Error ? err.message : String(err);
+  if (/Falha ao ler PDF do Blob/i.test(msg)) {
+    return 'Não foi possível validar o PDF enviado. Tente o upload novamente.';
+  }
   if (/BLOB_READ_WRITE_TOKEN/i.test(msg)) {
     return 'Armazenamento de PDF não configurado (BLOB_READ_WRITE_TOKEN). Contate o suporte.';
   }
