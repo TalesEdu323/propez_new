@@ -262,7 +262,11 @@ export default function Contratos() {
       if (previewFile && loadedPreviewForRef.current === previewKey) {
         return;
       }
-      void loadPreview(contratoId, { sourceType, pdfPath: currentContrato?.pdfPath });
+      void loadPreview(contratoId, {
+        sourceType,
+        pdfPath: currentContrato?.pdfPath,
+        preferApi: sourceType === 'pdf',
+      });
     } else if (sourceType === 'pdf' && !uploading && !pendingFileName && !previewFile) {
       setPreviewLoading(false);
       loadedPreviewForRef.current = null;
@@ -418,13 +422,45 @@ export default function Contratos() {
     return draft;
   };
 
+  const ensurePreviewBeforeSignature = async (saved: ContratoTemplate) => {
+    persistWizardSession(saved.id, 'signature', sourceType);
+
+    if (sourceType === 'pdf' && previewFile && loadedPreviewForRef.current === previewKey) {
+      return;
+    }
+
+    const backup = previewFile;
+    loadedPreviewForRef.current = null;
+    const remoteError = await loadPreview(saved.id, {
+      force: true,
+      sourceType,
+      pdfPath: saved.pdfPath,
+      preferApi: sourceType === 'pdf',
+    });
+
+    if (remoteError && backup && sourceType === 'pdf') {
+      setPreviewFile(backup);
+      loadedPreviewForRef.current = previewKey || saved.id;
+      setPreviewError(null);
+      return;
+    }
+
+    if (remoteError && sourceType === 'pdf') {
+      showToast(remoteError);
+      throw new Error(remoteError);
+    }
+  };
+
   const handleAdvanceToSignature = async () => {
     const saved = await persistContent();
     if (!saved?.id) return;
     const savedCfg = parseSavedSignatureConfig(saved.signatureConfig, orgName, pageCount);
     if (savedCfg.fields.length === 0) setMarcadores([]);
-    loadedPreviewForRef.current = null;
-    await loadPreview(saved.id, { force: true, sourceType, pdfPath: saved.pdfPath });
+    try {
+      await ensurePreviewBeforeSignature(saved);
+    } catch {
+      return;
+    }
     setWizardStep('signature');
   };
 
@@ -435,6 +471,7 @@ export default function Contratos() {
       force: true,
       sourceType,
       pdfPath: currentContrato.pdfPath,
+      preferApi: sourceType === 'pdf',
     });
   }, [currentContrato?.id, currentContrato?.pdfPath, loadPreview, sourceType]);
 
@@ -551,14 +588,12 @@ export default function Contratos() {
                   type="button"
                   onClick={() => {
                     void persistContent().then(async (s) => {
-                      if (s?.id) {
-                        loadedPreviewForRef.current = null;
-                        await loadPreview(s.id, {
-                          force: true,
-                          sourceType,
-                          pdfPath: s.pdfPath,
-                        });
+                      if (!s?.id) return;
+                      try {
+                        await ensurePreviewBeforeSignature(s);
                         setWizardStep('signature');
+                      } catch {
+                        /* toast já exibido */
                       }
                     });
                   }}
