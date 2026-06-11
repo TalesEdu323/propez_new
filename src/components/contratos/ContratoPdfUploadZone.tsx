@@ -7,7 +7,9 @@ export interface ContratoPdfUploadZoneProps {
   pageCount?: number;
   fileSizeBytes?: number | null;
   uploadError?: string | null;
+  uploadProgress?: number;
   onSelectFile: (file: File) => void;
+  onValidationError?: (message: string) => void;
   onRemove?: () => void;
 }
 
@@ -21,7 +23,9 @@ export function ContratoPdfUploadZone({
   pageCount = 0,
   fileSizeBytes,
   uploadError,
+  uploadProgress = 0,
   onSelectFile,
+  onValidationError,
   onRemove,
 }: ContratoPdfUploadZoneProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -36,6 +40,7 @@ export function ContratoPdfUploadZone({
   const handleFile = (file: File | undefined) => {
     if (!file || uploading) return;
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      onValidationError?.('Apenas arquivos PDF são aceitos.');
       return;
     }
     onSelectFile(file);
@@ -59,6 +64,15 @@ export function ContratoPdfUploadZone({
     e.stopPropagation();
     setIsDragging(false);
   };
+
+  const progressWidth =
+    uploading && uploadProgress > 0
+      ? `${uploadProgress}%`
+      : uploading
+        ? undefined
+        : hasFile && !uploadError
+          ? '100%'
+          : undefined;
 
   const zoneClass = hasFile
     ? 'border-emerald-300 bg-emerald-50/60 py-4 px-4'
@@ -152,7 +166,8 @@ export function ContratoPdfUploadZone({
                       </p>
                       <p className="text-xs text-zinc-500 mt-0.5">
                         {fileSizeBytes != null && `${formatSizeMb(fileSizeBytes)} MB`}
-                        {uploading && ' · Enviando…'}
+                        {uploading && uploadProgress > 0 && ` · ${uploadProgress}%`}
+                        {uploading && uploadProgress === 0 && ' · Enviando…'}
                         {!uploading && !uploadError && hasFile && ' · Enviado'}
                         {!uploading && pageCount > 0 && (
                           <span>
@@ -165,8 +180,13 @@ export function ContratoPdfUploadZone({
                         <div className="h-1.5 mt-2 bg-gray-200 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all duration-300 ${
-                              uploading ? 'bg-blue-500 w-2/3 animate-pulse' : 'bg-emerald-500 w-full'
+                              uploading
+                                ? progressWidth
+                                  ? 'bg-blue-500'
+                                  : 'bg-blue-500 w-2/3 animate-pulse'
+                                : 'bg-emerald-500 w-full'
                             }`}
+                            style={progressWidth ? { width: progressWidth } : undefined}
                           />
                         </div>
                       )}

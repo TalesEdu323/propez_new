@@ -1,8 +1,7 @@
 import express from 'express'
-import type { Request, Response, Router } from 'express'
+import type { NextFunction, Request, Response, Router } from 'express'
 import type { Pool } from 'pg'
 import multer from 'multer'
-import { PDFDocument } from 'pdf-lib'
 import { z } from 'zod'
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import type { EnvironmentConfig } from '../env.js'
@@ -15,15 +14,16 @@ import {
   normalizeSignatureConfig,
   validateTemplateSignatureConfig,
 } from '../../lib/signatureConfig.js'
-import { isPdfBuffer } from '../../lib/pdfPreview.js'
 import { isAllowedBlobUrl, readPdfFromStorage } from '../storage/blobStorage.js'
+import {
+  processTemplatePdfUpload,
+  sanitizePdfFileName,
+} from '../services/contratoTemplateUploadService.js'
 import {
   deleteTemplatePdf,
   readTemplatePdf,
-  registerTemplatePdfBlobUrl,
   templatePdfExists,
   uploadPdfErrorMessage,
-  writeTemplatePdf,
   type TemplatePdfRef,
 } from '../services/contractTemplateStorage.js'
 
@@ -95,6 +95,27 @@ const upload = multer({
   },
 })
 
+function authUnauthorized(res: Response): Response {
+  return res.status(401).json({ error: 'Não autenticado' })
+}
+
+function multerPdfUpload(req: Request, res: Response, next: NextFunction): void {
+  upload.single('file')(req, res, (err: unknown) => {
+    if (!err) {
+      next()
+      return
+    }
+    const code =
+      err && typeof err === 'object' && 'code' in err ? String((err as { code: string }).code) : ''
+    if (code === 'LIMIT_FILE_SIZE') {
+      res.status(413).json({ error: 'PDF muito grande (máx. 10 MB).' })
+      return
+    }
+    const msg = err instanceof Error ? err.message : 'Erro no upload do PDF'
+    res.status(400).json({ error: msg })
+  })
+}
+
 function templatePdfRef(
   pool: Pool,
   orgId: string,
@@ -134,32 +155,6 @@ export function sendPdfPreview(res: Response, buf: Buffer, filename: string): vo
   res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
   res.removeHeader('ETag')
   res.end(buf)
-}
-
-async function persistUploadedPdf(
-  pool: Pool,
-  orgId: string,
-  contratoId: string,
-  _buffer: Buffer,
-  safeName: string,
-  pageCount: number,
-  pdfPath: string,
-  existingPdfPath?: string | null,
-) {
-  await registerTemplatePdfBlobUrl(pool, orgId, contratoId, pdfPath, existingPdfPath)
-  const { rows: updated } = await pool.query(
-    `UPDATE contratos_templates SET
-       source_type = 'pdf',
-       pdf_path = $3,
-       pdf_file_name = $4,
-       page_count = $5,
-       texto = '',
-       pdf_data = NULL
-     WHERE organization_id = $1 AND id = $2
-     RETURNING ${CONTRATO_SELECT}`,
-    [orgId, contratoId, pdfPath, safeName, pageCount],
-  )
-  return updated[0]
 }
 
 export function createContratosRouter(deps: {
@@ -261,7 +256,7 @@ export function createContratosRouter(deps: {
   })
 
   router.post('/:id/blob-token', express.json(), async (req: Request, res: Response) => {
-    if (!req.auth) return res.status(401).end()
+    if (!req.auth) return authUnauthorized(res)
     if (!config.blobReadWriteToken) {
       return res.status(503).json({ error: 'Armazenamento Blob não configurado (BLOB_READ_WRITE_TOKEN).' })
     }
@@ -297,7 +292,7 @@ export function createContratosRouter(deps: {
   })
 
   router.post('/:id/upload-finalize', express.json(), async (req: Request, res: Response) => {
-    if (!req.auth) return res.status(401).end()
+    if (!req.auth) return authUnauthorized(res)
     const parsed = uploadFinalizeSchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: 'Dados inválidos' })
 
@@ -314,30 +309,16 @@ export function createContratosRouter(deps: {
       if (buffer.length > fileSize * 1.1 + 1024) {
         return res.status(400).json({ error: 'Tamanho do arquivo inconsistente.' })
       }
-      if (!isPdfBuffer(buffer)) {
-        return res.status(400).json({ error: 'O arquivo enviado não é um PDF válido.' })
-      }
 
-      let pageCount = 1
-      try {
-        const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true })
-        pageCount = pdfDoc.getPageCount()
-        if (pageCount === 0) return res.status(400).json({ error: 'PDF vazio' })
-      } catch (parseErr) {
-        console.warn('[contratos/upload-finalize] pdf-lib:', parseErr)
-      }
-
-      const safeName = fileName.replace(/[^\w\s.-]/g, '').slice(0, 120) || 'contrato.pdf'
-      const updated = await persistUploadedPdf(
+      const { row: updated, pageCount } = await processTemplatePdfUpload({
         pool,
-        req.auth.orgId,
-        req.params.id,
+        orgId: req.auth.orgId,
+        contratoId: req.params.id,
         buffer,
-        safeName,
-        pageCount,
+        fileName: sanitizePdfFileName(fileName),
+        existingPdfPath: row.pdf_path,
         blobUrl,
-        row.pdf_path,
-      )
+      })
       return res.json({ ...serializeContrato(updated), pageCount })
     } catch (err) {
       console.error('[contratos/upload-finalize] erro:', { blobUrl, err })
@@ -345,8 +326,8 @@ export function createContratosRouter(deps: {
     }
   })
 
-  router.post('/:id/upload-pdf', upload.single('file'), async (req: Request, res: Response) => {
-    if (!req.auth) return res.status(401).end()
+  router.post('/:id/upload-pdf', multerPdfUpload, async (req: Request, res: Response) => {
+    if (!req.auth) return authUnauthorized(res)
     const file = req.file
     if (!file?.buffer?.length) {
       return res.status(400).json({ error: 'Envie um arquivo PDF no campo "file"' })
@@ -356,44 +337,46 @@ export function createContratosRouter(deps: {
     if (!row) return res.status(404).json({ error: 'Contrato não encontrado' })
 
     try {
-      if (!isPdfBuffer(file.buffer)) {
-        return res.status(400).json({ error: 'O arquivo enviado não é um PDF válido.' })
-      }
-
-      let pageCount = 1
-      try {
-        const pdfDoc = await PDFDocument.load(file.buffer, { ignoreEncryption: true })
-        pageCount = pdfDoc.getPageCount()
-        if (pageCount === 0) return res.status(400).json({ error: 'PDF vazio' })
-      } catch (parseErr) {
-        console.warn('[contratos/upload-pdf] pdf-lib não leu o arquivo; usando contagem padrão:', parseErr)
-      }
-
-      const pdfPath = await writeTemplatePdf(
+      const { row: updated, pageCount } = await processTemplatePdfUpload({
         pool,
-        req.auth.orgId,
-        req.params.id,
-        file.buffer,
-        row.pdf_path,
-      )
-      const safeName = (file.originalname || 'contrato.pdf').replace(/[^\w\s.-]/g, '').slice(0, 120) || 'contrato.pdf'
-
-      const updated = await persistUploadedPdf(
-        pool,
-        req.auth.orgId,
-        req.params.id,
-        file.buffer,
-        safeName,
-        pageCount,
-        pdfPath,
-        row.pdf_path,
-      )
+        orgId: req.auth.orgId,
+        contratoId: req.params.id,
+        buffer: file.buffer,
+        fileName: file.originalname || 'contrato.pdf',
+        existingPdfPath: row.pdf_path,
+      })
       return res.json({ ...serializeContrato(updated), pageCount })
     } catch (err) {
       const code = err && typeof err === 'object' && 'code' in err ? (err as { code: string }).code : ''
       console.error('[contratos/upload-pdf] erro:', { code, err })
       return res.status(400).json({ error: uploadPdfErrorMessage(err) })
     }
+  })
+
+  router.delete('/:id/pdf', async (req: Request, res: Response) => {
+    if (!req.auth) return authUnauthorized(res)
+    const row = await loadContratoRow(pool, req.auth.orgId, req.params.id)
+    if (!row) return res.status(404).json({ error: 'Contrato não encontrado' })
+
+    if (row.pdf_path || row.source_type === 'pdf') {
+      await deleteTemplatePdf(
+        templatePdfRef(pool, req.auth.orgId, req.params.id, row.pdf_path),
+        row.pdf_path,
+      )
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE contratos_templates SET
+         source_type = 'text',
+         pdf_path = NULL,
+         pdf_file_name = NULL,
+         page_count = NULL,
+         pdf_data = NULL
+       WHERE organization_id = $1 AND id = $2
+       RETURNING ${CONTRATO_SELECT}`,
+      [req.auth.orgId, req.params.id],
+    )
+    return res.json(serializeContrato(rows[0]))
   })
 
   router.patch('/:id', async (req: Request, res: Response) => {

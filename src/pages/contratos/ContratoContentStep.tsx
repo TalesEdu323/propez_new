@@ -15,9 +15,11 @@ export interface ContratoContentStepProps {
   onOpenAi: () => void;
   uploading: boolean;
   uploadError?: string | null;
+  uploadProgress?: number;
   pendingFileSize?: number | null;
   pendingFileName?: string | null;
   onUploadPdf: (file: File) => void;
+  onUploadValidationError?: (message: string) => void;
   onRemovePdf?: () => void;
   previewFile: PdfPreviewSource | null;
   previewLoading: boolean;
@@ -33,9 +35,11 @@ export function ContratoContentStep({
   onOpenAi,
   uploading,
   uploadError,
+  uploadProgress,
   pendingFileSize,
   pendingFileName,
   onUploadPdf,
+  onUploadValidationError,
   onRemovePdf,
   previewFile,
   previewLoading,
@@ -112,7 +116,9 @@ export function ContratoContentStep({
             pageCount={currentContrato.pageCount ?? 0}
             fileSizeBytes={pendingFileSize}
             uploadError={uploadError}
+            uploadProgress={uploadProgress}
             onSelectFile={handleSelectFile}
+            onValidationError={onUploadValidationError}
             onRemove={onRemovePdf}
           />
 
