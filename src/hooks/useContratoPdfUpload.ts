@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import type { ContratoTemplate } from '../lib/store';
 import { store } from '../lib/store';
 import { titleFromPdfFilename } from '../lib/contratoPdfTitle';
+import { blobToPdfPreviewSource, type PdfPreviewSource } from '../lib/pdfPreview';
 import {
   ensureContratoDraft,
   formatContratoUploadError,
@@ -18,17 +19,18 @@ import {
 export type UseContratoPdfUploadOptions = {
   currentContrato: Partial<ContratoTemplate> | null;
   setCurrentContrato: React.Dispatch<React.SetStateAction<Partial<ContratoTemplate> | null>>;
-  contratos: (ContratoTemplate | undefined)[];
   sourceType: 'text' | 'pdf';
   setSourceType: (type: 'text' | 'pdf') => void;
-  onUploadSuccess?: (contrato: ContratoTemplate) => void | Promise<void>;
+  onUploadSuccess?: (
+    contrato: ContratoTemplate,
+    localPreview?: PdfPreviewSource,
+  ) => void | Promise<void>;
   onError?: (message: string) => void;
 };
 
 export function useContratoPdfUpload({
   currentContrato,
   setCurrentContrato,
-  contratos,
   sourceType,
   setSourceType,
   onUploadSuccess,
@@ -83,6 +85,7 @@ export function useContratoPdfUpload({
         });
 
         setCurrentContrato(saved);
+        store.upsertContratoCache(saved);
 
         const data = await uploadContratoTemplatePdf({
           contratoId: saved.id,
@@ -106,20 +109,19 @@ export function useContratoPdfUpload({
         setPendingFileName(null);
         setUploadProgress(100);
 
-        const existingContratos = contratos.filter((c): c is ContratoTemplate => !!c?.id);
-        const nextContratos = existingContratos.some((c) => c.id === updated.id)
-          ? existingContratos.map((c) => (c.id === updated.id ? updated : c))
-          : [updated, ...existingContratos];
-        store.saveContratos(nextContratos);
+        store.upsertContratoCache(updated);
+
+        const localPreview = await blobToPdfPreviewSource(file);
 
         logContratoInfo('upload:ui-ok', {
           contratoId: updated.id,
           pdfPath: resumirPdfPath(updated.pdfPath),
           pageCount: updated.pageCount,
           pdfFileName: updated.pdfFileName,
+          previewLocal: Boolean(localPreview),
         });
 
-        await onUploadSuccess?.(updated);
+        await onUploadSuccess?.(updated, localPreview ?? undefined);
       } catch (err) {
         const msg = formatContratoUploadError(err);
         logContratoErro('upload:ui-falhou', msg, {
@@ -136,7 +138,6 @@ export function useContratoPdfUpload({
     [
       currentContrato,
       setCurrentContrato,
-      contratos,
       sourceType,
       setSourceType,
       onUploadSuccess,
@@ -173,17 +174,13 @@ export function useContratoPdfUpload({
       setPendingFileSize(null);
       setPendingFileName(null);
       setUploadProgress(0);
-      store.saveContratos(
-        contratos
-          .filter((c): c is ContratoTemplate => !!c?.id)
-          .map((c) => (c.id === updated.id ? updated : c)),
-      );
+      store.upsertContratoCache(updated);
     } catch (err) {
       reportError(formatContratoUploadError(err));
     } finally {
       setUploading(false);
     }
-  }, [currentContrato?.id, setCurrentContrato, contratos, reportError]);
+  }, [currentContrato?.id, setCurrentContrato, reportError]);
 
   return {
     uploading,

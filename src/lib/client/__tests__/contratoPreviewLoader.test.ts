@@ -1,6 +1,24 @@
-import { describe, expect, it } from 'vitest';
-import { shouldLoadPreviewFromBlob } from '../contratoPreviewLoader.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { shouldLoadPreviewFromBlob, loadContratoPreviewPdf } from '../contratoPreviewLoader.js';
 import { mapBlobTokenError } from '../contratoBlobUpload.js';
+
+const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+const BLOB_PDF = 'https://abc.public.blob.vercel-storage.com/x.pdf';
+
+function mockPdfBlob(): Blob {
+  const data = PDF_BYTES;
+  return {
+    size: data.length,
+    arrayBuffer: () =>
+      Promise.resolve(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)),
+  } as Blob;
+}
+
+vi.mock('../../apiClient.js', () => ({
+  apiFetch: vi.fn(),
+}));
+
+import { apiFetch } from '../../apiClient.js';
 
 describe('shouldLoadPreviewFromBlob', () => {
   it('retorna true para URL Blob', () => {
@@ -32,5 +50,75 @@ describe('mapBlobTokenError', () => {
 
   it('usa mensagem do servidor quando disponível', () => {
     expect(mapBlobTokenError(400, { error: 'Contrato não encontrado' })).toBe('Contrato não encontrado');
+  });
+});
+
+describe('loadContratoPreviewPdf preferApi', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(),
+    );
+  });
+
+  it('tenta API antes do CDN quando preferApi=true', async () => {
+    vi.mocked(apiFetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      blob: () => Promise.resolve(mockPdfBlob()),
+    } as Response);
+
+    const result = await loadContratoPreviewPdf({
+      contratoId: 'c1',
+      pdfPath: BLOB_PDF,
+      sourceType: 'pdf',
+      preferApi: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(apiFetch).toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('retorna mensagem de aguarde quando preferApi e CDN/API falham', async () => {
+    vi.mocked(apiFetch).mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({}),
+    } as Response);
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 404 } as Response);
+
+    const result = await loadContratoPreviewPdf({
+      contratoId: 'c1',
+      pdfPath: BLOB_PDF,
+      sourceType: 'pdf',
+      preferApi: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toMatch(/Aguarde alguns segundos/i);
+    }
+  });
+
+  it('faz fallback CDN→API quando preferApi=false', async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error('rede'));
+    vi.mocked(apiFetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      blob: () => Promise.resolve(mockPdfBlob()),
+    } as Response);
+
+    const result = await loadContratoPreviewPdf({
+      contratoId: 'c1',
+      pdfPath: BLOB_PDF,
+      sourceType: 'pdf',
+      preferApi: false,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fetch).toHaveBeenCalled();
+    expect(apiFetch).toHaveBeenCalled();
   });
 });

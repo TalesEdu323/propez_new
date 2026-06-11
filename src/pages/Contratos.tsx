@@ -7,6 +7,12 @@ import { formatDateBR } from '../lib/format';
 import { AiBriefPromptModal } from '../components/ia/AiBriefPromptModal';
 import { api, apiFetch, ApiError } from '../lib/apiClient';
 import { loadContratoPreviewPdf } from '../lib/client/contratoPreviewLoader';
+import {
+  clearContratoWizardSession,
+  loadContratoWizardSession,
+  saveContratoWizardSession,
+  type ContratoWizardStep,
+} from '../lib/client/contratoWizardSession';
 import type { PdfPreviewSource } from '../lib/pdfPreview';
 import { useContratoPdfUpload } from '../hooks/useContratoPdfUpload';
 import { extrairErro, logContratoErro } from '../lib/client/contratoDiagnostics';
@@ -27,7 +33,7 @@ import { LISTING_GRID_CLASS, LISTING_LIST_CLASS } from '../components/listing/li
 
 const CONTRATOS_VIEW_KEY = 'listing_view:contratos';
 
-type WizardStep = 'choose' | 'content' | 'signature';
+type WizardStep = ContratoWizardStep;
 
 export default function Contratos() {
   const contratos = useContratos();
@@ -49,6 +55,19 @@ export default function Contratos() {
   const previewAbortRef = useRef<AbortController | null>(null);
   const loadedPreviewForRef = useRef<string | null>(null);
   const previewRequestIdRef = useRef(0);
+  const wizardRestoreAttemptedRef = useRef(false);
+
+  const persistWizardSession = useCallback(
+    (
+      contratoId: string | undefined,
+      step: WizardStep = wizardStep,
+      src: 'text' | 'pdf' = sourceType,
+    ) => {
+      if (!contratoId) return;
+      saveContratoWizardSession({ contratoId, wizardStep: step, sourceType: src });
+    },
+    [wizardStep, sourceType],
+  );
 
   const textoFingerprint = currentContrato?.texto
     ? `${currentContrato.texto.length}:${currentContrato.texto.slice(0, 32)}:${currentContrato.texto.slice(-16)}`
@@ -82,10 +101,15 @@ export default function Contratos() {
 
   const loadPreview = useCallback(async (
     contratoId: string,
-    opts?: { force?: boolean; sourceType?: 'text' | 'pdf'; pdfPath?: string | null },
-  ) => {
+    opts?: {
+      force?: boolean;
+      sourceType?: 'text' | 'pdf';
+      pdfPath?: string | null;
+      preferApi?: boolean;
+    },
+  ): Promise<string | null> => {
     if (!opts?.force && loadedPreviewForRef.current === previewKey && previewKey) {
-      return;
+      return null;
     }
 
     const requestId = ++previewRequestIdRef.current;
@@ -94,7 +118,9 @@ export default function Contratos() {
     previewAbortRef.current = controller;
 
     setPreviewLoading(true);
-    setPreviewError(null);
+    if (opts?.force) {
+      setPreviewError(null);
+    }
 
     const isStale = () => previewRequestIdRef.current !== requestId;
 
@@ -104,9 +130,10 @@ export default function Contratos() {
         pdfPath: opts?.pdfPath ?? currentContrato?.pdfPath,
         sourceType: opts?.sourceType,
         signal: controller.signal,
+        preferApi: opts?.preferApi,
       });
 
-      if (isStale()) return;
+      if (isStale()) return null;
 
       if (!result.ok) {
         logContratoErro('preview:ui', result.message, {
@@ -117,15 +144,16 @@ export default function Contratos() {
         setPreviewFile(null);
         loadedPreviewForRef.current = null;
         setPreviewError(result.message);
-        return;
+        return result.message;
       }
 
       setPreviewFile(result.source);
       loadedPreviewForRef.current = previewKey || contratoId;
       setPreviewError(null);
+      return null;
     } catch (e) {
-      if (isStale()) return;
-      if (e instanceof DOMException && e.name === 'AbortError') return;
+      if (isStale()) return null;
+      if (e instanceof DOMException && e.name === 'AbortError') return null;
       setPreviewFile(null);
       loadedPreviewForRef.current = null;
       const msg =
@@ -140,6 +168,7 @@ export default function Contratos() {
         ...extrairErro(e),
       });
       setPreviewError(msg);
+      return msg;
     } finally {
       if (!isStale() && previewAbortRef.current === controller) {
         setPreviewLoading(false);
@@ -159,19 +188,60 @@ export default function Contratos() {
   } = useContratoPdfUpload({
     currentContrato,
     setCurrentContrato,
-    contratos,
     sourceType,
     setSourceType,
     onError: showToast,
-    onUploadSuccess: async (updated) => {
+    onUploadSuccess: async (updated, localPreview) => {
+      persistWizardSession(updated.id, wizardStep, 'pdf');
+
+      const uploadedPreviewKey = `${updated.id}:pdf:${updated.pageCount}:${updated.pdfFileName}:${updated.pdfPath ?? ''}:`;
+
+      if (localPreview) {
+        setPreviewFile(localPreview);
+        loadedPreviewForRef.current = uploadedPreviewKey;
+        setPreviewError(null);
+        setPreviewLoading(false);
+        return;
+      }
+
       loadedPreviewForRef.current = null;
-      await loadPreview(updated.id, {
+      const remoteError = await loadPreview(updated.id, {
         force: true,
         sourceType: 'pdf',
         pdfPath: updated.pdfPath,
+        preferApi: true,
       });
+      if (remoteError) {
+        showToast(remoteError);
+      }
     },
   });
+
+  useEffect(() => {
+    if (wizardRestoreAttemptedRef.current) return;
+    wizardRestoreAttemptedRef.current = true;
+
+    const session = loadContratoWizardSession();
+    if (!session) return;
+
+    void (async () => {
+      try {
+        const contrato = await api.get<ContratoTemplate>(`/api/contratos/${session.contratoId}`);
+        setCurrentContrato(contrato);
+        setSourceType(session.sourceType);
+        setWizardStep(session.wizardStep);
+        setIsEditing(true);
+      } catch {
+        clearContratoWizardSession();
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (isEditing && currentContrato?.id) {
+      persistWizardSession(currentContrato.id, wizardStep, sourceType);
+    }
+  }, [isEditing, currentContrato?.id, wizardStep, sourceType, persistWizardSession]);
 
   useEffect(() => {
     loadedPreviewForRef.current = null;
@@ -189,10 +259,11 @@ export default function Contratos() {
       if (loadedPreviewForRef.current === previewKey && previewKey) {
         return;
       }
+      if (previewFile && loadedPreviewForRef.current === previewKey) {
+        return;
+      }
       void loadPreview(contratoId, { sourceType, pdfPath: currentContrato?.pdfPath });
-    } else if (sourceType === 'pdf' && !uploading && !pendingFileName) {
-      setPreviewFile(null);
-      setPreviewError(null);
+    } else if (sourceType === 'pdf' && !uploading && !pendingFileName && !previewFile) {
       setPreviewLoading(false);
       loadedPreviewForRef.current = null;
     }
@@ -207,6 +278,7 @@ export default function Contratos() {
     currentContrato?.pdfPath,
     uploading,
     pendingFileName,
+    previewFile,
   ]);
 
   useEffect(() => {
@@ -222,9 +294,11 @@ export default function Contratos() {
   const resetEditor = () => {
     previewAbortRef.current?.abort();
     loadedPreviewForRef.current = null;
+    clearContratoWizardSession();
     setIsEditing(false);
     setCurrentContrato(null);
     setWizardStep('choose');
+    setSourceType('text');
     setMarcadores([]);
     setSelectedSignerId('client');
     setPreviewFile(null);
@@ -275,11 +349,7 @@ export default function Contratos() {
       if (Object.keys(patch).length > 0) {
         const updated = await api.patch<ContratoTemplate>(`/api/contratos/${currentContrato.id}`, patch);
         setCurrentContrato(updated);
-        store.saveContratos(
-          contratos
-            .filter((c): c is ContratoTemplate => !!c?.id)
-            .map((c) => (c.id === updated.id ? updated : c)),
-        );
+        store.upsertContratoCache(updated);
         return updated;
       }
       return { ...currentContrato, titulo } as ContratoTemplate;
@@ -291,10 +361,7 @@ export default function Contratos() {
       sourceType: sourceType === 'pdf' ? 'text' : sourceType,
     });
     setCurrentContrato(saved);
-    store.saveContratos([
-      saved,
-      ...contratos.filter((c): c is ContratoTemplate => !!c?.id && c.id !== saved.id),
-    ]);
+    store.upsertContratoCache(saved);
     return saved;
   };
 

@@ -1077,6 +1077,11 @@ export const store = {
     );
   },
 
+  /** Atualiza cache local sem diffSave (evita CREATE duplicado após upload). */
+  upsertContratoCache: (contrato: ContratoTemplate): void => {
+    upsertContratoCache(contrato);
+  },
+
   duplicateContrato: async (id: string): Promise<ContratoTemplate> => {
     const saved = fromApiContrato(
       await api.post<ApiContrato>(`/api/contratos/${id}/duplicate`, {}),
@@ -1086,6 +1091,17 @@ export const store = {
     return saved;
   },
 };
+
+/** Insere ou substitui contrato no cache sem disparar diffSave/API. */
+export function upsertContratoCache(contrato: ContratoTemplate): void {
+  const idx = cache.contratos.findIndex((c) => c.id === contrato.id);
+  if (idx >= 0) {
+    cache.contratos = cache.contratos.map((c) => (c.id === contrato.id ? contrato : c));
+  } else {
+    cache.contratos = [contrato, ...cache.contratos];
+  }
+  notify('propez_contratos');
+}
 
 // ============================================================================
 // Helpers explícitos (preferidos em código novo)

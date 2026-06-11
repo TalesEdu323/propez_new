@@ -15,6 +15,8 @@ export type LoadContratoPreviewOpts = {
   pdfPath?: string | null;
   sourceType?: 'text' | 'pdf';
   signal?: AbortSignal;
+  /** Pós-upload: tenta API autenticada antes do CDN (propagação Blob). */
+  preferApi?: boolean;
 };
 
 export type LoadContratoPreviewResult =
@@ -107,16 +109,31 @@ async function fetchPreviewFromApi(
 export async function loadContratoPreviewPdf(
   opts: LoadContratoPreviewOpts,
 ): Promise<LoadContratoPreviewResult> {
-  const { contratoId, pdfPath, sourceType, signal } = opts;
+  const { contratoId, pdfPath, sourceType, signal, preferApi } = opts;
 
   logContratoInfo('preview:inicio', {
     contratoId,
     sourceType,
     pdfPath: resumirPdfPath(pdfPath),
     viaCdn: Boolean(pdfPath && contratoHasRemotePdf(pdfPath)),
+    preferApi: Boolean(preferApi),
   });
 
   if (pdfPath && contratoHasRemotePdf(pdfPath)) {
+    if (preferApi) {
+      const fromApi = await fetchPreviewFromApi(
+        contratoId,
+        sourceType,
+        signal,
+        'pós-upload (preferApi)',
+      );
+      if (fromApi.ok) return fromApi;
+      logContratoAviso('preview:api-pos-upload-falhou', 'API pós-upload falhou — tentando CDN', {
+        contratoId,
+        pdfPath: resumirPdfPath(pdfPath),
+      });
+    }
+
     const cdnUrl = buildPdfViewUrl(pdfPath);
     try {
       const res = await fetch(cdnUrl, {
@@ -145,12 +162,21 @@ export async function loadContratoPreviewPdf(
         ...extrairErro(err),
       });
     }
-    return fetchPreviewFromApi(
-      contratoId,
-      sourceType,
-      signal,
-      'CDN indisponível ou resposta inválida',
-    );
+
+    if (!preferApi) {
+      return fetchPreviewFromApi(
+        contratoId,
+        sourceType,
+        signal,
+        'CDN indisponível ou resposta inválida',
+      );
+    }
+
+    return {
+      ok: false,
+      message:
+        'PDF enviado com sucesso. Aguarde alguns segundos e clique em Recarregar preview.',
+    };
   }
 
   return fetchPreviewFromApi(contratoId, sourceType, signal);
