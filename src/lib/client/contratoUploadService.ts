@@ -6,6 +6,12 @@ import {
   uploadContratoPdfToBlob,
 } from './contratoBlobUpload';
 import { getUploadStrategy } from './storageHealth';
+import {
+  extrairErro,
+  logContratoErro,
+  logContratoInfo,
+  resumirPdfPath,
+} from './contratoDiagnostics';
 
 export type ContratoUploadErrorCode = 'VALIDATION' | 'NETWORK' | 'STORAGE' | 'AUTH';
 
@@ -35,29 +41,38 @@ export type UploadContratoTemplatePdfInput = {
 
 export type UploadContratoTemplatePdfResult = ContratoTemplate & { pageCount?: number };
 
-function classifyError(err: unknown): ContratoUploadError {
+function classifyError(err: unknown, etapa?: string): ContratoUploadError {
   if (err instanceof ContratoUploadError) return err;
   if (err instanceof ContratoUploadAbortedError) {
-    return new ContratoUploadError(err.message, 'NETWORK');
+    const e = new ContratoUploadError(err.message, 'NETWORK');
+    if (etapa) logContratoErro(etapa, e.message, extrairErro(err));
+    return e;
   }
   if (err instanceof ApiError) {
     const code: ContratoUploadErrorCode =
       err.status === 401 ? 'AUTH' : err.status === 413 ? 'VALIDATION' : 'STORAGE';
-    return new ContratoUploadError(err.message, code);
+    const e = new ContratoUploadError(err.message, code);
+    if (etapa) {
+      logContratoErro(etapa, e.message, {
+        codigo: code,
+        httpStatus: err.status,
+        corpo: err.body,
+      });
+    }
+    return e;
   }
   if (err instanceof Error) {
-    if (/sessão expirada|login/i.test(err.message)) {
-      return new ContratoUploadError(err.message, 'AUTH');
-    }
-    if (/pdf|arquivo|tamanho|muito grande|inválido/i.test(err.message)) {
-      return new ContratoUploadError(err.message, 'VALIDATION');
-    }
-    if (/blob|armazenamento|storage/i.test(err.message)) {
-      return new ContratoUploadError(err.message, 'STORAGE');
-    }
-    return new ContratoUploadError(err.message, 'NETWORK');
+    let code: ContratoUploadErrorCode = 'NETWORK';
+    if (/sessão expirada|login/i.test(err.message)) code = 'AUTH';
+    else if (/pdf|arquivo|tamanho|muito grande|inválido/i.test(err.message)) code = 'VALIDATION';
+    else if (/blob|armazenamento|storage/i.test(err.message)) code = 'STORAGE';
+    const e = new ContratoUploadError(err.message, code);
+    if (etapa) logContratoErro(etapa, e.message, { codigo: code, ...extrairErro(err) });
+    return e;
   }
-  return new ContratoUploadError('Erro ao enviar PDF', 'NETWORK');
+  const e = new ContratoUploadError('Erro ao enviar PDF', 'NETWORK');
+  if (etapa) logContratoErro(etapa, e.message, { valor: String(err) });
+  return e;
 }
 
 export function formatContratoUploadError(err: unknown): string {
@@ -68,7 +83,9 @@ export function formatContratoUploadError(err: unknown): string {
 export async function ensureContratoDraft(input: EnsureContratoDraftInput): Promise<ContratoTemplate> {
   const titulo = input.titulo.trim();
   if (!titulo) {
-    throw new ContratoUploadError('Informe o título do contrato.', 'VALIDATION');
+    const msg = 'Informe o título do contrato.';
+    logContratoErro('upload:rascunho', msg, { motivo: 'titulo-vazio' });
+    throw new ContratoUploadError(msg, 'VALIDATION');
   }
 
   const current = input.currentContrato;
@@ -84,7 +101,7 @@ export async function ensureContratoDraft(input: EnsureContratoDraftInput): Prom
       try {
         return await api.patch<ContratoTemplate>(`/api/contratos/${current.id}`, patch);
       } catch (err) {
-        throw classifyError(err);
+        throw classifyError(err, 'upload:rascunho-patch');
       }
     }
     return { ...current, titulo } as ContratoTemplate;
@@ -97,7 +114,7 @@ export async function ensureContratoDraft(input: EnsureContratoDraftInput): Prom
       sourceType: input.sourceType === 'pdf' ? 'text' : input.sourceType,
     });
   } catch (err) {
-    throw classifyError(err);
+    throw classifyError(err, 'upload:rascunho-post');
   }
 }
 
@@ -128,14 +145,26 @@ async function uploadViaMultipart(
     throw new ContratoUploadError('Sessão expirada. Faça login novamente.', 'AUTH');
   }
   if (!res.ok) {
-    throw new ContratoUploadError(
-      typeof data.error === 'string' ? data.error : 'Falha no upload do PDF.',
-      res.status === 413 ? 'VALIDATION' : 'STORAGE',
-    );
+    const msg = typeof data.error === 'string' ? data.error : 'Falha no upload do PDF.';
+    logContratoErro('upload:multipart', msg, {
+      contratoId,
+      httpStatus: res.status,
+      corpo: data,
+      arquivo: file.name,
+      bytes: file.size,
+    });
+    throw new ContratoUploadError(msg, res.status === 413 ? 'VALIDATION' : 'STORAGE');
   }
   if (!data.id) {
-    throw new ContratoUploadError('Resposta inválida do servidor.', 'NETWORK');
+    const msg = 'Resposta inválida do servidor.';
+    logContratoErro('upload:multipart', msg, { contratoId, corpo: data });
+    throw new ContratoUploadError(msg, 'NETWORK');
   }
+  logContratoInfo('upload:multipart-ok', {
+    contratoId,
+    pdfPath: resumirPdfPath(data.pdfPath),
+    pageCount: data.pageCount,
+  });
   return data;
 }
 
@@ -153,26 +182,48 @@ export async function uploadContratoTemplatePdf(
   }
 
   try {
-    const { strategy, multipartMaxBytes } = await getUploadStrategy();
+    const { strategy, multipartMaxBytes, warning } = await getUploadStrategy();
+    logContratoInfo('upload:inicio', {
+      contratoId,
+      arquivo: file.name,
+      bytes: file.size,
+      estrategia: strategy,
+      aviso: warning,
+    });
 
     if (strategy === 'blob') {
       const { blobUrl } = await uploadContratoPdfToBlob(contratoId, file, {
         onProgress,
         signal,
       });
+      logContratoInfo('upload:blob-put-ok', {
+        contratoId,
+        blobUrl: resumirPdfPath(blobUrl),
+      });
       const finalized = await finalizeContratoPdfUpload(
         contratoId,
         { blobUrl, fileName: file.name, fileSize: file.size },
         signal,
       );
-      return finalized as unknown as UploadContratoTemplatePdfResult;
+      const result = finalized as unknown as UploadContratoTemplatePdfResult;
+      logContratoInfo('upload:blob-finalize-ok', {
+        contratoId,
+        pdfPath: resumirPdfPath(result.pdfPath),
+        pageCount: result.pageCount,
+      });
+      return result;
     }
 
     if (import.meta.env.PROD && file.size > multipartMaxBytes) {
-      throw new ContratoUploadError(
-        'PDF muito grande para o modo de upload atual. Contate o suporte (armazenamento Blob não configurado).',
-        'STORAGE',
-      );
+      const msg =
+        'PDF muito grande para o modo de upload atual. Contate o suporte (armazenamento Blob não configurado).';
+      logContratoErro('upload:estrategia', msg, {
+        contratoId,
+        bytes: file.size,
+        limiteMultipart: multipartMaxBytes,
+        estrategia: strategy,
+      });
+      throw new ContratoUploadError(msg, 'STORAGE');
     }
 
     onProgress?.(50);
@@ -180,7 +231,7 @@ export async function uploadContratoTemplatePdf(
     onProgress?.(100);
     return result;
   } catch (err) {
-    throw classifyError(err);
+    throw classifyError(err, 'upload:geral');
   }
 }
 
@@ -189,6 +240,6 @@ export async function removeContratoTemplatePdf(contratoId: string): Promise<Con
   try {
     return await api.delete<ContratoTemplate>(`/api/contratos/${contratoId}/pdf`);
   } catch (err) {
-    throw classifyError(err);
+    throw classifyError(err, 'upload:remover-pdf');
   }
 }

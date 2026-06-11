@@ -9,6 +9,7 @@ import { api, apiFetch, ApiError } from '../lib/apiClient';
 import { loadContratoPreviewPdf } from '../lib/client/contratoPreviewLoader';
 import type { PdfPreviewSource } from '../lib/pdfPreview';
 import { useContratoPdfUpload } from '../hooks/useContratoPdfUpload';
+import { extrairErro, logContratoErro } from '../lib/client/contratoDiagnostics';
 import type { Marcador } from '../lib/documents/positioningTypes';
 import {
   defaultTemplateSigners,
@@ -108,6 +109,11 @@ export default function Contratos() {
       if (isStale()) return;
 
       if (!result.ok) {
+        logContratoErro('preview:ui', result.message, {
+          contratoId,
+          httpStatus: result.status,
+          sourceType: opts?.sourceType,
+        });
         setPreviewFile(null);
         loadedPreviewForRef.current = null;
         setPreviewError(result.message);
@@ -122,13 +128,18 @@ export default function Contratos() {
       if (e instanceof DOMException && e.name === 'AbortError') return;
       setPreviewFile(null);
       loadedPreviewForRef.current = null;
-      if (e instanceof ApiError && e.status === 401) {
-        setPreviewError('Sessão expirada. Faça login novamente.');
-      } else {
-        setPreviewError(
-          e instanceof Error ? e.message : 'Não foi possível carregar o preview do contrato.',
-        );
-      }
+      const msg =
+        e instanceof ApiError && e.status === 401
+          ? 'Sessão expirada. Faça login novamente.'
+          : e instanceof Error
+            ? e.message
+            : 'Não foi possível carregar o preview do contrato.';
+      logContratoErro('preview:ui-excecao', msg, {
+        contratoId,
+        sourceType: opts?.sourceType,
+        ...extrairErro(e),
+      });
+      setPreviewError(msg);
     } finally {
       if (!isStale() && previewAbortRef.current === controller) {
         setPreviewLoading(false);

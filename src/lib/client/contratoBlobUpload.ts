@@ -1,4 +1,5 @@
 import { apiFetch } from '../apiClient';
+import { logContratoErro, resumirPdfPath } from './contratoDiagnostics';
 
 export type ContratoBlobUploadResult = {
   blobUrl: string;
@@ -96,7 +97,15 @@ async function requestClientToken(
   }
 
   if (!res.ok || !parsed?.clientToken) {
-    throw new Error(mapBlobTokenError(res.status, parsed));
+    const msg = mapBlobTokenError(res.status, parsed);
+    logContratoErro('upload:blob-token', msg, {
+      contratoId,
+      httpStatus: res.status,
+      corpo: parsed,
+      arquivo: file.name,
+      bytes: file.size,
+    });
+    throw new Error(msg);
   }
 
   return parsed.clientToken;
@@ -153,12 +162,16 @@ function putToBlobWithProgress(
       } catch {
         detail = xhr.responseText?.slice(0, 200) || '';
       }
-      reject(new Error(detail || `Falha ao enviar PDF (${xhr.status}).`));
+      const msg = detail || `Falha ao enviar PDF (${xhr.status}).`;
+      logContratoErro('upload:blob-put', msg, { httpStatus: xhr.status, pathname, detalhe: detail });
+      reject(new Error(msg));
     };
 
     xhr.onerror = () => {
       signal?.removeEventListener('abort', onAbort);
-      reject(new Error('Falha na conexão durante o upload do PDF.'));
+      const msg = 'Falha na conexão durante o upload do PDF.';
+      logContratoErro('upload:blob-put-rede', msg, { pathname });
+      reject(new Error(msg));
     };
 
     xhr.onabort = () => {
@@ -208,10 +221,21 @@ export async function finalizeContratoPdfUpload(
   });
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
   if (res.status === 401) {
-    throw new Error('Sessão expirada. Faça login novamente.');
+    const msg = 'Sessão expirada. Faça login novamente.';
+    logContratoErro('upload:blob-finalize', msg, { contratoId, httpStatus: 401 });
+    throw new Error(msg);
   }
   if (!res.ok) {
-    throw new Error(typeof data.error === 'string' ? data.error : 'Falha ao finalizar upload do PDF.');
+    const msg = typeof data.error === 'string' ? data.error : 'Falha ao finalizar upload do PDF.';
+    logContratoErro('upload:blob-finalize', msg, {
+      contratoId,
+      httpStatus: res.status,
+      corpo: data,
+      blobUrl: resumirPdfPath(payload.blobUrl),
+      arquivo: payload.fileName,
+      bytes: payload.fileSize,
+    });
+    throw new Error(msg);
   }
   return data;
 }

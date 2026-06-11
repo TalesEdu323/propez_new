@@ -8,6 +8,12 @@ import {
   removeContratoTemplatePdf,
   uploadContratoTemplatePdf,
 } from '../lib/client/contratoUploadService';
+import {
+  extrairErro,
+  logContratoErro,
+  logContratoInfo,
+  resumirPdfPath,
+} from '../lib/client/contratoDiagnostics';
 
 export type UseContratoPdfUploadOptions = {
   currentContrato: Partial<ContratoTemplate> | null;
@@ -61,6 +67,12 @@ export function useContratoPdfUpload({
       setPendingFileName(file.name);
       setUploading(true);
 
+      logContratoInfo('upload:ui-inicio', {
+        arquivo: file.name,
+        bytes: file.size,
+        contratoId: currentContrato?.id,
+      });
+
       try {
         const saved = await ensureContratoDraft({
           titulo,
@@ -109,9 +121,23 @@ export function useContratoPdfUpload({
             : [updated, ...contratos.filter((c): c is ContratoTemplate => !!c?.id)],
         );
 
+        logContratoInfo('upload:ui-ok', {
+          contratoId: updated.id,
+          pdfPath: resumirPdfPath(updated.pdfPath),
+          pageCount: updated.pageCount,
+          pdfFileName: updated.pdfFileName,
+        });
+
         await onUploadSuccess?.(updated);
       } catch (err) {
-        reportError(formatContratoUploadError(err));
+        const msg = formatContratoUploadError(err);
+        logContratoErro('upload:ui-falhou', msg, {
+          arquivo: file.name,
+          bytes: file.size,
+          contratoId: currentContrato?.id,
+          ...extrairErro(err),
+        });
+        reportError(msg);
       } finally {
         setUploading(false);
       }

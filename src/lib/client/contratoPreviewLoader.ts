@@ -2,6 +2,13 @@ import { apiFetch } from '../apiClient';
 import { blobToPdfPreviewSource, isPdfBuffer } from '../pdfPreview';
 import type { PdfPreviewSource } from '../pdfPreview';
 import { buildPdfViewUrl, contratoHasRemotePdf } from '../pdfViewUrl';
+import {
+  extrairErro,
+  logContratoAviso,
+  logContratoErro,
+  logContratoInfo,
+  resumirPdfPath,
+} from './contratoDiagnostics';
 
 export type LoadContratoPreviewOpts = {
   contratoId: string;
@@ -14,48 +21,42 @@ export type LoadContratoPreviewResult =
   | { ok: true; source: PdfPreviewSource }
   | { ok: false; status?: number; message: string };
 
-async function blobToPreviewResult(blob: Blob): Promise<LoadContratoPreviewResult> {
+async function blobToPreviewResult(
+  blob: Blob,
+  origem: 'cdn' | 'api',
+): Promise<LoadContratoPreviewResult> {
   if (blob.size < 5) {
-    return { ok: false, message: 'O servidor não retornou um PDF válido.' };
+    const msg = 'O servidor não retornou um PDF válido.';
+    logContratoErro('preview:pdf-vazio', msg, { origem, bytes: blob.size });
+    return { ok: false, message: msg };
   }
   const buf = await blob.arrayBuffer();
   if (!isPdfBuffer(buf)) {
-    return {
-      ok: false,
-      message: 'PDF não encontrado ou inválido. Envie o arquivo novamente na etapa de conteúdo.',
-    };
+    const msg = 'PDF não encontrado ou inválido. Envie o arquivo novamente na etapa de conteúdo.';
+    logContratoErro('preview:nao-e-pdf', msg, { origem, bytes: blob.size });
+    return { ok: false, message: msg };
   }
   const source = await blobToPdfPreviewSource(blob);
   if (!source) {
-    return { ok: false, message: 'O servidor não retornou um PDF válido.' };
+    const msg = 'O servidor não retornou um PDF válido.';
+    logContratoErro('preview:parse-falhou', msg, { origem, bytes: blob.size });
+    return { ok: false, message: msg };
   }
+  logContratoInfo('preview:ok', { origem, bytes: blob.size });
   return { ok: true, source };
 }
 
-/** Carrega PDF de preview: URL Blob direta ou rotas API legadas. */
-export async function loadContratoPreviewPdf(
-  opts: LoadContratoPreviewOpts,
+async function fetchPreviewFromApi(
+  contratoId: string,
+  sourceType: 'text' | 'pdf' | undefined,
+  signal: AbortSignal | undefined,
+  motivoFallback?: string,
 ): Promise<LoadContratoPreviewResult> {
-  const { contratoId, pdfPath, sourceType, signal } = opts;
-
-  if (pdfPath && contratoHasRemotePdf(pdfPath)) {
-    const res = await fetch(buildPdfViewUrl(pdfPath), {
-      method: 'GET',
-      cache: 'no-store',
-      signal,
-    });
-    if (!res.ok) {
-      return {
-        ok: false,
-        status: res.status,
-        message:
-          res.status === 404
-            ? 'PDF não encontrado no armazenamento. Envie o arquivo novamente.'
-            : 'Não foi possível carregar o PDF do armazenamento.',
-      };
-    }
-    return blobToPreviewResult(await res.blob());
-  }
+  logContratoInfo('preview:api-inicio', {
+    contratoId,
+    sourceType,
+    motivoFallback,
+  });
 
   const fetchPdf = async (path: string) => {
     const run = () =>
@@ -69,24 +70,90 @@ export async function loadContratoPreviewPdf(
     return res;
   };
 
-  let res = await fetchPdf(`/api/contratos/${contratoId}/preview-pdf`);
+  const previewPath = `/api/contratos/${contratoId}/preview-pdf`;
+  let res = await fetchPdf(previewPath);
+  let rotaUsada = previewPath;
+
   if (!res.ok && sourceType === 'pdf') {
-    res = await fetchPdf(`/api/contratos/${contratoId}/pdf`);
+    rotaUsada = `/api/contratos/${contratoId}/pdf`;
+    res = await fetchPdf(rotaUsada);
   }
 
   if (!res.ok) {
     if (res.status === 401) {
-      return { ok: false, status: 401, message: 'Sessão expirada. Faça login novamente.' };
+      const msg = 'Sessão expirada. Faça login novamente.';
+      logContratoErro('preview:api-401', msg, { contratoId, rota: rotaUsada });
+      return { ok: false, status: 401, message: msg };
     }
     const err = await res.json().catch(() => ({}));
     const msg =
       typeof err === 'object' && err && 'error' in err && typeof err.error === 'string'
         ? err.error
         : 'Não foi possível carregar o preview do contrato.';
+    logContratoErro('preview:api-erro', msg, {
+      contratoId,
+      rota: rotaUsada,
+      httpStatus: res.status,
+      corpo: err,
+      motivoFallback,
+    });
     return { ok: false, status: res.status, message: msg };
   }
 
-  return blobToPreviewResult(await res.blob());
+  return blobToPreviewResult(await res.blob(), 'api');
+}
+
+/** Carrega PDF de preview: tenta CDN Blob e faz fallback na API autenticada. */
+export async function loadContratoPreviewPdf(
+  opts: LoadContratoPreviewOpts,
+): Promise<LoadContratoPreviewResult> {
+  const { contratoId, pdfPath, sourceType, signal } = opts;
+
+  logContratoInfo('preview:inicio', {
+    contratoId,
+    sourceType,
+    pdfPath: resumirPdfPath(pdfPath),
+    viaCdn: Boolean(pdfPath && contratoHasRemotePdf(pdfPath)),
+  });
+
+  if (pdfPath && contratoHasRemotePdf(pdfPath)) {
+    const cdnUrl = buildPdfViewUrl(pdfPath);
+    try {
+      const res = await fetch(cdnUrl, {
+        method: 'GET',
+        cache: 'no-store',
+        signal,
+      });
+      if (res.ok) {
+        const fromCdn = await blobToPreviewResult(await res.blob(), 'cdn');
+        if (fromCdn.ok) return fromCdn;
+        logContratoAviso('preview:cdn-invalido', 'CDN retornou dados que não são PDF válido', {
+          contratoId,
+          pdfPath: resumirPdfPath(pdfPath),
+        });
+      } else {
+        logContratoAviso('preview:cdn-http', `CDN respondeu HTTP ${res.status}`, {
+          contratoId,
+          pdfPath: resumirPdfPath(pdfPath),
+          httpStatus: res.status,
+        });
+      }
+    } catch (err) {
+      logContratoAviso('preview:cdn-rede', 'Falha ao buscar PDF no CDN — tentando API', {
+        contratoId,
+        pdfPath: resumirPdfPath(pdfPath),
+        ...extrairErro(err),
+      });
+    }
+    return fetchPreviewFromApi(
+      contratoId,
+      sourceType,
+      signal,
+      'CDN indisponível ou resposta inválida',
+    );
+  }
+
+  return fetchPreviewFromApi(contratoId, sourceType, signal);
 }
 
 /** Indica se o preview deve usar CDN Blob em vez da API. */

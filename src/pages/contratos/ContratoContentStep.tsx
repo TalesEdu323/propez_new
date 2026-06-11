@@ -67,6 +67,20 @@ export function ContratoContentStep({
     onUploadPdf(file);
   };
 
+  const pdfEnviadoComSucesso =
+    currentContrato.sourceType === 'pdf' &&
+    !uploading &&
+    !uploadError &&
+    !!(
+      currentContrato.pdfFileName ||
+      currentContrato.pdfPath ||
+      (currentContrato.pageCount ?? 0) > 0
+    );
+
+  const mostrarPreviewPdf = pdfEnviadoComSucesso;
+  const mostrarPreviewTexto =
+    sourceType === 'text' && (previewLoading || !!previewFile || !!previewError);
+
   return (
     <div className="max-w-5xl mx-auto w-full p-6 space-y-6">
       {sourceType === 'text' && (
@@ -110,18 +124,6 @@ export function ContratoContentStep({
 
       {sourceType === 'pdf' && (
         <>
-          <ContratoPdfUploadZone
-            uploading={uploading}
-            fileName={currentContrato.pdfFileName || pendingFileName}
-            pageCount={currentContrato.pageCount ?? 0}
-            fileSizeBytes={pendingFileSize}
-            uploadError={uploadError}
-            uploadProgress={uploadProgress}
-            onSelectFile={handleSelectFile}
-            onValidationError={onUploadValidationError}
-            onRemove={onRemovePdf}
-          />
-
           <div>
             <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">
               Título do Modelo
@@ -137,10 +139,22 @@ export function ContratoContentStep({
               Preenchido automaticamente pelo nome do arquivo. Você pode editar antes de salvar.
             </p>
           </div>
+
+          <ContratoPdfUploadZone
+            uploading={uploading}
+            fileName={currentContrato.pdfFileName || pendingFileName}
+            pageCount={currentContrato.pageCount ?? 0}
+            fileSizeBytes={pendingFileSize}
+            uploadError={uploadError}
+            uploadProgress={uploadProgress}
+            onSelectFile={handleSelectFile}
+            onValidationError={onUploadValidationError}
+            onRemove={onRemovePdf}
+          />
         </>
       )}
 
-      {(sourceType === 'pdf' || previewLoading || previewFile || previewError) && (
+      {(mostrarPreviewPdf || mostrarPreviewTexto) && (
         <div>
           <h3 className="text-sm font-bold text-zinc-900 mb-2">Preview do documento</h3>
           <div
@@ -180,10 +194,6 @@ export function ContratoContentStep({
                   <p className="p-8 text-sm text-zinc-500">Não foi possível exibir o preview.</p>
                 }
               />
-            ) : sourceType === 'pdf' ? (
-              <p className="p-8 text-center text-sm text-zinc-500">
-                Envie um PDF acima para visualizar a primeira página aqui.
-              </p>
             ) : null}
           </div>
         </div>
