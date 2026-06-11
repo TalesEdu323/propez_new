@@ -26,6 +26,7 @@ import {
 import type { ProposalFlowConfig } from '../types/proposalFlow';
 import { parseProposalFlow } from '../types/proposalFlow';
 import { api, ApiError } from './apiClient';
+import { mergeModeloAfterSave } from './mergeModeloAfterSave';
 import { normalizeUuidOrNull } from './normalizeUuid';
 import { notifyStoreSaveError } from './storeSaveFeedback';
 import {
@@ -539,26 +540,6 @@ function replaceCacheItem<T extends { id: string }>(list: T[], oldId: string, ne
 
 function removeCacheItem<T extends { id: string }>(list: T[], id: string): T[] {
   return list.filter((i) => i.id !== id);
-}
-
-function mergeModeloAfterSave(local: ModeloProposta, api: ModeloProposta): ModeloProposta {
-  return {
-    ...local,
-    id: api.id,
-    nome: api.nome ?? local.nome,
-    servicos: api.servicos?.length ? api.servicos : local.servicos,
-    contratoId: api.contratoId ?? local.contratoId,
-    chavePix: api.chavePix ?? local.chavePix,
-    linkPagamento: api.linkPagamento ?? local.linkPagamento,
-    whatsappComprovante: api.whatsappComprovante ?? local.whatsappComprovante,
-    tier: api.tier ?? local.tier,
-    fluxo: api.fluxo ?? local.fluxo,
-    data_criacao: api.data_criacao ?? local.data_criacao,
-    elementos: Array.isArray(api.elementos) ? api.elementos : local.elementos,
-    pageLayout: api.pageLayout ?? local.pageLayout,
-    contratoTexto: api.contratoTexto !== undefined ? api.contratoTexto : local.contratoTexto,
-    signatureConfig: api.signatureConfig !== undefined ? api.signatureConfig : local.signatureConfig,
-  };
 }
 
 const MODELO_RETRY_DELAYS_MS = [0, 2000, 5000, 8000];

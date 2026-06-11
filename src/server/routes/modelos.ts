@@ -204,7 +204,7 @@ export function createModelosRouter(deps: {
              fluxo = EXCLUDED.fluxo,
              signature_config = EXCLUDED.signature_config
            WHERE modelos_propostas.organization_id = EXCLUDED.organization_id
-           RETURNING ${MODEL_SELECT}`,
+           RETURNING ${MODEL_SUMMARY_SELECT}`,
           [d.id, req.auth.orgId, ...insertParams],
         )
         if (!upsertRows[0]) {
@@ -217,7 +217,7 @@ export function createModelosRouter(deps: {
              (organization_id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
               chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config)
            VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::uuid[], $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb)
-           RETURNING ${MODEL_SELECT}`,
+           RETURNING ${MODEL_SUMMARY_SELECT}`,
           [req.auth.orgId, ...insertParams],
         )
         rows = insertRows
@@ -231,7 +231,7 @@ export function createModelosRouter(deps: {
         idempotent: Boolean(d.id),
       })
 
-      return res.status(201).json(serializeModelo(rows[0]))
+      return res.status(201).json(serializeModeloSummary(rows[0]))
     } catch (err) {
       logModeloPgError('POST', err)
       const { status, error } = modeloErrorResponse(err)
@@ -264,14 +264,21 @@ export function createModelosRouter(deps: {
       }
       const d = parsed.data
 
-      const patchContratoId = 'contratoId' in d ? (d.contratoId ?? null) : undefined
-      const patchContratoTexto =
-        'contratoId' in d || 'contratoTexto' in d
-          ? resolveContratoTextoForPersist(
-              patchContratoId !== undefined ? patchContratoId : d.contratoId,
-              'contratoTexto' in d ? d.contratoTexto : null,
-            )
-          : undefined
+      let patchContratoTexto: string | null | undefined
+      if ('contratoId' in d || 'contratoTexto' in d) {
+        let effectiveContratoId = 'contratoId' in d ? (d.contratoId ?? null) : undefined
+        if (effectiveContratoId === undefined) {
+          const { rows: existingRows } = await pool.query<{ contrato_id: string | null }>(
+            `SELECT contrato_id FROM modelos_propostas WHERE organization_id = $1 AND id = $2`,
+            [req.auth.orgId, req.params.id],
+          )
+          effectiveContratoId = existingRows[0]?.contrato_id ?? null
+        }
+        patchContratoTexto = resolveContratoTextoForPersist(
+          effectiveContratoId,
+          'contratoTexto' in d ? d.contratoTexto : null,
+        )
+      }
 
       const patchPageLayout =
         d.pageLayout !== undefined

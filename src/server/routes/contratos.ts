@@ -340,7 +340,7 @@ export function createContratosRouter(deps: {
       )
       return res.json({ ...serializeContrato(updated), pageCount })
     } catch (err) {
-      console.error('[contratos/upload-finalize] erro:', err)
+      console.error('[contratos/upload-finalize] erro:', { blobUrl, err })
       return res.status(400).json({ error: uploadPdfErrorMessage(err) })
     }
   })

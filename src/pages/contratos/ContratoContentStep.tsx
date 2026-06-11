@@ -22,6 +22,7 @@ export interface ContratoContentStepProps {
   previewFile: PdfPreviewSource | null;
   previewLoading: boolean;
   previewError: string | null;
+  onReloadPreview?: () => void;
 }
 
 export function ContratoContentStep({
@@ -39,6 +40,7 @@ export function ContratoContentStep({
   previewFile,
   previewLoading,
   previewError,
+  onReloadPreview,
 }: ContratoContentStepProps) {
   const previewWrapRef = useRef<HTMLDivElement>(null);
   const [previewWidth, setPreviewWidth] = useState(560);
@@ -142,6 +144,15 @@ export function ContratoContentStep({
             {previewError ? (
               <div className="p-8 text-center space-y-3 max-w-md mx-auto">
                 <p className="text-sm text-zinc-600">{previewError}</p>
+                {onReloadPreview && (
+                  <button
+                    type="button"
+                    onClick={onReloadPreview}
+                    className="text-sm font-medium text-zinc-900 underline hover:no-underline"
+                  >
+                    Recarregar preview
+                  </button>
+                )}
                 {sourceType === 'pdf' &&
                   (/pdf|envie|perdido|não encontrado/i.test(previewError) ||
                     previewError.includes('etapa de conteúdo')) && (

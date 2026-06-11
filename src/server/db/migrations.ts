@@ -35,8 +35,17 @@ export async function runMigrations(pool: Pool, sqlDir: string): Promise<void> {
   }
 
   await ensureMigrationTable(pool)
-  const applied = await getAppliedMigrations(pool)
 
+  const { rows: countRows } = await pool.query<{ c: number }>(
+    `SELECT COUNT(*)::int AS c FROM schema_migrations`,
+  )
+  const appliedCount = countRows[0]?.c ?? 0
+  if (files.length > 0 && appliedCount === files.length) {
+    console.log(`[migrations] skip all (${files.length} applied, count fast-path)`)
+    return
+  }
+
+  const applied = await getAppliedMigrations(pool)
   const pending = files.filter((f) => !applied.has(f))
   if (pending.length === 0) {
     console.log(`[migrations] skip all (${files.length} applied, fast-path)`)
