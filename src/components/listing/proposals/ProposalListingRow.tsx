@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Check, ChevronRight, Clock, MoreVertical, X } from 'lucide-react';
+import { Check, ChevronRight, Clock, Copy, Trash2, X } from 'lucide-react';
 import type { Proposta } from '../../../lib/store';
 import { formatBRL } from '../../../lib/format';
 import { getFlowStepLabels, getProposalListingStatus } from '../../../lib/proposalSubStatus';
@@ -9,13 +9,21 @@ interface ProposalListingRowProps {
   proposta: Proposta;
   servicosLabel: string;
   onOpen: (id: string) => void;
-  onMenuAction?: (action: 'delete', id: string) => void;
+  onDelete?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
 }
 
-export function ProposalListingRow({ proposta, servicosLabel, onOpen, onMenuAction }: ProposalListingRowProps) {
+export function ProposalListingRow({
+  proposta,
+  servicosLabel,
+  onOpen,
+  onDelete,
+  onDuplicate,
+}: ProposalListingRowProps) {
   const status = getProposalListingStatus(proposta);
   const colors = getListingStatusColors(status.tone);
   const steps = getFlowStepLabels(proposta);
+  const hasActions = onDelete || onDuplicate;
 
   return (
     <motion.div
@@ -83,17 +91,35 @@ export function ProposalListingRow({ proposta, servicosLabel, onOpen, onMenuActi
         <ChevronRight className="hidden h-4 w-4 shrink-0 text-zinc-300 group-hover:text-zinc-600 sm:block" />
       </div>
 
-      {onMenuAction && (
-        <button
-          type="button"
-          className="shrink-0 self-center p-3 text-zinc-300 hover:text-red-500"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (window.confirm('Excluir esta proposta?')) onMenuAction('delete', proposta.id);
-          }}
-        >
-          <MoreVertical className="h-4 w-4" />
-        </button>
+      {hasActions && (
+        <div className="flex shrink-0 items-center gap-1 self-center pr-2">
+          {onDuplicate && (
+            <button
+              type="button"
+              className="p-3 text-zinc-400 hover:text-zinc-900"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDuplicate(proposta.id);
+              }}
+              title="Duplicar"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              className="p-3 text-zinc-300 hover:text-red-500"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(proposta.id);
+              }}
+              title="Excluir"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       )}
     </motion.div>
   );

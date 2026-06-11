@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, FileText } from 'lucide-react';
 import { store } from '../lib/store';
+import { duplicateProposta } from '../lib/duplicateEntity';
 import { motion } from 'motion/react';
 import { usePropostas, useServicos } from '../hooks/useStoreEntity';
 import type { NavigateFn } from '../types/navigation';
@@ -38,8 +39,16 @@ export default function Propostas({ navigate }: { navigate: NavigateFn }) {
   });
 
   const handleDelete = (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta proposta?')) return;
     store.savePropostas(propostas.filter((p) => p.id !== id));
     if (activeId === id) setActiveId(null);
+  };
+
+  const handleDuplicate = (id: string) => {
+    if (!window.confirm('Duplicar esta proposta? Será criada uma cópia com status pendente.')) return;
+    const source = propostas.find((p) => p.id === id);
+    if (!source) return;
+    store.savePropostas([duplicateProposta(source), ...propostas]);
   };
 
   const containerVariants = {
@@ -149,9 +158,8 @@ export default function Propostas({ navigate }: { navigate: NavigateFn }) {
                         servicosLabel={getServicosNomes(proposta.servicos)}
                         index={index}
                         onOpen={setActiveId}
-                        onMenuAction={(action, id) => {
-                          if (action === 'delete') handleDelete(id);
-                        }}
+                        onDelete={handleDelete}
+                        onDuplicate={handleDuplicate}
                       />
                     ) : (
                       <ProposalListingRow
@@ -159,9 +167,8 @@ export default function Propostas({ navigate }: { navigate: NavigateFn }) {
                         proposta={proposta}
                         servicosLabel={getServicosNomes(proposta.servicos)}
                         onOpen={setActiveId}
-                        onMenuAction={(action, id) => {
-                          if (action === 'delete') handleDelete(id);
-                        }}
+                        onDelete={handleDelete}
+                        onDuplicate={handleDuplicate}
                       />
                     ),
                   )}

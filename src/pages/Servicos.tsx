@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Search, Edit2, Trash2, LayoutTemplate } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, LayoutTemplate, Copy } from 'lucide-react';
 import { store, Servico } from '../lib/store';
+import { duplicateServico } from '../lib/duplicateEntity';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatBRL } from '../lib/format';
 import { createId } from '../lib/ids';
@@ -50,7 +51,15 @@ export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn
   };
 
   const handleDelete = (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este serviço?')) return;
     store.saveServicos(servicos.filter(s => s.id !== id));
+  };
+
+  const handleDuplicate = (id: string) => {
+    if (!window.confirm('Duplicar este serviço?')) return;
+    const source = servicos.find((s) => s.id === id);
+    if (!source) return;
+    store.saveServicos([duplicateServico(source), ...servicos]);
   };
 
   const openModal = (servico?: Servico) => {
@@ -217,6 +226,13 @@ export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button 
+                                onClick={() => handleDuplicate(servico.id)}
+                                className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-zinc-900 hover:bg-white hover:shadow-md rounded-xl transition-all border border-transparent hover:border-zinc-100"
+                                title="Duplicar"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <button 
                                 onClick={() => handleDelete(servico.id)}
                                 className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
                                 title="Excluir"
@@ -271,6 +287,13 @@ export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn
                           className="flex-1 bg-zinc-900 text-white py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                           <Edit2 className="w-4 h-4" /> Editar
+                        </button>
+                        <button 
+                          onClick={() => handleDuplicate(servico.id)}
+                          className="w-12 h-12 flex items-center justify-center text-zinc-600 bg-zinc-50 rounded-xl border border-zinc-100 active:scale-95 transition-all"
+                          title="Duplicar"
+                        >
+                          <Copy className="w-4 h-4" />
                         </button>
                         <button 
                           onClick={() => handleDelete(servico.id)}

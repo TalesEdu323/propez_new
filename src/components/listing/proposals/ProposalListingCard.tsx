@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Check, ChevronRight, Clock, FileText, MoreVertical, X } from 'lucide-react';
+import { Check, ChevronRight, Clock, Copy, FileText, Trash2, X } from 'lucide-react';
 import type { Proposta } from '../../../lib/store';
 import { formatBRL } from '../../../lib/format';
 import { getFlowStepLabels, getProposalListingStatus } from '../../../lib/proposalSubStatus';
@@ -10,7 +10,8 @@ interface ProposalListingCardProps {
   servicosLabel: string;
   index?: number;
   onOpen: (id: string) => void;
-  onMenuAction?: (action: 'delete' | 'toggle-approve', id: string) => void;
+  onDelete?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
 }
 
 export function ProposalListingCard({
@@ -18,11 +19,13 @@ export function ProposalListingCard({
   servicosLabel,
   index = 0,
   onOpen,
-  onMenuAction,
+  onDelete,
+  onDuplicate,
 }: ProposalListingCardProps) {
   const status = getProposalListingStatus(proposta);
   const colors = getListingStatusColors(status.tone);
   const steps = getFlowStepLabels(proposta);
+  const hasActions = onDelete || onDuplicate;
 
   return (
     <motion.div
@@ -49,20 +52,34 @@ export function ProposalListingCard({
             <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-100 bg-zinc-50 transition-colors group-hover:bg-zinc-900 group-hover:text-white">
               <FileText className="h-5 w-5" />
             </div>
-            {onMenuAction && (
-              <div className="relative opacity-0 transition-opacity group-hover:opacity-100">
-                <button
-                  type="button"
-                  className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-50 hover:text-zinc-900"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const action = window.confirm('Excluir esta proposta?') ? 'delete' : null;
-                    if (action) onMenuAction(action, proposta.id);
-                  }}
-                  title="Mais ações"
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </button>
+            {hasActions && (
+              <div className="relative flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                {onDuplicate && (
+                  <button
+                    type="button"
+                    className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-50 hover:text-zinc-900"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDuplicate(proposta.id);
+                    }}
+                    title="Duplicar"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    type="button"
+                    className="rounded-xl p-2 text-zinc-300 hover:bg-red-50 hover:text-red-500"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(proposta.id);
+                    }}
+                    title="Excluir"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, FileText } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, FileText, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { store } from '../lib/store';
+import { duplicateModelo } from '../lib/duplicateEntity';
 import { useModelos } from '../hooks/useStoreEntity';
 import { formatDateBR } from '../lib/format';
 import type { NavigateFn, ModelosTab } from '../types/navigation';
@@ -32,6 +33,13 @@ export default function Modelos({
     if (confirm('Tem certeza que deseja excluir este modelo?')) {
       store.saveModelos(modelos.filter((m) => m.id !== id));
     }
+  };
+
+  const handleDuplicate = (id: string) => {
+    if (!window.confirm('Duplicar este modelo?')) return;
+    const source = modelos.find((m) => m.id === id);
+    if (!source) return;
+    store.saveModelos([duplicateModelo(source), ...modelos]);
   };
 
   const filteredModelos = modelos.filter((m) =>
@@ -228,6 +236,13 @@ export default function Modelos({
                                   <Edit2 className="w-4 h-4" />
                                 </button>
                                 <button
+                                  onClick={() => handleDuplicate(modelo.id)}
+                                  className="p-2.5 text-zinc-300 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-all"
+                                  title="Duplicar"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </button>
+                                <button
                                   onClick={() => handleDelete(modelo.id)}
                                   className="p-2.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                                   title="Excluir"
@@ -274,6 +289,17 @@ export default function Modelos({
                           className="flex-1 text-[9px] font-bold uppercase tracking-widest text-zinc-600"
                         >
                           Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDuplicate(modelo.id);
+                          }}
+                          className="p-2 text-zinc-400 hover:bg-zinc-50 rounded-lg"
+                          title="Duplicar"
+                        >
+                          <Copy className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
