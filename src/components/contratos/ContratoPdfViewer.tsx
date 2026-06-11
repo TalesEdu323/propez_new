@@ -1,60 +1,78 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Document, Page } from 'react-pdf';
 import { setupPdfWorker } from '../../lib/pdfSetup';
+import type { PdfPreviewSource } from '../../lib/pdfPreview';
 
 setupPdfWorker();
 
 export interface ContratoPdfViewerProps {
-  fileUrl: string;
+  file: string | PdfPreviewSource;
+  fileKey?: string | number;
   pageWidth: number;
   pageNumbers?: number[];
   renderPageWrap?: (pageNum: number, page: ReactNode) => ReactNode;
   loading?: ReactNode;
   error?: ReactNode;
-  /** true para rotas autenticadas /api/contratos (cookies de sessão). */
+  /** true para rotas autenticadas /api/contratos quando file é URL (legado). */
   withCredentials?: boolean;
   onLoadSuccess?: (numPages: number) => void;
-  onLoadError?: () => void;
+  onLoadError?: (error: Error) => void;
+}
+
+function resolveFileSource(
+  file: string | PdfPreviewSource,
+  withCredentials: boolean,
+): string | PdfPreviewSource | { url: string; withCredentials: true } {
+  if (typeof file !== 'string') return file;
+  return withCredentials ? { url: file, withCredentials: true as const } : file;
+}
+
+function fileIdentity(file: string | PdfPreviewSource, fileKey?: string | number): string {
+  if (fileKey != null) return String(fileKey);
+  if (typeof file === 'string') return file;
+  return `bytes-${file.data.byteLength}`;
 }
 
 /**
- * Viewer react-pdf via URL — padrão da assinatura pública, com suporte a renderPageWrap.
+ * Viewer react-pdf — bytes autenticados (PdfPreviewSource) ou URL pública.
  */
 export function ContratoPdfViewer({
-  fileUrl,
+  file,
+  fileKey,
   pageWidth,
   pageNumbers,
   renderPageWrap,
   loading,
   error,
-  withCredentials = true,
+  withCredentials = false,
   onLoadSuccess,
   onLoadError,
 }: ContratoPdfViewerProps) {
   const [loadedPages, setLoadedPages] = useState<number | null>(null);
+  const documentKey = fileIdentity(file, fileKey);
 
   useEffect(() => {
     setLoadedPages(null);
-  }, [fileUrl]);
+  }, [documentKey]);
 
   const pagesToRender =
     loadedPages != null && loadedPages > 0
       ? (pageNumbers ?? Array.from({ length: loadedPages }, (_, i) => i + 1))
       : [];
 
-  const fileSource = withCredentials ? { url: fileUrl, withCredentials: true as const } : fileUrl;
+  const fileSource = resolveFileSource(file, withCredentials);
 
   return (
     <Document
-      key={fileUrl}
+      key={documentKey}
       file={fileSource}
       onLoadSuccess={({ numPages }) => {
         setLoadedPages(numPages);
         onLoadSuccess?.(numPages);
       }}
-      onLoadError={() => {
+      onLoadError={(err) => {
         setLoadedPages(0);
-        onLoadError?.();
+        onLoadError?.(err);
       }}
       loading={
         loading ?? (
@@ -64,7 +82,7 @@ export function ContratoPdfViewer({
       error={
         error ?? (
           <p className="text-center text-sm text-red-600 py-8">
-            Não foi possível carregar o PDF.
+            Não foi possível renderizar o PDF.
           </p>
         )
       }

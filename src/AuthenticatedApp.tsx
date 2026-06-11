@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { LayoutDashboard, Users, FileText, Settings, LogOut, Layers, Briefcase, Bell, DollarSign, User, Calendar } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -16,38 +16,40 @@ import { OrgBrandProvider } from './components/OrgBrandProvider';
 import { resolveOrgBrand } from './lib/orgBrand';
 import { AppTopBar, AppTopBarMobileButton } from './components/AppTopBar';
 import { StoreSaveErrorListener } from './components/StoreSaveErrorListener';
+import { PageErrorBoundary } from './components/PageErrorBoundary';
 import { useNotifications } from './lib/useNotifications';
+import { lazyWithRetry } from './lib/lazyWithRetry';
 
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Clientes = lazy(() => import('./pages/Clientes'));
-const Propostas = lazy(() => import('./pages/Propostas'));
-const Pagamentos = lazy(() => import('./pages/Pagamentos'));
-const PropezFluido = lazy(() => import('./pages/PropezFluido'));
-const VisualizarProposta = lazy(() => import('./pages/VisualizarProposta'));
-const Servicos = lazy(() => import('./pages/Servicos'));
-const Modelos = lazy(() => import('./pages/Modelos'));
-const CriarModelo = lazy(() => import('./pages/CriarModelo'));
-const Contratos = lazy(() => import('./pages/Contratos'));
-const Agenda = lazy(() => import('./pages/Agenda'));
-const Configuracoes = lazy(() => import('./pages/Configuracoes'));
-const Planos = lazy(() => import('./pages/Planos'));
-const Onboarding = lazy(() => import('./components/Onboarding'));
-const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
-const AdminOrganizations = lazy(() => import('./pages/admin/AdminOrganizations'));
-const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
-const AdminSubscriptions = lazy(() => import('./pages/admin/AdminSubscriptions'));
-const AdminRetention = lazy(() => import('./pages/admin/AdminRetention'));
-const AdminAcquisition = lazy(() => import('./pages/admin/AdminAcquisition'));
-const AdminProduct = lazy(() => import('./pages/admin/AdminProduct'));
-const AdminOperations = lazy(() => import('./pages/admin/AdminOperations'));
-const AdminRequests = lazy(() => import('./pages/admin/AdminRequests'));
-const AdminOrganizationDetail = lazy(() => import('./pages/admin/AdminOrganizationDetail'));
-const AdminMarketplace = lazy(() => import('./pages/admin/AdminMarketplace'));
-const AdminAffiliates = lazy(() => import('./pages/admin/AdminAffiliates'));
-const AdminCoupons = lazy(() => import('./pages/admin/AdminCoupons'));
-const AdminBlogList = lazy(() => import('./pages/admin/AdminBlogList'));
-const AdminBlogEditor = lazy(() => import('./pages/admin/AdminBlogEditor'));
-const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
+const Clientes = lazyWithRetry(() => import('./pages/Clientes'));
+const Propostas = lazyWithRetry(() => import('./pages/Propostas'));
+const Pagamentos = lazyWithRetry(() => import('./pages/Pagamentos'));
+const PropezFluido = lazyWithRetry(() => import('./pages/PropezFluido'));
+const VisualizarProposta = lazyWithRetry(() => import('./pages/VisualizarProposta'));
+const Servicos = lazyWithRetry(() => import('./pages/Servicos'));
+const Modelos = lazyWithRetry(() => import('./pages/Modelos'));
+const CriarModelo = lazyWithRetry(() => import('./pages/CriarModelo'));
+const Contratos = lazyWithRetry(() => import('./pages/Contratos'));
+const Agenda = lazyWithRetry(() => import('./pages/Agenda'));
+const Configuracoes = lazyWithRetry(() => import('./pages/Configuracoes'));
+const Planos = lazyWithRetry(() => import('./pages/Planos'));
+const Onboarding = lazyWithRetry(() => import('./components/Onboarding'));
+const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard'));
+const AdminOrganizations = lazyWithRetry(() => import('./pages/admin/AdminOrganizations'));
+const AdminUsers = lazyWithRetry(() => import('./pages/admin/AdminUsers'));
+const AdminSubscriptions = lazyWithRetry(() => import('./pages/admin/AdminSubscriptions'));
+const AdminRetention = lazyWithRetry(() => import('./pages/admin/AdminRetention'));
+const AdminAcquisition = lazyWithRetry(() => import('./pages/admin/AdminAcquisition'));
+const AdminProduct = lazyWithRetry(() => import('./pages/admin/AdminProduct'));
+const AdminOperations = lazyWithRetry(() => import('./pages/admin/AdminOperations'));
+const AdminRequests = lazyWithRetry(() => import('./pages/admin/AdminRequests'));
+const AdminOrganizationDetail = lazyWithRetry(() => import('./pages/admin/AdminOrganizationDetail'));
+const AdminMarketplace = lazyWithRetry(() => import('./pages/admin/AdminMarketplace'));
+const AdminAffiliates = lazyWithRetry(() => import('./pages/admin/AdminAffiliates'));
+const AdminCoupons = lazyWithRetry(() => import('./pages/admin/AdminCoupons'));
+const AdminBlogList = lazyWithRetry(() => import('./pages/admin/AdminBlogList'));
+const AdminBlogEditor = lazyWithRetry(() => import('./pages/admin/AdminBlogEditor'));
+const AdminLayout = lazyWithRetry(() => import('./pages/admin/AdminLayout'));
 
 const loadingFallback = (
   <div className="h-full min-h-screen w-full flex items-center justify-center text-zinc-500 bg-[#F5F5F7]">
@@ -185,6 +187,13 @@ export default function AuthenticatedApp() {
     }
   };
 
+  const pageResetKey = `${route}|${JSON.stringify(routeParams)}`;
+  const pageContent = (
+    <PageErrorBoundary resetKey={pageResetKey}>
+      <Suspense fallback={loadingFallback}>{renderContent()}</Suspense>
+    </PageErrorBoundary>
+  );
+
   const pageVariants = {
     initial: { y: 8, scale: 0.99 },
     animate: { y: 0, scale: 1, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as const } },
@@ -214,7 +223,7 @@ export default function AuthenticatedApp() {
           variants={pageVariants}
           className="h-dvh min-h-0 w-full max-w-full overflow-hidden bg-[#F5F5F7]"
         >
-          <Suspense fallback={loadingFallback}>{renderContent()}</Suspense>
+          <Suspense fallback={loadingFallback}>{pageContent}</Suspense>
         </motion.div>
       </AnimatePresence>
       </OrgBrandProvider>
@@ -238,7 +247,7 @@ export default function AuthenticatedApp() {
     return (
       <Suspense fallback={loadingFallback}>
         <AdminLayout navigate={navigate} current={route}>
-          <Suspense fallback={loadingFallback}>{renderContent()}</Suspense>
+          <Suspense fallback={loadingFallback}>{pageContent}</Suspense>
         </AdminLayout>
       </Suspense>
     );
@@ -340,7 +349,7 @@ export default function AuthenticatedApp() {
         <div className="h-full w-full relative flex-1 min-h-0">
           <AnimatePresence mode="wait">
             <motion.div key={route} initial="initial" animate="animate" exit="exit" variants={pageVariants} className="min-h-full">
-              <Suspense fallback={loadingFallback}>{renderContent()}</Suspense>
+              <Suspense fallback={loadingFallback}>{pageContent}</Suspense>
             </motion.div>
           </AnimatePresence>
         </div>

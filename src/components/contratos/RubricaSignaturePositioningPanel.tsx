@@ -17,6 +17,7 @@ import {
   hexToRgba,
 } from '../../lib/documents/positioningConstants';
 import { ContratoPdfViewer } from './ContratoPdfViewer';
+import type { PdfPreviewSource } from '../../lib/pdfPreview';
 
 const PAGE_ASPECT = 1123 / 794;
 
@@ -29,7 +30,10 @@ export interface RubricaSignaturePositioningPanelProps {
   documentPages: number;
   currentPage: number;
   onCurrentPageChange: (page: number) => void;
-  previewUrl: string | null;
+  pdfSource: PdfPreviewSource | null;
+  previewLoading: boolean;
+  previewError: string | null;
+  previewReloadKey: number;
   onNotify?: (message: string) => void;
   onReloadPreview?: () => void;
 }
@@ -51,13 +55,17 @@ export function RubricaSignaturePositioningPanel({
   documentPages: _documentPages,
   currentPage,
   onCurrentPageChange,
-  previewUrl,
+  pdfSource,
+  previewLoading,
+  previewError,
+  previewReloadKey,
   onNotify,
   onReloadPreview,
 }: RubricaSignaturePositioningPanelProps) {
   const [pendingClick, setPendingClick] = useState<PendingClick | null>(null);
   const [pageWidth, setPageWidth] = useState(794);
   const [loadedPages, setLoadedPages] = useState<number | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef<{
@@ -78,7 +86,8 @@ export function RubricaSignaturePositioningPanel({
 
   useEffect(() => {
     setLoadedPages(null);
-  }, [previewUrl]);
+    setRenderError(null);
+  }, [pdfSource, previewReloadKey]);
 
   useEffect(() => {
     if (signers.length > 0 && !selectedSignerId) {
@@ -301,7 +310,37 @@ export function RubricaSignaturePositioningPanel({
 
       <div className="flex-1 flex min-w-0 rounded-2xl border border-black/10 overflow-hidden bg-[#EBEEF2]">
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 max-h-[70vh]">
-          {!previewUrl ? (
+          {previewLoading ? (
+            <div className="text-center py-12 space-y-4">
+              <p className="text-sm text-zinc-400">Carregando documento…</p>
+            </div>
+          ) : previewError ? (
+            <div className="text-center py-12 space-y-4">
+              <p className="text-sm text-red-600">{previewError}</p>
+              {onReloadPreview ? (
+                <button
+                  type="button"
+                  onClick={onReloadPreview}
+                  className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
+                >
+                  Recarregar preview
+                </button>
+              ) : null}
+            </div>
+          ) : renderError ? (
+            <div className="text-center py-12 space-y-4">
+              <p className="text-sm text-red-600">{renderError}</p>
+              {onReloadPreview ? (
+                <button
+                  type="button"
+                  onClick={onReloadPreview}
+                  className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
+                >
+                  Recarregar preview
+                </button>
+              ) : null}
+            </div>
+          ) : !pdfSource ? (
             <div className="text-center py-12 space-y-4">
               <p className="text-sm text-zinc-400">Carregando documento…</p>
               {onReloadPreview ? (
@@ -316,15 +355,19 @@ export function RubricaSignaturePositioningPanel({
             </div>
           ) : (
             <ContratoPdfViewer
-              fileUrl={previewUrl}
+              file={pdfSource}
+              fileKey={previewReloadKey}
               pageWidth={pageWidth}
               onLoadSuccess={setLoadedPages}
-              onLoadError={() => setLoadedPages(0)}
+              onLoadError={() => {
+                setLoadedPages(0);
+                setRenderError('Não foi possível renderizar o PDF.');
+              }}
               loading={<p className="text-center text-sm text-zinc-400">Renderizando PDF…</p>}
               error={
                 <div className="text-center py-12 space-y-4">
                   <p className="text-sm text-red-600">
-                    Não foi possível carregar o PDF. Clique em Recarregar preview.
+                    Não foi possível renderizar o PDF. Clique em Recarregar preview.
                   </p>
                   {onReloadPreview ? (
                     <button
@@ -417,7 +460,7 @@ export function RubricaSignaturePositioningPanel({
           )}
         </div>
 
-        {totalPages > 1 && loadedPages != null && previewUrl && (
+        {totalPages > 1 && loadedPages != null && pdfSource && (
           <nav className="w-12 shrink-0 border-l border-zinc-200 flex flex-col items-center justify-center gap-2 py-4">
             <button
               type="button"

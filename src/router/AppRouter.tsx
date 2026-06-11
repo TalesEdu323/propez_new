@@ -1,23 +1,24 @@
-import { Suspense, lazy, useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { LoggedInRedirect } from '../marketing/LoggedInRedirect';
 import { LegacyRedirects } from './LegacyRedirects';
-import { RouteErrorBoundary } from './RouteErrorBoundary';
+import { RouteErrorBoundaryOutlet } from './RouteErrorBoundary';
 import { captureAffiliateFromUrl, trackAffiliatePageView } from '../lib/affiliateTracking';
+import { lazyWithRetry } from '../lib/lazyWithRetry';
 import HomeRoute from './HomeRoute';
 import NotFoundPage from './NotFoundPage';
-const PublicProposta = lazy(() => import('../pages/PublicProposta'));
-const AuthenticatedApp = lazy(() => import('../AuthenticatedApp'));
-const SobreNosPage = lazy(() => import('../pages/marketing/SobreNosPage'));
-const PublicPlanosPage = lazy(() => import('../pages/marketing/PublicPlanosPage'));
-const BlogListPage = lazy(() => import('../pages/marketing/BlogListPage'));
-const BlogPostPage = lazy(() => import('../pages/marketing/BlogPostPage'));
-const LoginPage = lazy(() => import('../pages/marketing/LoginPage'));
-const CadastroPage = lazy(() => import('../pages/marketing/CadastroPage'));
-const NewsletterUnsubscribePage = lazy(() => import('../pages/marketing/NewsletterUnsubscribePage'));
-const LegalPlaceholderPage = lazy(() => import('../pages/marketing/LegalPlaceholderPage'));
-const SignContractPage = lazy(() => import('../pages/publicProposta/signing/SignContractPage'));
-const ValidityPage = lazy(() => import('../pages/validity/ValidityPage'));
+const PublicProposta = lazyWithRetry(() => import('../pages/PublicProposta'));
+const AuthenticatedApp = lazyWithRetry(() => import('../AuthenticatedApp'));
+const SobreNosPage = lazyWithRetry(() => import('../pages/marketing/SobreNosPage'));
+const PublicPlanosPage = lazyWithRetry(() => import('../pages/marketing/PublicPlanosPage'));
+const BlogListPage = lazyWithRetry(() => import('../pages/marketing/BlogListPage'));
+const BlogPostPage = lazyWithRetry(() => import('../pages/marketing/BlogPostPage'));
+const LoginPage = lazyWithRetry(() => import('../pages/marketing/LoginPage'));
+const CadastroPage = lazyWithRetry(() => import('../pages/marketing/CadastroPage'));
+const NewsletterUnsubscribePage = lazyWithRetry(() => import('../pages/marketing/NewsletterUnsubscribePage'));
+const LegalPlaceholderPage = lazyWithRetry(() => import('../pages/marketing/LegalPlaceholderPage'));
+const SignContractPage = lazyWithRetry(() => import('../pages/publicProposta/signing/SignContractPage'));
+const ValidityPage = lazyWithRetry(() => import('../pages/validity/ValidityPage'));
 
 const loadingFallback = (
   <div className="min-h-screen flex items-center justify-center text-zinc-500 bg-white">
@@ -40,7 +41,7 @@ function PublicPropostaRoute() {
 
 export default function AppRouter() {
   return (
-    <RouteErrorBoundary>
+    <RouteErrorBoundaryOutlet>
       <Suspense fallback={loadingFallback}>
         <LegacyRedirects />
         <Routes>
@@ -63,6 +64,6 @@ export default function AppRouter() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
-    </RouteErrorBoundary>
+    </RouteErrorBoundaryOutlet>
   );
 }

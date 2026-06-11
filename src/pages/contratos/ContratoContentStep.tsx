@@ -5,6 +5,7 @@ import ContractEditor from '../../components/ContractEditor';
 import { ContratoPdfUploadZone } from '../../components/contratos/ContratoPdfUploadZone';
 import { ContratoPdfViewer } from '../../components/contratos/ContratoPdfViewer';
 import { titleFromPdfFilename } from '../../lib/contratoPdfTitle';
+import type { PdfPreviewSource } from '../../lib/pdfPreview';
 
 export interface ContratoContentStepProps {
   currentContrato: Partial<ContratoTemplate>;
@@ -20,7 +21,10 @@ export interface ContratoContentStepProps {
   onUploadPdf: (file: File) => void;
   onUploadValidationError?: (message: string) => void;
   onRemovePdf?: () => void;
-  previewUrl: string | null;
+  pdfSource: PdfPreviewSource | null;
+  previewLoading: boolean;
+  previewError: string | null;
+  previewReloadKey: number;
   onReloadPreview?: () => void;
 }
 
@@ -38,11 +42,15 @@ export function ContratoContentStep({
   onUploadPdf,
   onUploadValidationError,
   onRemovePdf,
-  previewUrl,
+  pdfSource,
+  previewLoading,
+  previewError,
+  previewReloadKey,
   onReloadPreview,
 }: ContratoContentStepProps) {
   const previewWrapRef = useRef<HTMLDivElement>(null);
   const [previewWidth, setPreviewWidth] = useState(560);
+  const [renderError, setRenderError] = useState<string | null>(null);
 
   useEffect(() => {
     const el = previewWrapRef.current;
@@ -54,6 +62,10 @@ export function ContratoContentStep({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    setRenderError(null);
+  }, [pdfSource, previewReloadKey]);
 
   const handleSelectFile = (file: File) => {
     if (!currentContrato.titulo?.trim()) {
@@ -73,7 +85,72 @@ export function ContratoContentStep({
     );
 
   const mostrarPreviewPdf = pdfEnviadoComSucesso;
-  const mostrarPreviewTexto = sourceType === 'text' && !!previewUrl;
+  const mostrarPreviewTexto = sourceType === 'text' && !!currentContrato.id;
+
+  const previewBlock = () => {
+    if (previewLoading) {
+      return <p className="p-8 text-center text-sm text-zinc-400">Carregando PDF…</p>;
+    }
+    if (previewError) {
+      return (
+        <div className="p-8 text-center space-y-3">
+          <p className="text-sm text-red-600">{previewError}</p>
+          {onReloadPreview && (
+            <button
+              type="button"
+              onClick={onReloadPreview}
+              className="text-sm font-medium text-zinc-900 underline hover:no-underline"
+            >
+              Recarregar preview
+            </button>
+          )}
+        </div>
+      );
+    }
+    if (renderError) {
+      return (
+        <div className="p-8 text-center space-y-3">
+          <p className="text-sm text-red-600">{renderError}</p>
+          {onReloadPreview && (
+            <button
+              type="button"
+              onClick={onReloadPreview}
+              className="text-sm font-medium text-zinc-900 underline hover:no-underline"
+            >
+              Recarregar preview
+            </button>
+          )}
+        </div>
+      );
+    }
+    if (pdfSource) {
+      return (
+        <ContratoPdfViewer
+          file={pdfSource}
+          fileKey={previewReloadKey}
+          pageWidth={previewWidth}
+          pageNumbers={[1]}
+          loading={<p className="p-8 text-sm text-zinc-400">Renderizando PDF…</p>}
+          onLoadError={() => setRenderError('Não foi possível renderizar o PDF.')}
+          error={
+            <div className="p-8 text-center space-y-3">
+              <p className="text-sm text-zinc-500">Não foi possível renderizar o PDF.</p>
+              {onReloadPreview && (
+                <button
+                  type="button"
+                  onClick={onReloadPreview}
+                  className="text-sm font-medium text-zinc-900 underline hover:no-underline"
+                >
+                  Recarregar preview
+                </button>
+              )}
+            </div>
+          }
+        />
+      );
+    }
+    return <p className="p-8 text-center text-sm text-zinc-400">Gerando preview…</p>;
+  };
 
   return (
     <div className="max-w-5xl mx-auto w-full p-6 space-y-6">
@@ -155,30 +232,7 @@ export function ContratoContentStep({
             ref={previewWrapRef}
             className="rounded-2xl border border-black/10 overflow-hidden bg-zinc-100 flex justify-center min-h-[200px]"
           >
-            {previewUrl ? (
-              <ContratoPdfViewer
-                fileUrl={previewUrl}
-                pageWidth={previewWidth}
-                pageNumbers={[1]}
-                loading={<p className="p-8 text-sm text-zinc-400">Carregando PDF…</p>}
-                error={
-                  <div className="p-8 text-center space-y-3">
-                    <p className="text-sm text-zinc-500">Não foi possível exibir o preview.</p>
-                    {onReloadPreview && (
-                      <button
-                        type="button"
-                        onClick={onReloadPreview}
-                        className="text-sm font-medium text-zinc-900 underline hover:no-underline"
-                      >
-                        Recarregar preview
-                      </button>
-                    )}
-                  </div>
-                }
-              />
-            ) : (
-              <p className="p-8 text-center text-sm text-zinc-400">Gerando preview…</p>
-            )}
+            {previewBlock()}
           </div>
         </div>
       )}

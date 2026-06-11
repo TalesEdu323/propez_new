@@ -1,9 +1,14 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { APP_BASE_PATH } from '../lib/appPaths';
 import { isChunkLoadError, reloadOnceOnChunkError, clearChunkReloadFlag } from '../lib/chunkLoadError';
 
-type Props = { children: ReactNode };
+type Props = {
+  children: ReactNode;
+  /** Muda quando a URL muda — reseta o boundary para não prender o usuário na tela de erro. */
+  resetKey?: string;
+};
+
 type State = { error: Error | null };
 
 export class RouteErrorBoundary extends Component<Props, State> {
@@ -11,6 +16,12 @@ export class RouteErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
+  }
+
+  componentDidUpdate(prevProps: Props): void {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+    }
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
@@ -24,7 +35,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
     const { error } = this.state;
     if (error && isChunkLoadError(error)) {
       clearChunkReloadFlag();
-      window.location.reload();
+      reloadOnceOnChunkError();
       return;
     }
     this.setState({ error: null });
@@ -64,4 +75,11 @@ export class RouteErrorBoundary extends Component<Props, State> {
     }
     return this.props.children;
   }
+}
+
+/** Reseta o boundary ao mudar de rota — evita ficar preso na tela de erro após navegar. */
+export function RouteErrorBoundaryOutlet({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const resetKey = `${location.pathname}${location.search}${location.hash}`;
+  return <RouteErrorBoundary resetKey={resetKey}>{children}</RouteErrorBoundary>;
 }

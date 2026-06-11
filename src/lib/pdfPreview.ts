@@ -21,8 +21,20 @@ export function isPdfBytes(buf: ArrayBuffer): boolean {
   return isPdfBuffer(buf);
 }
 
+async function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+  if (typeof blob.arrayBuffer === 'function') {
+    return blob.arrayBuffer();
+  }
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error ?? new Error('Falha ao ler Blob'));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
 export async function blobToPdfPreviewSource(blob: Blob): Promise<PdfPreviewSource | null> {
-  const buf = await blob.arrayBuffer();
+  const buf = await blobToArrayBuffer(blob);
   if (!isPdfBytes(buf)) return null;
   return { data: new Uint8Array(buf) };
 }

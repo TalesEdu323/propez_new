@@ -14,6 +14,7 @@ import {
   type ContratoWizardStep,
 } from '../lib/client/contratoWizardSession';
 import { useContratoPdfUpload } from '../hooks/useContratoPdfUpload';
+import { useContratoPreviewPdf } from '../hooks/useContratoPreviewPdf';
 import type { Marcador } from '../lib/documents/positioningTypes';
 import {
   defaultTemplateSigners,
@@ -84,6 +85,11 @@ export default function Contratos() {
     currentContrato?.id && shouldLoadPreview(currentContrato, sourceType)
       ? getContratoPreviewPdfUrl(currentContrato.id, previewReloadKey)
       : null;
+
+  const { pdfSource, loading: previewLoading, error: previewError } = useContratoPreviewPdf(
+    previewUrl,
+    previewReloadKey,
+  );
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -437,7 +443,10 @@ export default function Contratos() {
                 onUploadPdf={(f) => void uploadPdf(f)}
                 onUploadValidationError={setUploadError}
                 onRemovePdf={handleRemovePdf}
-                previewUrl={previewUrl}
+                pdfSource={pdfSource}
+                previewLoading={previewLoading}
+                previewError={previewError}
+                previewReloadKey={previewReloadKey}
                 onReloadPreview={handleReloadPreview}
               />
             )}
@@ -451,7 +460,10 @@ export default function Contratos() {
                 documentPages={pageCount}
                 currentPage={currentPage}
                 onCurrentPageChange={setCurrentPage}
-                previewUrl={previewUrl}
+                pdfSource={pdfSource}
+                previewLoading={previewLoading}
+                previewError={previewError}
+                previewReloadKey={previewReloadKey}
                 onNotify={showToast}
                 onReloadPreview={handleReloadPreview}
               />

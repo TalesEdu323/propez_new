@@ -6,9 +6,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.tsx';
 import './index.css';
 import { bootstrapSession } from './lib/authSession';
-import { registerChunkLoadRecovery } from './lib/chunkLoadError';
+import { registerChunkLoadRecovery, clearChunkReloadFlag } from './lib/chunkLoadError';
 
 registerChunkLoadRecovery();
+clearChunkReloadFlag();
 
 const queryClient = new QueryClient({
   defaultOptions: {

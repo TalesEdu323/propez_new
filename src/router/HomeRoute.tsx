@@ -1,8 +1,9 @@
-import { Suspense, lazy } from 'react';
+import { Suspense } from 'react';
 import { useInitialLoaded, useSession } from '../lib/authSession';
+import { lazyWithRetry } from '../lib/lazyWithRetry';
 
-const LandingPage = lazy(() => import('../pages/marketing/LandingPage'));
-const AuthenticatedApp = lazy(() => import('../AuthenticatedApp'));
+const LandingPage = lazyWithRetry(() => import('../pages/marketing/LandingPage'));
+const AuthenticatedApp = lazyWithRetry(() => import('../AuthenticatedApp'));
 
 const loadingFallback = (
   <div className="min-h-screen flex items-center justify-center text-zinc-500 bg-white">
