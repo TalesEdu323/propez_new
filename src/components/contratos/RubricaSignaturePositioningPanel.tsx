@@ -16,8 +16,7 @@ import {
   getSignerColorByIndex,
   hexToRgba,
 } from '../../lib/documents/positioningConstants';
-import { PdfDocumentPages } from './PdfDocumentPages';
-import type { PdfPreviewSource } from '../../lib/pdfPreview';
+import { ContratoPdfViewer } from './ContratoPdfViewer';
 
 const PAGE_ASPECT = 1123 / 794;
 
@@ -30,9 +29,7 @@ export interface RubricaSignaturePositioningPanelProps {
   documentPages: number;
   currentPage: number;
   onCurrentPageChange: (page: number) => void;
-  pdfFile: PdfPreviewSource | null;
-  loading?: boolean;
-  error?: string | null;
+  previewUrl: string | null;
   onNotify?: (message: string) => void;
   onReloadPreview?: () => void;
 }
@@ -54,9 +51,7 @@ export function RubricaSignaturePositioningPanel({
   documentPages: _documentPages,
   currentPage,
   onCurrentPageChange,
-  pdfFile,
-  loading,
-  error,
+  previewUrl,
   onNotify,
   onReloadPreview,
 }: RubricaSignaturePositioningPanelProps) {
@@ -83,7 +78,7 @@ export function RubricaSignaturePositioningPanel({
 
   useEffect(() => {
     setLoadedPages(null);
-  }, [pdfFile]);
+  }, [previewUrl]);
 
   useEffect(() => {
     if (signers.length > 0 && !selectedSignerId) {
@@ -306,9 +301,9 @@ export function RubricaSignaturePositioningPanel({
 
       <div className="flex-1 flex min-w-0 rounded-2xl border border-black/10 overflow-hidden bg-[#EBEEF2]">
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 max-h-[70vh]">
-          {error ? (
+          {!previewUrl ? (
             <div className="text-center py-12 space-y-4">
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-zinc-400">Carregando documento…</p>
               {onReloadPreview ? (
                 <button
                   type="button"
@@ -319,22 +314,9 @@ export function RubricaSignaturePositioningPanel({
                 </button>
               ) : null}
             </div>
-          ) : loading || !pdfFile ? (
-            <div className="text-center py-12 space-y-4">
-              <p className="text-sm text-zinc-400">Carregando documento…</p>
-              {!loading && !pdfFile && onReloadPreview ? (
-                <button
-                  type="button"
-                  onClick={onReloadPreview}
-                  className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
-                >
-                  Recarregar preview
-                </button>
-              ) : null}
-            </div>
           ) : (
-            <PdfDocumentPages
-              file={pdfFile}
+            <ContratoPdfViewer
+              fileUrl={previewUrl}
               pageWidth={pageWidth}
               onLoadSuccess={setLoadedPages}
               onLoadError={() => setLoadedPages(0)}
@@ -342,8 +324,7 @@ export function RubricaSignaturePositioningPanel({
               error={
                 <div className="text-center py-12 space-y-4">
                   <p className="text-sm text-red-600">
-                    Não foi possível exibir o documento. Volte à etapa de conteúdo e envie o PDF
-                    novamente.
+                    Não foi possível carregar o PDF. Clique em Recarregar preview.
                   </p>
                   {onReloadPreview ? (
                     <button
@@ -436,7 +417,7 @@ export function RubricaSignaturePositioningPanel({
           )}
         </div>
 
-        {totalPages > 1 && loadedPages != null && pdfFile && (
+        {totalPages > 1 && loadedPages != null && previewUrl && (
           <nav className="w-12 shrink-0 border-l border-zinc-200 flex flex-col items-center justify-center gap-2 py-4">
             <button
               type="button"

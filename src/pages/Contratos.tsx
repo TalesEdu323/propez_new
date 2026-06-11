@@ -5,17 +5,15 @@ import { store, ContratoTemplate } from '../lib/store';
 import { useContratos, useUserConfig } from '../hooks/useStoreEntity';
 import { formatDateBR } from '../lib/format';
 import { AiBriefPromptModal } from '../components/ia/AiBriefPromptModal';
-import { api, apiFetch, ApiError } from '../lib/apiClient';
-import { loadContratoPreviewPdf } from '../lib/client/contratoPreviewLoader';
+import { api } from '../lib/apiClient';
+import { getContratoPreviewPdfUrl } from '../lib/client/contratoPreviewUrl';
 import {
   clearContratoWizardSession,
   loadContratoWizardSession,
   saveContratoWizardSession,
   type ContratoWizardStep,
 } from '../lib/client/contratoWizardSession';
-import type { PdfPreviewSource } from '../lib/pdfPreview';
 import { useContratoPdfUpload } from '../hooks/useContratoPdfUpload';
-import { extrairErro, logContratoErro } from '../lib/client/contratoDiagnostics';
 import type { Marcador } from '../lib/documents/positioningTypes';
 import {
   defaultTemplateSigners,
@@ -47,14 +45,9 @@ export default function Contratos() {
   const [marcadores, setMarcadores] = useState<Marcador[]>([]);
   const [selectedSignerId, setSelectedSignerId] = useState<string | null>('client');
   const [currentPage, setCurrentPage] = useState(1);
-  const [previewFile, setPreviewFile] = useState<PdfPreviewSource | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewReloadKey, setPreviewReloadKey] = useState(0);
   const [aiOpen, setAiOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const previewAbortRef = useRef<AbortController | null>(null);
-  const loadedPreviewForRef = useRef<string | null>(null);
-  const previewRequestIdRef = useRef(0);
   const wizardRestoreAttemptedRef = useRef(false);
 
   const persistWizardSession = useCallback(
@@ -68,13 +61,6 @@ export default function Contratos() {
     },
     [wizardStep, sourceType],
   );
-
-  const textoFingerprint = currentContrato?.texto
-    ? `${currentContrato.texto.length}:${currentContrato.texto.slice(0, 32)}:${currentContrato.texto.slice(-16)}`
-    : '';
-  const previewKey = currentContrato
-    ? `${currentContrato.id}:${currentContrato.sourceType}:${currentContrato.pageCount}:${currentContrato.pdfFileName}:${currentContrato.pdfPath ?? ''}:${textoFingerprint}`
-    : '';
 
   const isNewContrato = isEditing && !currentContrato?.id;
   const pageCount = currentContrato?.pageCount ?? 1;
@@ -94,87 +80,19 @@ export default function Contratos() {
     [],
   );
 
+  const previewUrl =
+    currentContrato?.id && shouldLoadPreview(currentContrato, sourceType)
+      ? getContratoPreviewPdfUrl(currentContrato.id, previewReloadKey)
+      : null;
+
   const showToast = (msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(null), 4000);
   };
 
-  const loadPreview = useCallback(async (
-    contratoId: string,
-    opts?: {
-      force?: boolean;
-      sourceType?: 'text' | 'pdf';
-      pdfPath?: string | null;
-      preferApi?: boolean;
-    },
-  ): Promise<string | null> => {
-    if (!opts?.force && loadedPreviewForRef.current === previewKey && previewKey) {
-      return null;
-    }
-
-    const requestId = ++previewRequestIdRef.current;
-    previewAbortRef.current?.abort();
-    const controller = new AbortController();
-    previewAbortRef.current = controller;
-
-    setPreviewLoading(true);
-    if (opts?.force) {
-      setPreviewError(null);
-    }
-
-    const isStale = () => previewRequestIdRef.current !== requestId;
-
-    try {
-      const result = await loadContratoPreviewPdf({
-        contratoId,
-        pdfPath: opts?.pdfPath ?? currentContrato?.pdfPath,
-        sourceType: opts?.sourceType,
-        signal: controller.signal,
-        preferApi: opts?.preferApi,
-      });
-
-      if (isStale()) return null;
-
-      if (!result.ok) {
-        logContratoErro('preview:ui', result.message, {
-          contratoId,
-          httpStatus: result.status,
-          sourceType: opts?.sourceType,
-        });
-        setPreviewFile(null);
-        loadedPreviewForRef.current = null;
-        setPreviewError(result.message);
-        return result.message;
-      }
-
-      setPreviewFile(result.source);
-      loadedPreviewForRef.current = previewKey || contratoId;
-      setPreviewError(null);
-      return null;
-    } catch (e) {
-      if (isStale()) return null;
-      if (e instanceof DOMException && e.name === 'AbortError') return null;
-      setPreviewFile(null);
-      loadedPreviewForRef.current = null;
-      const msg =
-        e instanceof ApiError && e.status === 401
-          ? 'Sessão expirada. Faça login novamente.'
-          : e instanceof Error
-            ? e.message
-            : 'Não foi possível carregar o preview do contrato.';
-      logContratoErro('preview:ui-excecao', msg, {
-        contratoId,
-        sourceType: opts?.sourceType,
-        ...extrairErro(e),
-      });
-      setPreviewError(msg);
-      return msg;
-    } finally {
-      if (!isStale() && previewAbortRef.current === controller) {
-        setPreviewLoading(false);
-      }
-    }
-  }, [previewKey, currentContrato?.pdfPath]);
+  const handleReloadPreview = useCallback(() => {
+    setPreviewReloadKey(Date.now());
+  }, []);
 
   const {
     uploading,
@@ -191,29 +109,9 @@ export default function Contratos() {
     sourceType,
     setSourceType,
     onError: showToast,
-    onUploadSuccess: async (updated, localPreview) => {
+    onUploadSuccess: (updated) => {
       persistWizardSession(updated.id, wizardStep, 'pdf');
-
-      const uploadedPreviewKey = `${updated.id}:pdf:${updated.pageCount}:${updated.pdfFileName}:${updated.pdfPath ?? ''}:`;
-
-      if (localPreview) {
-        setPreviewFile(localPreview);
-        loadedPreviewForRef.current = uploadedPreviewKey;
-        setPreviewError(null);
-        setPreviewLoading(false);
-        return;
-      }
-
-      loadedPreviewForRef.current = null;
-      const remoteError = await loadPreview(updated.id, {
-        force: true,
-        sourceType: 'pdf',
-        pdfPath: updated.pdfPath,
-        preferApi: true,
-      });
-      if (remoteError) {
-        showToast(remoteError);
-      }
+      setPreviewReloadKey(Date.now());
     },
   });
 
@@ -231,6 +129,7 @@ export default function Contratos() {
         setSourceType(session.sourceType);
         setWizardStep(session.wizardStep);
         setIsEditing(true);
+        setPreviewReloadKey(Date.now());
       } catch {
         clearContratoWizardSession();
       }
@@ -244,48 +143,6 @@ export default function Contratos() {
   }, [isEditing, currentContrato?.id, wizardStep, sourceType, persistWizardSession]);
 
   useEffect(() => {
-    loadedPreviewForRef.current = null;
-  }, [sourceType]);
-
-  useEffect(() => {
-    if (!isEditing || wizardStep === 'choose') {
-      setPreviewFile(null);
-      setPreviewError(null);
-      loadedPreviewForRef.current = null;
-      return;
-    }
-    const contratoId = currentContrato?.id;
-    if (shouldLoadPreview(currentContrato, sourceType) && contratoId) {
-      if (loadedPreviewForRef.current === previewKey && previewKey) {
-        return;
-      }
-      if (previewFile && loadedPreviewForRef.current === previewKey) {
-        return;
-      }
-      void loadPreview(contratoId, {
-        sourceType,
-        pdfPath: currentContrato?.pdfPath,
-        preferApi: sourceType === 'pdf',
-      });
-    } else if (sourceType === 'pdf' && !uploading && !pendingFileName && !previewFile) {
-      setPreviewLoading(false);
-      loadedPreviewForRef.current = null;
-    }
-  }, [
-    isEditing,
-    wizardStep,
-    previewKey,
-    sourceType,
-    loadPreview,
-    shouldLoadPreview,
-    currentContrato?.id,
-    currentContrato?.pdfPath,
-    uploading,
-    pendingFileName,
-    previewFile,
-  ]);
-
-  useEffect(() => {
     if (!currentContrato) return;
     const cfg = parseSavedSignatureConfig(
       currentContrato.signatureConfig,
@@ -296,8 +153,6 @@ export default function Contratos() {
   }, [currentContrato?.id, currentContrato?.signatureConfig, orgName, pageCount]);
 
   const resetEditor = () => {
-    previewAbortRef.current?.abort();
-    loadedPreviewForRef.current = null;
     clearContratoWizardSession();
     setIsEditing(false);
     setCurrentContrato(null);
@@ -305,12 +160,10 @@ export default function Contratos() {
     setSourceType('text');
     setMarcadores([]);
     setSelectedSignerId('client');
-    setPreviewFile(null);
-    setPreviewError(null);
+    setPreviewReloadKey(0);
   };
 
   const handleAiContract = async (result: { titulo: string; texto: string }) => {
-    loadedPreviewForRef.current = null;
     setSourceType('text');
     setCurrentContrato((prev) => ({
       ...prev,
@@ -322,9 +175,7 @@ export default function Contratos() {
     try {
       const saved = await ensureSavedDraft({ titulo: result.titulo, texto: result.texto });
       if (!saved?.id) return;
-
-      loadedPreviewForRef.current = null;
-      await loadPreview(saved.id, { force: true, sourceType: 'text' });
+      setPreviewReloadKey(Date.now());
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao salvar rascunho do contrato';
       showToast(msg);
@@ -370,10 +221,7 @@ export default function Contratos() {
   };
 
   const handleRemovePdf = () => {
-    previewAbortRef.current?.abort();
-    loadedPreviewForRef.current = null;
-    setPreviewFile(null);
-    setPreviewError(null);
+    setPreviewReloadKey(0);
     void removePdf();
   };
 
@@ -422,58 +270,15 @@ export default function Contratos() {
     return draft;
   };
 
-  const ensurePreviewBeforeSignature = async (saved: ContratoTemplate) => {
-    persistWizardSession(saved.id, 'signature', sourceType);
-
-    if (sourceType === 'pdf' && previewFile && loadedPreviewForRef.current === previewKey) {
-      return;
-    }
-
-    const backup = previewFile;
-    loadedPreviewForRef.current = null;
-    const remoteError = await loadPreview(saved.id, {
-      force: true,
-      sourceType,
-      pdfPath: saved.pdfPath,
-      preferApi: sourceType === 'pdf',
-    });
-
-    if (remoteError && backup && sourceType === 'pdf') {
-      setPreviewFile(backup);
-      loadedPreviewForRef.current = previewKey || saved.id;
-      setPreviewError(null);
-      return;
-    }
-
-    if (remoteError && sourceType === 'pdf') {
-      showToast(remoteError);
-      throw new Error(remoteError);
-    }
-  };
-
   const handleAdvanceToSignature = async () => {
     const saved = await persistContent();
     if (!saved?.id) return;
     const savedCfg = parseSavedSignatureConfig(saved.signatureConfig, orgName, pageCount);
     if (savedCfg.fields.length === 0) setMarcadores([]);
-    try {
-      await ensurePreviewBeforeSignature(saved);
-    } catch {
-      return;
-    }
+    persistWizardSession(saved.id, 'signature', sourceType);
+    setPreviewReloadKey(Date.now());
     setWizardStep('signature');
   };
-
-  const handleReloadPreview = useCallback(() => {
-    if (!currentContrato?.id) return;
-    loadedPreviewForRef.current = null;
-    void loadPreview(currentContrato.id, {
-      force: true,
-      sourceType,
-      pdfPath: currentContrato.pdfPath,
-      preferApi: sourceType === 'pdf',
-    });
-  }, [currentContrato?.id, currentContrato?.pdfPath, loadPreview, sourceType]);
 
   const handleConfirmSave = async () => {
     const saved = await persistContent();
@@ -586,17 +391,7 @@ export default function Contratos() {
               {wizardStep === 'content' && currentContrato?.id && (
                 <button
                   type="button"
-                  onClick={() => {
-                    void persistContent().then(async (s) => {
-                      if (!s?.id) return;
-                      try {
-                        await ensurePreviewBeforeSignature(s);
-                        setWizardStep('signature');
-                      } catch {
-                        /* toast já exibido */
-                      }
-                    });
-                  }}
+                  onClick={() => void handleAdvanceToSignature()}
                   className="text-sm text-zinc-600 hover:text-zinc-900 font-medium"
                 >
                   Ajustar assinaturas
@@ -642,9 +437,7 @@ export default function Contratos() {
                 onUploadPdf={(f) => void uploadPdf(f)}
                 onUploadValidationError={setUploadError}
                 onRemovePdf={handleRemovePdf}
-                previewFile={previewFile}
-                previewLoading={previewLoading}
-                previewError={previewError}
+                previewUrl={previewUrl}
                 onReloadPreview={handleReloadPreview}
               />
             )}
@@ -658,9 +451,7 @@ export default function Contratos() {
                 documentPages={pageCount}
                 currentPage={currentPage}
                 onCurrentPageChange={setCurrentPage}
-                pdfFile={previewFile}
-                previewLoading={previewLoading}
-                previewError={previewError}
+                previewUrl={previewUrl}
                 onNotify={showToast}
                 onReloadPreview={handleReloadPreview}
               />
@@ -705,10 +496,7 @@ export default function Contratos() {
                       className="glass-input pl-12 pr-6 py-4 w-full text-sm font-medium"
                     />
                   </div>
-                  <ListingViewToggle
-                    view={listView}
-                    onChange={setListView}
-                  />
+                  <ListingViewToggle view={listView} onChange={setListView} />
                 </div>
               </div>
 
@@ -738,6 +526,7 @@ export default function Contratos() {
                         setCurrentContrato(contrato);
                         setSourceType(contrato.sourceType === 'pdf' ? 'pdf' : 'text');
                         setWizardStep('content');
+                        setPreviewReloadKey(Date.now());
                         setIsEditing(true);
                       };
                       if (listView === 'list') {
@@ -793,84 +582,84 @@ export default function Contratos() {
                         );
                       }
                       return (
-                      <motion.div
-                        key={contrato.id}
-                        layout
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="apple-card apple-card-hover group cursor-pointer !p-6 sm:!p-8 flex flex-col h-full"
-                        onClick={openEditor}
-                      >
-                        <div className="flex justify-between items-start mb-6 sm:mb-8">
-                          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-zinc-50 rounded-xl sm:rounded-2xl flex items-center justify-center group-hover:bg-zinc-900 group-hover:text-white transition-all duration-500 border border-black/[0.02]">
-                            <FileText className="w-6 h-6 sm:w-7 sm:h-7" />
+                        <motion.div
+                          key={contrato.id}
+                          layout
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="apple-card apple-card-hover group cursor-pointer !p-6 sm:!p-8 flex flex-col h-full"
+                          onClick={openEditor}
+                        >
+                          <div className="flex justify-between items-start mb-6 sm:mb-8">
+                            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-zinc-50 rounded-xl sm:rounded-2xl flex items-center justify-center group-hover:bg-zinc-900 group-hover:text-white transition-all duration-500 border border-black/[0.02]">
+                              <FileText className="w-6 h-6 sm:w-7 sm:h-7" />
+                            </div>
+                            <div className="flex items-center gap-1 md:opacity-0 group-hover:opacity-100 transition-all">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleDuplicate(contrato.id);
+                                }}
+                                className="p-2.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-50 rounded-xl transition-all"
+                                title="Duplicar"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(contrato.id);
+                                }}
+                                className="p-2.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                title="Excluir"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1 md:opacity-0 group-hover:opacity-100 transition-all">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleDuplicate(contrato.id);
-                              }}
-                              className="p-2.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-50 rounded-xl transition-all"
-                              title="Duplicar"
+
+                          <div className="flex items-center gap-2 mb-2">
+                            <span
+                              className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                                contrato.sourceType === 'pdf'
+                                  ? 'bg-blue-50 text-blue-700'
+                                  : 'bg-zinc-100 text-zinc-600'
+                              }`}
                             >
-                              <Copy className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(contrato.id);
-                              }}
-                              className="p-2.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                              title="Excluir"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 mb-2">
-                          <span
-                            className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                              contrato.sourceType === 'pdf'
-                                ? 'bg-blue-50 text-blue-700'
-                                : 'bg-zinc-100 text-zinc-600'
-                            }`}
-                          >
-                            {contrato.sourceType === 'pdf' ? 'PDF' : 'Texto'}
-                          </span>
-                          {contrato.signatureConfig ? (
-                            <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
-                              Assinatura
+                              {contrato.sourceType === 'pdf' ? 'PDF' : 'Texto'}
                             </span>
-                          ) : null}
-                        </div>
-
-                        <h3 className="text-lg sm:text-xl font-semibold text-zinc-900 mb-2 sm:mb-3 group-hover:text-zinc-900 transition-colors line-clamp-1 tracking-tight">
-                          {contrato.titulo}
-                        </h3>
-                        <p className="text-zinc-400 text-xs sm:text-sm mb-6 sm:mb-8 line-clamp-3 leading-relaxed font-medium flex-grow">
-                          {contrato.sourceType === 'pdf'
-                            ? contrato.pdfFileName || 'Documento PDF'
-                            : (contrato.texto || '').replace(/<[^>]*>/g, '').substring(0, 150) + '...'}
-                        </p>
-
-                        <div className="flex items-center justify-between pt-5 sm:pt-6 border-t border-zinc-100/50">
-                          <span className="text-[8px] sm:text-[9px] font-bold text-zinc-300 uppercase tracking-widest">
-                            {formatDateBR(contrato.data_criacao)}
-                          </span>
-                          <div className="flex items-center gap-2 text-zinc-300 group-hover:text-zinc-900 transition-all">
-                            <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest">
-                              Editar
-                            </span>
-                            <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                            {contrato.signatureConfig ? (
+                              <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                                Assinatura
+                              </span>
+                            ) : null}
                           </div>
-                        </div>
-                      </motion.div>
+
+                          <h3 className="text-lg sm:text-xl font-semibold text-zinc-900 mb-2 sm:mb-3 group-hover:text-zinc-900 transition-colors line-clamp-1 tracking-tight">
+                            {contrato.titulo}
+                          </h3>
+                          <p className="text-zinc-400 text-xs sm:text-sm mb-6 sm:mb-8 line-clamp-3 leading-relaxed font-medium flex-grow">
+                            {contrato.sourceType === 'pdf'
+                              ? contrato.pdfFileName || 'Documento PDF'
+                              : (contrato.texto || '').replace(/<[^>]*>/g, '').substring(0, 150) + '...'}
+                          </p>
+
+                          <div className="flex items-center justify-between pt-5 sm:pt-6 border-t border-zinc-100/50">
+                            <span className="text-[8px] sm:text-[9px] font-bold text-zinc-300 uppercase tracking-widest">
+                              {formatDateBR(contrato.data_criacao)}
+                            </span>
+                            <div className="flex items-center gap-2 text-zinc-300 group-hover:text-zinc-900 transition-all">
+                              <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest">
+                                Editar
+                              </span>
+                              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                            </div>
+                          </div>
+                        </motion.div>
                       );
                     })}
                   </AnimatePresence>

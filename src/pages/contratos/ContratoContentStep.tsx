@@ -3,9 +3,8 @@ import { Sparkles } from 'lucide-react';
 import type { ContratoTemplate } from '../../lib/store';
 import ContractEditor from '../../components/ContractEditor';
 import { ContratoPdfUploadZone } from '../../components/contratos/ContratoPdfUploadZone';
-import { PdfDocumentPages } from '../../components/contratos/PdfDocumentPages';
+import { ContratoPdfViewer } from '../../components/contratos/ContratoPdfViewer';
 import { titleFromPdfFilename } from '../../lib/contratoPdfTitle';
-import type { PdfPreviewSource } from '../../lib/pdfPreview';
 
 export interface ContratoContentStepProps {
   currentContrato: Partial<ContratoTemplate>;
@@ -21,9 +20,7 @@ export interface ContratoContentStepProps {
   onUploadPdf: (file: File) => void;
   onUploadValidationError?: (message: string) => void;
   onRemovePdf?: () => void;
-  previewFile: PdfPreviewSource | null;
-  previewLoading: boolean;
-  previewError: string | null;
+  previewUrl: string | null;
   onReloadPreview?: () => void;
 }
 
@@ -41,9 +38,7 @@ export function ContratoContentStep({
   onUploadPdf,
   onUploadValidationError,
   onRemovePdf,
-  previewFile,
-  previewLoading,
-  previewError,
+  previewUrl,
   onReloadPreview,
 }: ContratoContentStepProps) {
   const previewWrapRef = useRef<HTMLDivElement>(null);
@@ -78,8 +73,7 @@ export function ContratoContentStep({
     );
 
   const mostrarPreviewPdf = pdfEnviadoComSucesso;
-  const mostrarPreviewTexto =
-    sourceType === 'text' && (previewLoading || !!previewFile || !!previewError);
+  const mostrarPreviewTexto = sourceType === 'text' && !!previewUrl;
 
   return (
     <div className="max-w-5xl mx-auto w-full p-6 space-y-6">
@@ -161,40 +155,30 @@ export function ContratoContentStep({
             ref={previewWrapRef}
             className="rounded-2xl border border-black/10 overflow-hidden bg-zinc-100 flex justify-center min-h-[200px]"
           >
-            {previewError ? (
-              <div className="p-8 text-center space-y-3 max-w-md mx-auto">
-                <p className="text-sm text-zinc-600">{previewError}</p>
-                {onReloadPreview && (
-                  <button
-                    type="button"
-                    onClick={onReloadPreview}
-                    className="text-sm font-medium text-zinc-900 underline hover:no-underline"
-                  >
-                    Recarregar preview
-                  </button>
-                )}
-                {sourceType === 'pdf' &&
-                  (/pdf|envie|perdido|não encontrado/i.test(previewError) ||
-                    previewError.includes('etapa de conteúdo')) && (
-                    <p className="text-sm font-medium text-blue-700">
-                      Envie o PDF novamente na área &quot;Qual documento será usado no modelo?&quot;
-                      acima — use Substituir PDF se já houver um arquivo listado.
-                    </p>
-                  )}
-              </div>
-            ) : previewLoading ? (
-              <p className="p-8 text-center text-sm text-zinc-400">Gerando preview…</p>
-            ) : previewFile ? (
-              <PdfDocumentPages
-                file={previewFile}
+            {previewUrl ? (
+              <ContratoPdfViewer
+                fileUrl={previewUrl}
                 pageWidth={previewWidth}
                 pageNumbers={[1]}
                 loading={<p className="p-8 text-sm text-zinc-400">Carregando PDF…</p>}
                 error={
-                  <p className="p-8 text-sm text-zinc-500">Não foi possível exibir o preview.</p>
+                  <div className="p-8 text-center space-y-3">
+                    <p className="text-sm text-zinc-500">Não foi possível exibir o preview.</p>
+                    {onReloadPreview && (
+                      <button
+                        type="button"
+                        onClick={onReloadPreview}
+                        className="text-sm font-medium text-zinc-900 underline hover:no-underline"
+                      >
+                        Recarregar preview
+                      </button>
+                    )}
+                  </div>
                 }
               />
-            ) : null}
+            ) : (
+              <p className="p-8 text-center text-sm text-zinc-400">Gerando preview…</p>
+            )}
           </div>
         </div>
       )}

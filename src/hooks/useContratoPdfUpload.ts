@@ -2,7 +2,6 @@ import { useCallback, useState } from 'react';
 import type { ContratoTemplate } from '../lib/store';
 import { store } from '../lib/store';
 import { titleFromPdfFilename } from '../lib/contratoPdfTitle';
-import { blobToPdfPreviewSource, type PdfPreviewSource } from '../lib/pdfPreview';
 import {
   ensureContratoDraft,
   formatContratoUploadError,
@@ -21,10 +20,7 @@ export type UseContratoPdfUploadOptions = {
   setCurrentContrato: React.Dispatch<React.SetStateAction<Partial<ContratoTemplate> | null>>;
   sourceType: 'text' | 'pdf';
   setSourceType: (type: 'text' | 'pdf') => void;
-  onUploadSuccess?: (
-    contrato: ContratoTemplate,
-    localPreview?: PdfPreviewSource,
-  ) => void | Promise<void>;
+  onUploadSuccess?: (contrato: ContratoTemplate) => void | Promise<void>;
   onError?: (message: string) => void;
 };
 
@@ -111,17 +107,14 @@ export function useContratoPdfUpload({
 
         store.upsertContratoCache(updated);
 
-        const localPreview = await blobToPdfPreviewSource(file);
-
         logContratoInfo('upload:ui-ok', {
           contratoId: updated.id,
           pdfPath: resumirPdfPath(updated.pdfPath),
           pageCount: updated.pageCount,
           pdfFileName: updated.pdfFileName,
-          previewLocal: Boolean(localPreview),
         });
 
-        await onUploadSuccess?.(updated, localPreview ?? undefined);
+        await onUploadSuccess?.(updated);
       } catch (err) {
         const msg = formatContratoUploadError(err);
         logContratoErro('upload:ui-falhou', msg, {
