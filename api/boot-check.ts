@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import pg from 'pg';
 import { getConfigBootErrors, isMailConfigured, loadConfig } from '../src/server/env.js';
 import { normalizeDatabaseUrl } from '../src/server/db/databaseUrl.js';
+import { getPdfStorageInfo } from '../src/server/storage/pdfStorageMode.js';
 
 const DB_PING_TIMEOUT_MS = 3_000;
 
@@ -48,6 +49,14 @@ export default async function handler(
     !db.hasPooler && process.env.VERCEL === '1'
       ? 'Prefira DATABASE_URL com host Neon "-pooler" na Vercel.'
       : undefined;
+
+  const storage = getPdfStorageInfo();
+  const storageWarnings: string[] = [];
+  if ((process.env.VERCEL === '1' || process.env.NODE_ENV === 'production') && !storage.hasBlobToken) {
+    storageWarnings.push(
+      'BLOB_READ_WRITE_TOKEN ausente — upload de PDF usa BYTEA (limite ~4 MB) ou falha em arquivos grandes.',
+    );
+  }
 
   const ok = bootErrors.length === 0 && db.dbOk;
 
@@ -100,6 +109,11 @@ export default async function handler(
     hasPooler: db.hasPooler,
     migrationHint,
     bootErrors,
+    storage: {
+      hasBlobToken: storage.hasBlobToken,
+      pdfMode: storage.pdfMode,
+      warnings: storageWarnings,
+    },
     ...(mail ? { mail } : {}),
   };
 

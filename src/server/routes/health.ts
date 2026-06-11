@@ -5,6 +5,7 @@ import type { IntegrationsConfig } from '../config.js';
 import type { EnvironmentConfig } from '../env.js';
 import { isMailConfigured } from '../env.js';
 import { isSecretCryptoAvailable } from '../lib/secretCrypto.js';
+import { getPdfStorageInfo } from '../storage/pdfStorageMode.js';
 
 export interface HealthRouterOptions {
   pool: pg.Pool;
@@ -60,6 +61,14 @@ export function createHealthRouter({ pool, integrationsConfig, config }: HealthR
       );
     }
 
+    const storage = getPdfStorageInfo();
+    const storageWarnings: string[] = [];
+    if ((process.env.VERCEL === '1' || config.nodeEnv === 'production') && !storage.hasBlobToken) {
+      storageWarnings.push(
+        'BLOB_READ_WRITE_TOKEN ausente — upload de PDF usa BYTEA (limite ~4 MB) ou falha em arquivos grandes.',
+      );
+    }
+
     const ok = dbOk;
     res.status(ok ? 200 : 503).json({
       ok,
@@ -72,6 +81,11 @@ export function createHealthRouter({ pool, integrationsConfig, config }: HealthR
       hasPooler,
       migrationHint,
       bootErrors: [],
+      storage: {
+        hasBlobToken: storage.hasBlobToken,
+        pdfMode: storage.pdfMode,
+        warnings: storageWarnings,
+      },
       mail: {
         provider: mail.provider,
         configured: isMailConfigured(mail),
@@ -126,6 +140,13 @@ export function createHealthRouter({ pool, integrationsConfig, config }: HealthR
       );
     }
 
+    const storage = getPdfStorageInfo();
+    if ((process.env.VERCEL === '1' || config.nodeEnv === 'production') && !storage.hasBlobToken) {
+      warnings.push(
+        'BLOB_READ_WRITE_TOKEN ausente — upload de PDF de contrato limitado ou indisponível para arquivos grandes.',
+      );
+    }
+
     res.status(dbStatus ? 200 : 503).json({
       status: dbStatus ? 'ok' : 'degraded',
       database: dbStatus,
@@ -149,6 +170,10 @@ export function createHealthRouter({ pool, integrationsConfig, config }: HealthR
           webhookSecret: prosyncSecretState,
           baseUrl: integrationsConfig.prosync.baseUrl,
         },
+      },
+      storage: {
+        hasBlobToken: storage.hasBlobToken,
+        pdfMode: storage.pdfMode,
       },
       warnings,
     });

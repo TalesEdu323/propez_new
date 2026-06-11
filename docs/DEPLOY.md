@@ -247,7 +247,17 @@ Tipos: `proposal_approved`, `proposal_rejected`, `contract_sent`, `contract_sign
 
 ## Contratos PDF (Vercel Blob + legado BYTEA)
 
-Em produção, PDFs de template de contrato vão para **Vercel Blob** (`BLOB_READ_WRITE_TOKEN`); a URL pública fica em `contratos_templates.pdf_path`. Preview no app carrega direto do CDN (sem proxy `/preview-pdf`).
+Em produção, PDFs de template de contrato vão para **Vercel Blob** (`BLOB_READ_WRITE_TOKEN`); a URL pública fica em `contratos_templates.pdf_path`. Preview no app carrega direto do CDN quando `pdf_path` é URL Blob; legado BYTEA/texto usa `/api/contratos/:id/preview-pdf`.
+
+Diagnóstico rápido:
+
+```bash
+curl -s https://<APP_URL>/api/boot-check
+# storage.hasBlobToken deve ser true em produção
+# storage.pdfMode: "blob" | "bytea" | "disk"
+```
+
+Sem `BLOB_READ_WRITE_TOKEN`, o app faz fallback para upload multipart (BYTEA, limite ~4 MB).
 
 Variáveis no painel Vercel (Production + Preview):
 

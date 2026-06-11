@@ -117,6 +117,15 @@ if (dbUrl && !dbUrl.includes('-pooler') && (process.env.VERCEL === '1' || produc
   );
 }
 
+const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim() || '';
+const needsBlob = productionMode || process.env.VERCEL === '1';
+if (needsBlob && !blobToken) {
+  console.error(
+    '[check-deploy-env] BLOB_READ_WRITE_TOKEN ausente — upload de PDF de contrato falha ou fica limitado a ~4 MB.',
+  );
+  missing.push('BLOB_READ_WRITE_TOKEN');
+}
+
 if (missing.length > 0 || placeholders.length > 0) {
   console.error(
     '\n[check-deploy-env] Corrija no painel Vercel (Production + Preview) ou no .env local.',

@@ -3,6 +3,11 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { isBlobUrl as isBlobUrlShared, isAllowedBlobUrl as isAllowedBlobUrlShared } from '../../lib/blobUrl.js';
+import { usesDbPdfStorage } from '../services/pdfStorageEnv.js';
+import { shouldUseVercelBlob } from './pdfStorageMode.js';
+
+export { getPdfStorageInfo, shouldUseVercelBlob } from './pdfStorageMode.js';
+export type { PdfStorageMode } from './pdfStorageMode.js';
 
 export function isBlobUrl(urlOrPath: string): boolean {
   return isBlobUrlShared(urlOrPath);
@@ -17,12 +22,6 @@ export function getBlobReadWriteToken(): string | undefined {
   return process.env.BLOB_READ_WRITE_TOKEN?.trim() || undefined;
 }
 
-export function shouldUseVercelBlob(): boolean {
-  const onVercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
-  const isProd = process.env.NODE_ENV === 'production';
-  return (onVercel || isProd) && Boolean(getBlobReadWriteToken());
-}
-
 export async function savePdfToStorage(buffer: Buffer, storageKey: string): Promise<string> {
   const key = storageKey.replace(/\\/g, '/');
 
@@ -35,6 +34,10 @@ export async function savePdfToStorage(buffer: Buffer, storageKey: string): Prom
       contentType: 'application/pdf',
     });
     return blob.url;
+  }
+
+  if (usesDbPdfStorage()) {
+    return key.startsWith('uploads/') ? key : `uploads/${key}`;
   }
 
   const rel = key.startsWith('uploads/') ? key : `uploads/${key}`;

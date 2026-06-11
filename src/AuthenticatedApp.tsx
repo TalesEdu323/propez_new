@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { LayoutDashboard, Users, FileText, Settings, LogOut, Layers, Briefcase, Bell, DollarSign, User, Calendar } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { hydrateStore } from './lib/store';
+import { getLastHydrateErrors, hydrateStore } from './lib/store';
 import { subscribeToPlanosRequest } from './lib/navigationEvents';
 import type { AppRoute } from './types/navigation';
 import { useAppNavigation } from './hooks/useAppNavigation';
@@ -62,15 +62,26 @@ export default function AuthenticatedApp() {
   const { unreadCount: notificationUnread } = useNotifications(Boolean(session));
 
   const [hydrated, setHydrated] = useState(false);
+  const [hydrateErrors, setHydrateErrors] = useState<readonly { entity: string; message: string }[]>(
+    [],
+  );
   const isAdminRoute = route.startsWith('admin-');
 
   useEffect(() => {
     if (!initialLoaded || !session) return;
-    if (!isAdminRoute && !hydrated) {
-      void hydrateStore().then(() => setHydrated(true));
+    if (isAdminRoute) {
+      setHydrated(true);
+      return;
+    }
+    if (!hydrated) {
+      void hydrateStore().then(() => {
+        setHydrateErrors(getLastHydrateErrors());
+        setHydrated(true);
+      });
     }
     if (!session && hydrated) {
       setHydrated(false);
+      setHydrateErrors([]);
     }
   }, [session, hydrated, isAdminRoute, initialLoaded]);
 
@@ -94,6 +105,10 @@ export default function AuthenticatedApp() {
         <Onboarding onComplete={() => {}} />
       </Suspense>
     );
+  }
+
+  if (!isAdminRoute && !hydrated) {
+    return loadingFallback;
   }
 
   const renderContent = () => {
@@ -301,6 +316,27 @@ export default function AuthenticatedApp() {
 
       <main className="flex-1 overflow-y-auto w-full relative mobile-safe-top mobile-safe-bottom flex flex-col min-h-0">
         <AppTopBar navigate={navigate} showPlatformButton={isPlatformAdmin} />
+        {hydrateErrors.length > 0 && (
+          <div className="mx-4 mt-2 md:mx-6 md:mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 flex flex-wrap items-center justify-between gap-3">
+            <span>
+              Alguns dados não carregaram ({hydrateErrors.map((e) => e.entity).join(', ')}). Listas podem
+              estar incompletas.
+            </span>
+            <button
+              type="button"
+              className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+              onClick={() => {
+                setHydrated(false);
+                void hydrateStore(true).then(() => {
+                  setHydrateErrors(getLastHydrateErrors());
+                  setHydrated(true);
+                });
+              }}
+            >
+              Recarregar dados
+            </button>
+          </div>
+        )}
         <div className="h-full w-full relative flex-1 min-h-0">
           <AnimatePresence mode="wait">
             <motion.div key={route} initial="initial" animate="animate" exit="exit" variants={pageVariants} className="min-h-full">

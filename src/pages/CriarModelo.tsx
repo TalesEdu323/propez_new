@@ -103,6 +103,17 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
       alert('Resolva as imagens pendentes no passo "Imagens e banners" antes de salvar o modelo.');
       return;
     }
+    if (formData.contratoId && !contratos.some((c) => c.id === formData.contratoId)) {
+      alert('O contrato vinculado não existe mais. Selecione outro no passo "Contrato Padrão".');
+      return;
+    }
+    const missingServicos = formData.servicos.filter(
+      (id) => !servicosDisponiveis.some((s) => s.id === id),
+    );
+    if (missingServicos.length > 0) {
+      alert('Um ou mais serviços vinculados não existem mais. Atualize a seleção de serviços.');
+      return;
+    }
 
     const newModelo: ModeloProposta = {
       id: initialData?.editId || createId(),

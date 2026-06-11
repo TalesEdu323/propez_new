@@ -7,6 +7,7 @@ import { serializeModelo, serializeModeloSummary } from '../db/serializers.js'
 import { toJsonbParam } from '../db/jsonbParam.js'
 import { fetchOrgBrand, mergePageLayoutWithOrgBrand } from '../services/orgBrandDefaults.js'
 import { modeloBodySchema, modeloPatchSchema } from '../validation/modeloPayload.js'
+import { MODELO_MAX_PAYLOAD_BYTES, modeloErrorResponse } from './modeloErrors.js'
 
 const MODEL_SELECT = `id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
               chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config, created_at`
@@ -14,7 +15,7 @@ const MODEL_SELECT = `id, nome, elementos, page_layout, servicos, contrato_id, c
 const MODEL_SUMMARY_SELECT = `id, nome, servicos, contrato_id, chave_pix, link_pagamento,
               whatsapp_comprovante, tier, fluxo, created_at`
 
-const MAX_PAYLOAD_BYTES = 1_000_000
+const MAX_PAYLOAD_BYTES = MODELO_MAX_PAYLOAD_BYTES
 
 const bodySchema = modeloBodySchema
 const patchSchema = modeloPatchSchema
@@ -65,20 +66,6 @@ function logModeloPgError(
   console.error(
     `[modelos/${context}] pg code=${pg.code ?? '-'} column=${pg.column ?? '-'} constraint=${pg.constraint ?? '-'} detail=${pg.detail ?? pg.message ?? '-'}${suffix}`,
   )
-}
-
-function modeloErrorResponse(err: unknown): { status: number; error: string } {
-  const pg = err as { code?: string }
-  if (pg.code === '23503') {
-    return { status: 400, error: 'Contrato ou serviço vinculado não existe mais. Atualize o modelo e tente novamente.' }
-  }
-  if (pg.code === '42703') {
-    return { status: 503, error: 'Banco de dados desatualizado. Contate o suporte para aplicar as migrações.' }
-  }
-  if (pg.code === '22P02') {
-    return { status: 400, error: 'Dados do modelo em formato inválido. Recarregue a página e tente novamente.' }
-  }
-  return { status: 500, error: 'Erro ao salvar modelo. Tente novamente em alguns segundos.' }
 }
 
 function payloadByteLength(raw: unknown): number {

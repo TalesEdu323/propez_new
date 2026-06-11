@@ -11,9 +11,11 @@ import type { PdfPreviewSource } from '../lib/pdfPreview';
 import { titleFromPdfFilename } from '../lib/contratoPdfTitle';
 import {
   finalizeContratoPdfUpload,
+  MULTIPART_FALLBACK_MAX_BYTES,
   shouldUseClientBlobUpload,
   uploadContratoPdfToBlob,
 } from '../lib/client/contratoBlobUpload';
+import { buildPdfViewUrl, contratoHasRemotePdf } from '../lib/pdfViewUrl';
 import type { Marcador } from '../lib/documents/positioningTypes';
 import {
   defaultTemplateSigners,
@@ -84,7 +86,7 @@ export default function Contratos() {
 
   const loadPreview = useCallback(async (
     contratoId: string,
-    opts?: { force?: boolean; sourceType?: 'text' | 'pdf' },
+    opts?: { force?: boolean; sourceType?: 'text' | 'pdf'; pdfPath?: string | null },
   ) => {
     if (!opts?.force && loadedPreviewForRef.current === previewKey && previewKey) {
       return;
@@ -97,6 +99,47 @@ export default function Contratos() {
     setPreviewLoading(true);
     setPreviewError(null);
     try {
+      const applyPdfBlob = async (pdfBlob: Blob) => {
+        const source = await blobToPdfPreviewSource(pdfBlob);
+        if (!source) {
+          setPreviewFile(null);
+          loadedPreviewForRef.current = null;
+          setPreviewError('O arquivo não é um PDF válido.');
+          return;
+        }
+        setPreviewFile(source);
+        loadedPreviewForRef.current = previewKey || contratoId;
+        setPreviewError(null);
+      };
+
+      const remotePdfPath = opts?.pdfPath ?? currentContrato?.pdfPath;
+      if (remotePdfPath && contratoHasRemotePdf(remotePdfPath)) {
+        const res = await fetch(buildPdfViewUrl(remotePdfPath), {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          setPreviewFile(null);
+          loadedPreviewForRef.current = null;
+          setPreviewError(
+            res.status === 404
+              ? 'PDF não encontrado no armazenamento. Envie o arquivo novamente.'
+              : 'Não foi possível carregar o PDF do armazenamento.',
+          );
+          return;
+        }
+        const blob = await res.blob();
+        if (blob.size < 5) {
+          setPreviewFile(null);
+          loadedPreviewForRef.current = null;
+          setPreviewError('O servidor não retornou um PDF válido.');
+          return;
+        }
+        await applyPdfBlob(blob);
+        return;
+      }
+
       const fetchPdf = (path: string) => {
         const run = () =>
           apiFetch(`${path}?_=${Date.now()}`, {
@@ -173,7 +216,7 @@ export default function Contratos() {
         setPreviewLoading(false);
       }
     }
-  }, [previewKey]);
+  }, [previewKey, currentContrato?.pdfPath]);
 
   useEffect(() => {
     loadedPreviewForRef.current = null;
@@ -191,7 +234,7 @@ export default function Contratos() {
       if (loadedPreviewForRef.current === previewKey && previewKey) {
         return;
       }
-      void loadPreview(contratoId, { sourceType });
+      void loadPreview(contratoId, { sourceType, pdfPath: currentContrato?.pdfPath });
     } else if (sourceType === 'pdf') {
       setPreviewFile(null);
       setPreviewError(null);
@@ -313,7 +356,8 @@ export default function Contratos() {
     try {
       let data: ContratoTemplate & { error?: string; pageCount?: number };
 
-      if (shouldUseClientBlobUpload()) {
+      const useBlob = await shouldUseClientBlobUpload();
+      if (useBlob) {
         const { blobUrl } = await uploadContratoPdfToBlob(saved.id, file);
         const finalized = await finalizeContratoPdfUpload(saved.id, {
           blobUrl,
@@ -322,6 +366,11 @@ export default function Contratos() {
         });
         data = finalized as ContratoTemplate & { pageCount?: number };
       } else {
+        if (import.meta.env.PROD && file.size > MULTIPART_FALLBACK_MAX_BYTES) {
+          throw new Error(
+            'PDF muito grande para o modo de upload atual. Contate o suporte (armazenamento Blob não configurado).',
+          );
+        }
         const form = new FormData();
         form.append('file', file);
         const res = await apiFetch(`/api/contratos/${saved.id}/upload-pdf`, {
@@ -357,7 +406,11 @@ export default function Contratos() {
           : [updated, ...contratos.filter((c): c is ContratoTemplate => !!c?.id)],
       );
       loadedPreviewForRef.current = null;
-      await loadPreview(updated.id, { force: true, sourceType: 'pdf' });
+      await loadPreview(updated.id, {
+        force: true,
+        sourceType: 'pdf',
+        pdfPath: updated.pdfPath,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao enviar PDF';
       setUploadError(msg);
@@ -430,15 +483,19 @@ export default function Contratos() {
     const savedCfg = parseSavedSignatureConfig(saved.signatureConfig, orgName, pageCount);
     if (savedCfg.fields.length === 0) setMarcadores([]);
     loadedPreviewForRef.current = null;
-    await loadPreview(saved.id, { force: true, sourceType });
+    await loadPreview(saved.id, { force: true, sourceType, pdfPath: saved.pdfPath });
     setWizardStep('signature');
   };
 
   const handleReloadPreview = useCallback(() => {
     if (!currentContrato?.id) return;
     loadedPreviewForRef.current = null;
-    void loadPreview(currentContrato.id, { force: true, sourceType });
-  }, [currentContrato?.id, loadPreview, sourceType]);
+    void loadPreview(currentContrato.id, {
+      force: true,
+      sourceType,
+      pdfPath: currentContrato.pdfPath,
+    });
+  }, [currentContrato?.id, currentContrato?.pdfPath, loadPreview, sourceType]);
 
   const handleConfirmSave = async () => {
     const saved = await persistContent();
@@ -545,7 +602,11 @@ export default function Contratos() {
                     void persistContent().then(async (s) => {
                       if (s?.id) {
                         loadedPreviewForRef.current = null;
-                        await loadPreview(s.id, { force: true, sourceType });
+                        await loadPreview(s.id, {
+                          force: true,
+                          sourceType,
+                          pdfPath: s.pdfPath,
+                        });
                         setWizardStep('signature');
                       }
                     });

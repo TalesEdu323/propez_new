@@ -67,13 +67,15 @@ export function resolveContratoTextoForApi(
   return contratoTexto;
 }
 
-/** Alerta se o payload de elementos for excessivamente grande (>500KB serializado). */
+const MODELO_PAYLOAD_WARN_BYTES = Math.floor(4_000_000 * 0.8);
+
+/** Alerta se o payload de elementos aproximar o limite do servidor (4 MB). */
 export function warnIfElementosPayloadLarge(elementos: BuilderElement[]): void {
   try {
     const size = JSON.stringify(elementos).length;
-    if (size > 500_000) {
+    if (size > MODELO_PAYLOAD_WARN_BYTES) {
       console.warn(
-        `[modelo] Payload de elementos muito grande (${Math.round(size / 1024)}KB). O salvamento pode demorar ou falhar.`,
+        `[modelo] Payload de elementos muito grande (${Math.round(size / 1024)}KB). Reduza imagens ou o layout antes de salvar.`,
       );
     }
   } catch {
