@@ -138,7 +138,13 @@ export function createModelosRouter(deps: {
         })
       }
 
-      const parsed = bodySchema.safeParse(rawBody)
+      let parsed: ReturnType<typeof bodySchema.safeParse>
+      try {
+        parsed = bodySchema.safeParse(rawBody)
+      } catch (err) {
+        console.warn('[modelos/POST] validação lançou exceção', err)
+        return res.status(400).json({ error: 'Dados do modelo em formato inválido.' })
+      }
       if (!parsed.success) {
         console.warn('[modelos/POST] payload inválido', {
           orgId: req.auth.orgId,
@@ -252,7 +258,13 @@ export function createModelosRouter(deps: {
         })
       }
 
-      const parsed = patchSchema.safeParse(rawBody)
+      let parsed: ReturnType<typeof patchSchema.safeParse>
+      try {
+        parsed = patchSchema.safeParse(rawBody)
+      } catch (err) {
+        console.warn('[modelos/PATCH] validação lançou exceção', err)
+        return res.status(400).json({ error: 'Dados do modelo em formato inválido.' })
+      }
       if (!parsed.success) {
         console.warn('[modelos/PATCH] payload inválido', {
           modeloId: req.params.id,

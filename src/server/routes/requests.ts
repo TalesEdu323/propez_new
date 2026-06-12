@@ -8,7 +8,7 @@ import { getRequestFlowConfig } from '../services/platformSettings.js';
 
 const createSchema = z.object({
   type: z.enum(['whitelabel', 'enterprise']),
-  payload: z.record(z.unknown()).default({}),
+  payload: z.record(z.string(), z.unknown()).default({}),
 });
 
 export function createRequestsRouter(deps: {

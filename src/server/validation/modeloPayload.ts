@@ -27,6 +27,8 @@ const optionalUuid = z.preprocess(
   z.string().uuid().nullable().optional(),
 );
 
+const signatureConfigSchema = z.object({}).passthrough().nullable().optional();
+
 export const modeloBodySchema = z.object({
   id: z.string().uuid().optional(),
   nome: z.string().trim().min(1).max(200),
@@ -43,12 +45,7 @@ export const modeloBodySchema = z.object({
     (v) => (v === undefined ? undefined : parseProposalFlow(v)),
     proposalFlowConfigSchema.optional(),
   ),
-  signatureConfig: z.record(z.unknown()).nullable().optional(),
+  signatureConfig: signatureConfigSchema,
 });
 
-export const modeloPatchSchema = modeloBodySchema.partial().extend({
-  fluxo: z.preprocess(
-    (v) => (v === undefined ? undefined : parseProposalFlow(v)),
-    proposalFlowConfigSchema.optional(),
-  ),
-});
+export const modeloPatchSchema = modeloBodySchema.partial();

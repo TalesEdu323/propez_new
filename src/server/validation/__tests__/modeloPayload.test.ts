@@ -27,6 +27,17 @@ describe('modeloBodySchema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('aceita signatureConfig com campos aninhados (Zod 4)', () => {
+    const parsed = modeloBodySchema.safeParse({
+      ...validBase,
+      signatureConfig: {
+        clientField: { page: 1, xPct: 35, yPct: 82, widthPct: 30, heightPct: 10 },
+        signers: [{ id: 'client', name: 'Cliente', role: 'client' }],
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   it('aceita whatsappComprovante com até 20 dígitos', () => {
     const parsed = modeloBodySchema.safeParse({
       ...validBase,

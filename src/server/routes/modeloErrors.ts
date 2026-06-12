@@ -18,6 +18,12 @@ export function modeloErrorResponse(err: unknown): { status: number; error: stri
       error: 'Dados do layout contêm valores inválidos. Recarregue a página e tente salvar novamente.',
     };
   }
+  if (err instanceof Error && err.message.includes("reading '_zod'")) {
+    return {
+      status: 400,
+      error: 'Dados do modelo em formato inválido. Recarregue a página e tente novamente.',
+    };
+  }
 
   const pg = err as { code?: string };
   if (pg.code === '23503') {

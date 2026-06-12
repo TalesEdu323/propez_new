@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:integrations": "node scripts/check-integrations.mjs",
+    "check:zod": "node scripts/check-zod-schemas.mjs",
     "check:server-imports": "tsx scripts/check-server-imports.ts",
     "check:deploy-env": "node scripts/check-deploy-env.mjs",
     "check:production-mail": "node scripts/check-production-mail.mjs",
