@@ -232,7 +232,7 @@ export function RubricaSignaturePositioningPanel({
     typeof document !== 'undefined' &&
     createPortal(
       <div
-        className="fixed z-[9999] bg-white rounded-xl shadow-xl border border-zinc-200 p-3 min-w-[200px]"
+        className="fixed z-[9999] bg-white rounded-xl shadow-xl border border-zinc-200 p-3 min-w-[min(280px,calc(100vw-2rem))]"
         style={{
           left: Math.min(window.innerWidth - 220, (getPageRect(pendingClick.page)?.left ?? 0) + pendingClick.xPct * pageWidth),
           top: Math.min(window.innerHeight - 180, (getPageRect(pendingClick.page)?.top ?? 0) + pendingClick.yPct * pageHeight - 80),
@@ -242,21 +242,21 @@ export function RubricaSignaturePositioningPanel({
         <p className="text-xs font-bold text-zinc-500 mb-2 uppercase tracking-widest">Adicionar campo</p>
         <button
           type="button"
-          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg bg-zinc-900 text-white text-sm font-medium mb-1"
+          className="w-full flex items-center gap-2 px-3 py-3 rounded-lg bg-zinc-900 text-white text-sm font-medium mb-1 min-h-[44px]"
           onClick={() => createMarcador('signature', pendingClick.xPct, pendingClick.yPct, pendingClick.page)}
         >
           <PenTool className="w-4 h-4" /> Assinar
         </button>
         <button
           type="button"
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 text-sm mb-1"
+          className="w-full flex items-center gap-2 px-3 py-3 rounded-lg border border-zinc-200 text-sm mb-1 min-h-[44px]"
           onClick={() => createMarcador('initials', pendingClick.xPct, pendingClick.yPct, pendingClick.page)}
         >
           <PenTool className="w-4 h-4" /> Rubricar
         </button>
         <button
           type="button"
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 text-sm"
+          className="w-full flex items-center gap-2 px-3 py-3 rounded-lg border border-zinc-200 text-sm min-h-[44px]"
           onClick={() => createMarcador('text', pendingClick.xPct, pendingClick.yPct, pendingClick.page)}
         >
           <Type className="w-4 h-4" /> Texto
@@ -273,7 +273,10 @@ export function RubricaSignaturePositioningPanel({
     );
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 min-h-[520px]">
+    <div className="flex flex-col lg:flex-row gap-4 min-h-[400px] md:min-h-[520px]">
+      <p className="lg:hidden text-xs text-zinc-500 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2">
+        Toque no PDF para adicionar campos de assinatura. Use dois dedos para rolar a página.
+      </p>
       <aside className="lg:w-56 shrink-0 rounded-2xl border border-black/10 bg-zinc-50 p-4">
         <div className="flex items-center gap-2 mb-3">
           <Users className="w-4 h-4 text-zinc-500" />

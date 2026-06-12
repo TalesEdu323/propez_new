@@ -331,7 +331,7 @@ export default function AdminSubscriptions({ navigate }: { navigate: NavigateFn 
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
                     Renova em

@@ -8,6 +8,10 @@ import { toJsonbParam } from '../db/jsonbParam.js'
 import { fetchOrgBrand, mergePageLayoutWithOrgBrand } from '../services/orgBrandDefaults.js'
 import { modeloBodySchema, modeloPatchSchema } from '../validation/modeloPayload.js'
 import { MODELO_MAX_PAYLOAD_BYTES, modeloErrorResponse } from './modeloErrors.js'
+import {
+  assertModeloJsonFields,
+  validateModeloReferences,
+} from './modeloPersistHelpers.js'
 
 const MODEL_SELECT = `id, nome, elementos, page_layout, servicos, contrato_id, contrato_texto,
               chave_pix, link_pagamento, whatsapp_comprovante, tier, fluxo, signature_config, created_at`
@@ -154,10 +158,18 @@ export function createModelosRouter(deps: {
       const fluxoValue = d.fluxo ?? { steps: ['approve', 'sign', 'pay'] as const }
       const contratoTextoBytes = contratoTexto ? Buffer.byteLength(contratoTexto, 'utf8') : 0
 
+      await validateModeloReferences(pool, req.auth.orgId, d.contratoId, d.servicos)
+      assertModeloJsonFields({
+        elementos: elementosValue,
+        pageLayout,
+        fluxo: fluxoValue,
+        signatureConfig: d.signatureConfig,
+      })
+
       const insertParams = [
         d.nome,
-        toJsonbParam(elementosValue),
-        toJsonbParam(pageLayout),
+        toJsonbParam(elementosValue, 'elementos'),
+        toJsonbParam(pageLayout, 'pageLayout'),
         d.servicos,
         d.contratoId ?? null,
         contratoTexto,
@@ -165,8 +177,8 @@ export function createModelosRouter(deps: {
         d.linkPagamento ?? null,
         d.whatsappComprovante ?? null,
         d.tier,
-        toJsonbParam(fluxoValue),
-        d.signatureConfig != null ? toJsonbParam(d.signatureConfig) : null,
+        toJsonbParam(fluxoValue, 'fluxo'),
+        d.signatureConfig != null ? toJsonbParam(d.signatureConfig, 'signatureConfig') : null,
       ]
 
       let rows: Record<string, unknown>[]
@@ -289,6 +301,40 @@ export function createModelosRouter(deps: {
       patchJsonbFields = patchJsonbContext
       console.log('[modelos/PATCH] fields', JSON.stringify(patchJsonbContext))
 
+      const effectiveServicos = d.servicos ?? []
+      const effectiveContratoId =
+        'contratoId' in d ? (d.contratoId ?? null) : undefined
+      if (d.servicos !== undefined || effectiveContratoId !== undefined) {
+        let contratoForValidation = effectiveContratoId
+        if (contratoForValidation === undefined) {
+          const { rows: existingRows } = await pool.query<{ contrato_id: string | null }>(
+            `SELECT contrato_id FROM modelos_propostas WHERE organization_id = $1 AND id = $2`,
+            [req.auth.orgId, req.params.id],
+          )
+          contratoForValidation = existingRows[0]?.contrato_id ?? null
+        }
+        await validateModeloReferences(
+          pool,
+          req.auth.orgId,
+          contratoForValidation,
+          d.servicos !== undefined ? effectiveServicos : [],
+        )
+      }
+
+      if (
+        d.elementos !== undefined ||
+        patchPageLayout !== undefined ||
+        d.fluxo !== undefined ||
+        d.signatureConfig !== undefined
+      ) {
+        assertModeloJsonFields({
+          elementos: d.elementos ?? [],
+          pageLayout: patchPageLayout ?? {},
+          fluxo: d.fluxo ?? { steps: ['approve', 'sign', 'pay'] },
+          signatureConfig: d.signatureConfig,
+        })
+      }
+
       const { rows } = await pool.query(
         `UPDATE modelos_propostas SET
            nome = COALESCE($3, nome),
@@ -310,9 +356,9 @@ export function createModelosRouter(deps: {
           req.params.id,
           d.nome ?? null,
           d.elementos !== undefined,
-          d.elementos !== undefined ? toJsonbParam(d.elementos) : null,
+          d.elementos !== undefined ? toJsonbParam(d.elementos, 'elementos') : null,
           d.pageLayout !== undefined,
-          patchPageLayout !== undefined ? toJsonbParam(patchPageLayout) : null,
+          patchPageLayout !== undefined ? toJsonbParam(patchPageLayout, 'pageLayout') : null,
           d.servicos !== undefined,
           d.servicos ?? null,
           'contratoId' in d,
@@ -327,9 +373,9 @@ export function createModelosRouter(deps: {
           d.whatsappComprovante ?? null,
           d.tier ?? null,
           d.fluxo !== undefined,
-          d.fluxo !== undefined ? toJsonbParam(d.fluxo) : null,
+          d.fluxo !== undefined ? toJsonbParam(d.fluxo, 'fluxo') : null,
           d.signatureConfig !== undefined,
-          d.signatureConfig !== undefined ? toJsonbParam(d.signatureConfig) : null,
+          d.signatureConfig !== undefined ? toJsonbParam(d.signatureConfig, 'signatureConfig') : null,
         ],
       )
       if (!rows[0]) return res.status(404).json({ error: 'Modelo não encontrado' })

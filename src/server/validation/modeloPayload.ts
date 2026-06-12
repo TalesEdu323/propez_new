@@ -39,7 +39,10 @@ export const modeloBodySchema = z.object({
   linkPagamento: z.string().max(2000).optional().nullable(),
   whatsappComprovante: z.string().max(20).optional().nullable(),
   tier: z.enum(['free', 'pro', 'business']).default('free'),
-  fluxo: proposalFlowConfigSchema.optional(),
+  fluxo: z.preprocess(
+    (v) => (v === undefined ? undefined : parseProposalFlow(v)),
+    proposalFlowConfigSchema.optional(),
+  ),
   signatureConfig: z.record(z.unknown()).nullable().optional(),
 });
 

@@ -12,6 +12,11 @@ describe('storeSaveFeedback', () => {
     expect(formatStoreSaveError(err)).toBe('Dados inválidos');
   });
 
+  it('formats 401 como sessão expirada', () => {
+    const err = new ApiError(401, 'Não autenticado');
+    expect(formatStoreSaveError(err)).toBe('Sessão expirada. Faça login novamente.');
+  });
+
   it('formats 504 with mensagem amigável', () => {
     const err = new ApiError(504, 'Gateway Timeout');
     expect(formatStoreSaveError(err)).toContain('servidor demorou');

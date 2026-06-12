@@ -14,6 +14,14 @@ describe('modeloBodySchema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('normaliza fluxo inválido no POST body', () => {
+    const parsed = modeloBodySchema.safeParse({ ...validBase, fluxo: { steps: [] } });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.fluxo?.steps).toContain('approve');
+    }
+  });
+
   it('aceita signatureConfig null', () => {
     const parsed = modeloBodySchema.safeParse({ ...validBase, signatureConfig: null });
     expect(parsed.success).toBe(true);

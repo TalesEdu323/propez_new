@@ -119,8 +119,8 @@ export default function ContractEditor({ value, onChange }: ContractEditorProps)
           </div>
         </div>
 
-        <div className="flex-1 p-8 sm:p-12 bg-zinc-100/30 overflow-y-auto custom-scrollbar">
-          <div className="max-w-[800px] mx-auto bg-white shadow-xl border border-black/5 min-h-[1000px] p-12 sm:p-20 rounded-sm relative">
+        <div className="flex-1 p-4 sm:p-8 md:p-12 bg-zinc-100/30 overflow-y-auto custom-scrollbar">
+          <div className="max-w-full md:max-w-[800px] mx-auto bg-white shadow-xl border border-black/5 min-h-[60vh] md:min-h-[1000px] p-4 sm:p-12 md:p-20 rounded-sm relative">
             {!value && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] select-none">
                 <FileText className="w-64 h-64" />
@@ -141,7 +141,7 @@ CONTRATADA: {{EMPRESA_NOME}}, CNPJ {{EMPRESA_CNPJ}}
 
 OBJETO: {{SERVICOS_LISTA}}
 VALOR: {{VALOR_TOTAL}}`}
-              className="w-full h-full min-h-[900px] resize-none focus:outline-none text-zinc-800 leading-relaxed font-serif text-base sm:text-lg placeholder:text-zinc-200"
+              className="w-full h-full min-h-[50vh] md:min-h-[900px] resize-none focus:outline-none text-zinc-800 leading-relaxed font-serif text-base sm:text-lg placeholder:text-zinc-200"
             />
           </div>
         </div>

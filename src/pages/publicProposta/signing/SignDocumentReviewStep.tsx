@@ -14,11 +14,11 @@ export function SignDocumentReviewStep({ meta, org, onContinue }: Props) {
     <div className="min-h-screen bg-[#F0F2F5] flex flex-col font-sans">
       <SigningHeader step="review" org={org} completedSignatures={0} totalSignatures={1} />
       <div className="flex-1 flex justify-center p-4 sm:p-8 overflow-y-auto pb-32">
-        <div className="w-full max-w-3xl bg-white shadow-sm rounded-sm border border-gray-300 min-h-[500px] relative">
+        <div className="w-full max-w-3xl bg-white shadow-sm rounded-sm border border-gray-300 min-h-[300px] md:min-h-[500px] relative">
           <div className="absolute top-4 right-4 bg-black/5 text-gray-500 text-[10px] font-bold px-2 py-1 rounded">
             Documento para assinatura
           </div>
-          <div className="w-full min-h-[500px] flex justify-center p-4 pt-12">
+          <div className="w-full min-h-[280px] md:min-h-[500px] flex justify-center p-4 pt-12">
             <SignDocumentViewer
               fileUrl={meta.previewUrl}
               fields={meta.clientFields}

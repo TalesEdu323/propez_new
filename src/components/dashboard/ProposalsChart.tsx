@@ -203,8 +203,8 @@ export function DateFilterControls({ filter, onChange }: DateFilterControlsProps
   const setMode = (mode: DateFilterState['mode']) => onChange({ ...filter, mode });
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-1.5 p-1 bg-zinc-100/80 rounded-xl w-fit">
+    <div className="flex flex-col gap-3 w-full">
+      <div className="flex flex-wrap gap-1.5 p-1 bg-zinc-100/80 rounded-xl w-full sm:w-fit">
         {(
           [
             ['month', 'Mês'],

@@ -223,7 +223,7 @@ export default function AdminAffiliates({ navigate }: { navigate: NavigateFn }) 
         <p className="text-zinc-500">Carregando…</p>
       ) : (
         <div className="apple-card overflow-x-auto">
-          <table className="w-full text-sm min-w-[900px]">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="border-b border-black/5 text-left text-zinc-500">
                 <th className="p-4">Parceiro</th>

@@ -569,8 +569,13 @@ async function patchModeloWithRetry(id: string, body: Record<string, unknown>): 
 }
 
 async function createModeloWithRetry(payload: ModeloPayload): Promise<ApiModelo> {
-  JSON.stringify(payload.elementos ?? []);
-  if (payload.pageLayout) JSON.stringify(payload.pageLayout);
+  try {
+    JSON.stringify(payload);
+  } catch {
+    throw new Error(
+      'O layout contém dados inválidos. Recarregue a página e tente salvar novamente.',
+    );
+  }
   return postModeloWithRetry(payload as unknown as Record<string, unknown>);
 }
 

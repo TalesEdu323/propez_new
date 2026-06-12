@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { MODELO_MAX_PAYLOAD_BYTES, modeloErrorResponse } from '../modeloErrors.js';
+import { modeloErrorResponse } from '../modeloErrors.js';
+import { JsonNotSerializableError } from '../../db/jsonbParam.js';
+import { ModeloReferenceError } from '../modeloPersistHelpers.js';
 
 describe('modeloErrorResponse', () => {
   it('mapeia FK inválida', () => {
@@ -17,7 +19,21 @@ describe('modeloErrorResponse', () => {
     expect(modeloErrorResponse({ code: '22P02' }).status).toBe(400);
   });
 
-  it('limite de payload alinhado ao express 5mb', () => {
-    expect(MODELO_MAX_PAYLOAD_BYTES).toBe(4_000_000);
+  it('mapeia unique violation', () => {
+    expect(modeloErrorResponse({ code: '23505' }).status).toBe(409);
+  });
+
+  it('mapeia timeout', () => {
+    expect(modeloErrorResponse({ code: '57014' }).status).toBe(504);
+  });
+
+  it('mapeia JSON não serializável', () => {
+    expect(modeloErrorResponse(new JsonNotSerializableError('elementos')).status).toBe(400);
+  });
+
+  it('mapeia referência inválida pré-validada', () => {
+    expect(
+      modeloErrorResponse(new ModeloReferenceError('Contrato ausente')).status,
+    ).toBe(400);
   });
 });

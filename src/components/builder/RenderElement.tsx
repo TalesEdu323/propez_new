@@ -1043,7 +1043,7 @@ export function RenderElement({
           {props.title && (
             <h3 className="p-6 pb-0 text-2xl font-bold text-zinc-900">{props.title as string}</h3>
           )}
-          <table className="w-full text-left border-collapse min-w-[600px]">
+          <table className="w-full text-left border-collapse min-w-[320px] sm:min-w-[600px]">
             <thead>
               <tr>
                 {headers.map((header, idx) => (

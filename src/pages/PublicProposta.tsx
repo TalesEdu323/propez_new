@@ -425,7 +425,7 @@ export default function PublicProposta({ token }: Props) {
   }
 
   return (
-    <div className="min-h-screen w-full bg-white relative font-sans">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-white relative font-sans">
       {showOrgHeader && org && (
         <PublicOrgHeader
           name={org.name}
@@ -452,7 +452,7 @@ export default function PublicProposta({ token }: Props) {
             <p className="text-zinc-400 font-bold text-[10px] uppercase tracking-[0.2em]">Esta proposta está vazia.</p>
           </div>
         ) : (
-          <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full bg-white">
+          <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-full overflow-x-hidden bg-white">
             <PageShell layout={pageLayout}>
               {proposta.elementos.map((el) => (
                 <RenderElement

@@ -64,6 +64,7 @@ export default function AdminBlogList({ navigate }: { navigate: NavigateFn }) {
         <p className="text-zinc-400">Carregando...</p>
       ) : (
         <div className="bg-white rounded-2xl border border-black/5 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-black/5 text-left text-zinc-400 text-[10px] uppercase tracking-widest">
@@ -111,6 +112,7 @@ export default function AdminBlogList({ navigate }: { navigate: NavigateFn }) {
               ))}
             </tbody>
           </table>
+          </div>
           {posts.length === 0 && (
             <p className="p-8 text-center text-zinc-400">Nenhum artigo ainda.</p>
           )}

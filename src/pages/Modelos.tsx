@@ -64,7 +64,7 @@ export default function Modelos({
   };
 
   return (
-    <div className="p-[7px] md:p-10 max-w-7xl mx-auto font-sans pb-[87px] md:pb-10">
+    <div className="p-4 md:p-10 max-w-7xl mx-auto font-sans">
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -188,9 +188,10 @@ export default function Modelos({
                 </div>
               </div>
             ) : listView === 'list' ? (
-              <div className={`${LISTING_LIST_CLASS} p-4 sm:p-6`}>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+              <>
+                <div className={`hidden md:block ${LISTING_LIST_CLASS} p-4 sm:p-6`}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 bg-zinc-50/30">
                         <th className="px-10 py-5 font-bold">Nome do Modelo</th>
@@ -258,6 +259,64 @@ export default function Modelos({
                   </table>
                 </div>
               </div>
+              <div className={`md:hidden ${LISTING_GRID_CLASS} p-4 sm:p-6`}>
+                <AnimatePresence mode="popLayout">
+                  {filteredModelos.map((modelo, index) => (
+                    <motion.div
+                      key={modelo.id}
+                      layout
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ delay: index * 0.04 }}
+                      className="apple-card apple-card-hover group cursor-pointer !p-6 flex flex-col h-full"
+                      onClick={() => navigate('criar-modelo', { editId: modelo.id })}
+                    >
+                      <div className="w-12 h-12 bg-zinc-50 rounded-xl flex items-center justify-center mb-4 border border-zinc-100">
+                        <FileText className="w-6 h-6 text-zinc-400" />
+                      </div>
+                      <h3 className="text-lg font-bold text-zinc-900 line-clamp-1">{modelo.nome}</h3>
+                      <p className="text-xs text-zinc-400 mt-2 flex-grow">
+                        {modelo.servicos.length} serviço(s) · {formatDateBR(modelo.data_criacao)}
+                      </p>
+                      <div className="flex gap-2 mt-4 pt-4 border-t border-zinc-100">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('criar-modelo', { editId: modelo.id });
+                          }}
+                          className="flex-1 text-[9px] font-bold uppercase tracking-widest text-zinc-600"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDuplicate(modelo.id);
+                          }}
+                          className="p-2 text-zinc-400 hover:bg-zinc-50 rounded-lg"
+                          title="Duplicar"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(modelo.id);
+                          }}
+                          className="p-2 text-red-400 hover:bg-red-50 rounded-lg"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+              </>
             ) : (
               <div className={`${LISTING_GRID_CLASS} p-6 sm:p-10`}>
                 <AnimatePresence mode="popLayout">

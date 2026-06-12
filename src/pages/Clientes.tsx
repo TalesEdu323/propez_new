@@ -137,19 +137,28 @@ export default function Clientes({ navigate: _navigate }: { navigate: NavigateFn
             </div>
           ) : (
             listView === 'list' ? (
-              <ClientesTable
+              <>
+                <div className="hidden md:block">
+                  <ClientesTable
+                    clientes={filteredClientes}
+                    onEdit={(cliente) => { setFormData(cliente); setIsModalOpen(true); }}
+                    onDelete={handleDelete}
+                  />
+                </div>
+                <div className="md:hidden">
+                  <ClientesCards
+                    clientes={filteredClientes}
+                    onEdit={(cliente) => { setFormData(cliente); setIsModalOpen(true); }}
+                    onDelete={handleDelete}
+                  />
+                </div>
+              </>
+            ) : (
+              <ClientesCards
                 clientes={filteredClientes}
                 onEdit={(cliente) => { setFormData(cliente); setIsModalOpen(true); }}
                 onDelete={handleDelete}
               />
-            ) : (
-              <div className="block">
-                <ClientesCards
-                  clientes={filteredClientes}
-                  onEdit={(cliente) => { setFormData(cliente); setIsModalOpen(true); }}
-                  onDelete={handleDelete}
-                />
-              </div>
             )
           )}
         </motion.div>

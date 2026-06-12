@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, Settings, LogOut, Layers, Briefcase, Bell, DollarSign, User, Calendar } from 'lucide-react';
+import { Settings, LogOut, Bell, User } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { getLastHydrateErrors, hydrateStore } from './lib/store';
 import { subscribeToPlanosRequest } from './lib/navigationEvents';
@@ -15,6 +15,7 @@ import { BrandLogo } from './components/BrandLogo';
 import { OrgBrandProvider } from './components/OrgBrandProvider';
 import { resolveOrgBrand } from './lib/orgBrand';
 import { AppTopBar, AppTopBarMobileButton } from './components/AppTopBar';
+import { DESKTOP_NAV_ITEMS, MobileAppNav } from './components/MobileAppNav';
 import { StoreSaveErrorListener } from './components/StoreSaveErrorListener';
 import { PageErrorBoundary } from './components/PageErrorBoundary';
 import { useNotifications } from './lib/useNotifications';
@@ -230,17 +231,6 @@ export default function AuthenticatedApp() {
     );
   }
 
-  const navItems: { id: AppRoute; label: string; icon: React.ReactNode }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { id: 'clientes', label: 'Clientes', icon: <Users className="w-5 h-5" /> },
-    { id: 'servicos', label: 'Serviços', icon: <Briefcase className="w-5 h-5" /> },
-    { id: 'contratos', label: 'Contratos', icon: <FileText className="w-5 h-5" /> },
-    { id: 'modelos', label: 'Modelos', icon: <Layers className="w-5 h-5" /> },
-    { id: 'propostas', label: 'Propostas', icon: <FileText className="w-5 h-5" /> },
-    { id: 'agenda', label: 'Agenda', icon: <Calendar className="w-5 h-5" /> },
-    { id: 'pagamentos', label: 'Pagamentos', icon: <DollarSign className="w-5 h-5" /> },
-  ];
-
   const isPlatformAdmin = Boolean(session?.user.isPlatformAdmin);
 
   if (isAdminRoute && isPlatformAdmin) {
@@ -262,7 +252,7 @@ export default function AuthenticatedApp() {
           <BrandLogo height="md" />
         </div>
         <nav className="flex-1 px-4 mt-8 space-y-1.5 overflow-y-auto custom-scrollbar">
-          {navItems.map((item) => {
+          {DESKTOP_NAV_ITEMS.map((item) => {
             const isActive = route === item.id;
             return (
               <button
@@ -303,9 +293,11 @@ export default function AuthenticatedApp() {
         </div>
       </div>
 
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-2xl border-b border-black/[0.05] z-40 flex items-center justify-between px-5">
-        <BrandLogo height="md" />
-        <div className="flex items-center gap-2">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-2xl border-b border-black/[0.05] z-40 flex items-center justify-between px-4 gap-2">
+        <div className="min-w-0 shrink">
+          <BrandLogo height="md" />
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
           <AppTopBarMobileButton navigate={navigate} showPlatformButton={isPlatformAdmin} />
           <button type="button" onClick={() => navigate('configuracoes')} className="w-10 h-10 flex items-center justify-center text-zinc-500 bg-zinc-100 rounded-full relative">
             <Bell className="w-5 h-5" />
@@ -355,24 +347,12 @@ export default function AuthenticatedApp() {
         </div>
       </main>
 
-      <div className="md:hidden fixed bottom-6 left-6 right-6 h-20 bg-white/80 backdrop-blur-2xl border border-black/[0.05] rounded-[2rem] z-50 px-4 flex items-center justify-around shadow-[0_20px_50px_-10px_rgba(0,0,0,0.15)]">
-        {navItems.map((item) => {
-          const isActive = route === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => navigate(item.id)}
-              className={`relative flex flex-col items-center justify-center gap-1 w-14 h-full transition-all active:scale-90 ${isActive ? 'text-zinc-900' : 'text-zinc-400'}`}
-            >
-              <div className={`transition-all ${isActive ? 'scale-110 -translate-y-0.5' : 'scale-100'}`}>{item.icon}</div>
-              <span className={`text-[9px] font-bold uppercase tracking-widest ${isActive ? 'opacity-100' : 'opacity-60'}`}>
-                {item.label.substring(0, 3)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <MobileAppNav
+        route={route}
+        navigate={navigate}
+        navActiveClass={navActiveClass}
+        onLogout={() => void authLogout().then(() => { window.location.href = '/'; })}
+      />
     </div>
     </OrgBrandProvider>
   );

@@ -44,21 +44,21 @@ export default function Pagamentos({ navigate }: { navigate: NavigateFn }) {
   const totalPendente = propostas.filter(p => !p.pago).reduce((acc, p) => acc + p.valor, 0);
 
   return (
-    <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-12 pb-[87px] md:pb-10">
+    <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-12">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 px-1 md:px-0">
         <div>
           <h1 className="page-title">Financeiro.</h1>
           <p className="text-zinc-400 mt-4 font-medium tracking-tight">Controle o fluxo de caixa das propostas aprovadas.</p>
         </div>
         
-        <div className="flex items-center gap-6">
-          <div className="apple-card !p-6 flex flex-col gap-2 min-w-[160px] shadow-[0_20px_40px_-12px_rgba(16,185,129,0.1)]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full md:w-auto">
+          <div className="apple-card !p-6 flex flex-col gap-2 shadow-[0_20px_40px_-12px_rgba(16,185,129,0.1)]">
             <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-[0.25em]">Recebido</span>
             <span className="text-2xl font-bold text-zinc-900 tracking-tightest">
               {formatBRL(totalRecebido, { fractionDigits: 0 })}
             </span>
           </div>
-          <div className="apple-card !p-6 flex flex-col gap-2 min-w-[160px] shadow-[0_20px_40px_-12px_rgba(245,158,11,0.1)]">
+          <div className="apple-card !p-6 flex flex-col gap-2 shadow-[0_20px_40px_-12px_rgba(245,158,11,0.1)]">
             <span className="text-[9px] font-bold text-amber-600 uppercase tracking-[0.25em]">Pendente</span>
             <span className="text-2xl font-bold text-zinc-900 tracking-tightest">
               {formatBRL(totalPendente, { fractionDigits: 0 })}

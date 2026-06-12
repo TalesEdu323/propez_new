@@ -7,9 +7,17 @@ import App from './App.tsx';
 import './index.css';
 import { bootstrapSession } from './lib/authSession';
 import { registerChunkLoadRecovery, clearChunkReloadFlag } from './lib/chunkLoadError';
+import { subscribeRefreshFailure } from './lib/apiClient';
 
 registerChunkLoadRecovery();
 clearChunkReloadFlag();
+
+subscribeRefreshFailure(() => {
+  if (typeof window === 'undefined') return;
+  if (window.location.pathname.startsWith('/app')) {
+    window.location.replace('/login?expired=1');
+  }
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {

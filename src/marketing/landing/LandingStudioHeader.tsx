@@ -43,7 +43,7 @@ export function LandingStudioHeader() {
 
   return (
     <header className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-xl z-50 border-b border-gray-100">
-      <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-2">
         <Link to="/" className="shrink-0 hover:opacity-80 transition-opacity">
           <PropezLogo height="md" />
         </Link>
@@ -58,7 +58,7 @@ export function LandingStudioHeader() {
           ))}
         </nav>
 
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden md:flex items-center gap-3 shrink-0">
           <Link to="/login" className="text-sm font-medium text-gray-600 hover:text-black transition-colors">
             Entrar
           </Link>
@@ -70,7 +70,14 @@ export function LandingStudioHeader() {
           </Link>
         </div>
 
-        <button
+        <div className="flex md:hidden items-center gap-2 shrink-0">
+          <Link
+            to="/cadastro"
+            className="text-xs font-semibold bg-black text-white px-3 py-2 rounded-full whitespace-nowrap"
+          >
+            Começar
+          </Link>
+          <button
           type="button"
           className="md:hidden p-2 text-gray-600"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -79,6 +86,7 @@ export function LandingStudioHeader() {
         >
           {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
+        </div>
       </div>
 
       {isMobileMenuOpen && (

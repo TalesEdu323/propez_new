@@ -83,6 +83,8 @@ export interface BuilderWidgetPaletteProps {
   onLockedWidgetClick?: (type: BuilderElementType) => void;
   /** Painel mais estreito dentro do Propez Fluido. */
   embedded?: boolean;
+  /** When true, palette fills drawer width instead of fixed sidebar */
+  inDrawer?: boolean;
 }
 
 /**
@@ -95,6 +97,7 @@ export function BuilderWidgetPalette({
   allowedWidgets,
   onLockedWidgetClick,
   embedded = false,
+  inDrawer = false,
 }: BuilderWidgetPaletteProps) {
   const isLocked = (type: BuilderElementType) => !!allowedWidgets && !allowedWidgets.has(type);
   const widgetProps = (type: BuilderElementType) => {
@@ -109,10 +112,14 @@ export function BuilderWidgetPalette({
     };
   };
 
-  const widthClass = embedded ? 'w-[220px] shrink-0 min-w-0' : 'w-[300px]'
+  const widthClass = inDrawer
+    ? 'w-full min-w-0'
+    : embedded
+      ? 'w-[220px] shrink-0 min-w-0'
+      : 'w-[300px] shrink-0 min-w-0';
 
   return (
-    <div className={`${widthClass} glass-panel flex flex-col border-r border-black/5 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all min-h-0`}>
+    <div className={`${widthClass} ${inDrawer ? '' : 'h-full min-h-0 glass-panel border-r border-black/5 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]'} flex flex-col transition-all`}>
       <div className={`${embedded ? 'p-3' : 'p-5'} border-b border-black/5 flex items-center gap-2 bg-white/50 shrink-0`}>
         {embedded ? (
           <>

@@ -136,7 +136,7 @@ body {
   }
 
   .mobile-safe-bottom {
-    @apply pb-28 md:pb-0;
+    @apply pb-[6.5rem] md:pb-0;
   }
 
   /* Landing marketing (AI Studio) — ativo com body.landing-marketing */

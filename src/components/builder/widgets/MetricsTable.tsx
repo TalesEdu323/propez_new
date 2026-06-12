@@ -28,7 +28,7 @@ export function MetricsTable({
           <h3 className="text-lg font-bold text-zinc-900">{title}</h3>
         </div>
       ) : null}
-      <table className="w-full text-sm border-collapse min-w-[480px]">
+      <table className="w-full text-sm border-collapse min-w-[280px] sm:min-w-[480px]">
         <thead>
           <tr>
             {headers.map((h, idx) => (

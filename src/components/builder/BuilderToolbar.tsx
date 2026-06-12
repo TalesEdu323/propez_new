@@ -27,6 +27,7 @@ export interface BuilderToolbarProps {
   canRedo?: boolean;
   onSave?: () => void;
   embedded?: boolean;
+  compact?: boolean;
 }
 
 export function BuilderToolbar({
@@ -50,6 +51,7 @@ export function BuilderToolbar({
   canRedo = false,
   onSave,
   embedded = false,
+  compact = false,
 }: BuilderToolbarProps) {
   const viewportButtons: { v: BuilderViewport; icon: React.ReactNode }[] = [
     { v: 'desktop', icon: <Monitor className="w-4 h-4" /> },
@@ -58,23 +60,23 @@ export function BuilderToolbar({
   ];
 
   return (
-    <div className="h-16 glass-panel border-b border-black/5 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20 shadow-sm shrink-0 bg-white/80 relative">
-      <div className="flex items-center gap-2 flex-wrap">
+    <div className={`${compact ? 'h-14' : 'h-16'} glass-panel border-b border-black/5 flex items-center justify-between px-3 sm:px-6 sticky top-0 z-20 shadow-sm shrink-0 bg-white/80 relative gap-2`}>
+      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
         {onBack && (
-          <button type="button" onClick={onBack} className="btn-secondary mr-2">
-            <ChevronLeft className="w-4 h-4" /> Voltar
+          <button type="button" onClick={onBack} className={`btn-secondary ${compact ? '!px-2.5 !py-2' : 'mr-2'}`}>
+            <ChevronLeft className="w-4 h-4" /> {!compact && 'Voltar'}
           </button>
         )}
         <button
           type="button"
           onClick={onTogglePreview}
-          className={`btn-secondary ${previewMode ? 'bg-zinc-100 text-zinc-900 border-black/10 shadow-inner' : ''}`}
+          className={`btn-secondary ${compact ? '!px-2.5 !py-2' : ''} ${previewMode ? 'bg-zinc-100 text-zinc-900 border-black/10 shadow-inner' : ''}`}
         >
           {previewMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          {previewMode ? 'Sair do Preview' : 'Preview'}
+          {!compact && (previewMode ? 'Sair do Preview' : 'Preview')}
         </button>
 
-        <div className="relative flex items-center bg-zinc-100 rounded-xl p-1 border border-black/5 ml-1">
+        <div className="relative flex items-center bg-zinc-100 rounded-xl p-0.5 border border-black/5">
           {viewportButtons.map(({ v, icon }) => (
             <button
               key={v}
@@ -104,7 +106,7 @@ export function BuilderToolbar({
         </div>
 
         {!previewMode && onUndo && onRedo && (
-          <div className="flex items-center bg-zinc-100 rounded-xl p-1 border border-black/5 ml-1">
+          <div className="flex items-center bg-zinc-100 rounded-xl p-0.5 border border-black/5">
             <button type="button" title="Desfazer" disabled={!canUndo} onClick={onUndo} className={`p-2 rounded-lg transition-colors ${canUndo ? 'hover:bg-white text-zinc-700' : 'text-zinc-300'}`}>
               <Undo2 className="w-4 h-4" />
             </button>
@@ -116,8 +118,8 @@ export function BuilderToolbar({
       </div>
 
       {!previewMode && !embedded && (
-        <div className="flex items-center gap-1.5">
-          {(onImport || onExport) && (
+        <div className="flex items-center gap-1 shrink-0">
+          {!compact && (onImport || onExport) && (
             <div className="flex items-center bg-zinc-100 rounded-xl p-1 border border-black/5">
               {onImport && (
                 <label

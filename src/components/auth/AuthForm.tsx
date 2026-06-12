@@ -275,7 +275,7 @@ export function AuthForm({
             <h2 className="text-xl font-semibold text-zinc-900 mb-2">Criar conta</h2>
             <p className="text-zinc-400 text-sm mb-8">Comece a criar propostas profissionais hoje.</p>
             <form onSubmit={handleRegister} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Nome</label>
                   <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="glass-input" />

@@ -184,7 +184,7 @@ export function ContratoContentStep({
               </button>
             </div>
           )}
-          <div className="h-[400px] rounded-2xl border border-black/10 overflow-hidden">
+          <div className="min-h-[50vh] md:min-h-[400px] h-[60vh] md:h-[400px] rounded-2xl border border-black/10 overflow-hidden flex flex-col">
             <ContractEditor
               value={currentContrato.texto || ''}
               onChange={(val) => onContratoChange({ texto: val, sourceType: 'text' })}

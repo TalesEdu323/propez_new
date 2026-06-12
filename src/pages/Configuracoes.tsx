@@ -175,7 +175,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
                 </button>
               )}
               
-              <div className="mt-8 pt-8 border-t border-zinc-100 grid grid-cols-2 gap-4">
+              <div className="mt-8 pt-8 border-t border-zinc-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-zinc-900 tracking-tight">12</p>
                   <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Propostas</p>

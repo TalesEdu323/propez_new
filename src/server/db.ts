@@ -41,6 +41,7 @@ export async function runStartupMigrations(pool: pg.Pool): Promise<void> {
     const sqlDir = resolveSqlDir();
     await runMigrations(pool, sqlDir);
     await verifyIntegrationSchema(pool);
+    await verifyModeloSchema(pool);
   } catch (err) {
     console.error('[startup] migrations failed:', err);
     const isProd =
@@ -73,5 +74,39 @@ async function verifyIntegrationSchema(pool: pg.Pool): Promise<void> {
     console.log('[startup] integration schema OK (integration_mappings, integration_events)');
   } catch (err) {
     console.warn('[startup] verificação do schema de integração falhou:', err);
+  }
+}
+
+const MODELO_REQUIRED_COLUMNS = [
+  'page_layout',
+  'fluxo',
+  'signature_config',
+  'whatsapp_comprovante',
+] as const;
+
+/** Confirma colunas críticas de modelos_propostas (evita 500 silencioso pós-deploy). */
+async function verifyModeloSchema(pool: pg.Pool): Promise<void> {
+  try {
+    const { rows } = await pool.query<{ column_name: string }>(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'modelos_propostas'
+         AND column_name = ANY($1::text[])`,
+      [MODELO_REQUIRED_COLUMNS],
+    );
+    const found = new Set(rows.map((r) => r.column_name));
+    const missing = MODELO_REQUIRED_COLUMNS.filter((c) => !found.has(c));
+    if (missing.length > 0) {
+      console.error(
+        '[startup] modelos_propostas incompleto — colunas ausentes:',
+        missing.join(', '),
+        '(execute npm run migrate:apply)',
+      );
+      return;
+    }
+    console.log('[startup] modelos_propostas schema OK');
+  } catch (err) {
+    console.warn('[startup] verificação do schema de modelos falhou:', err);
   }
 }

@@ -234,6 +234,7 @@ export default function AdminCoupons({ navigate }: { navigate: NavigateFn }) {
         <p className="text-zinc-500">Carregando…</p>
       ) : (
         <div className="apple-card overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-black/5 text-left text-zinc-500">
@@ -276,6 +277,7 @@ export default function AdminCoupons({ navigate }: { navigate: NavigateFn }) {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </AdminPageShell>

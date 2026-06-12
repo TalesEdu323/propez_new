@@ -9,6 +9,9 @@ import { BuilderCanvas } from './builder/BuilderCanvas';
 import { BuilderWidgetPalette } from './builder/BuilderWidgetPalette';
 import { BuilderToolbar } from './builder/BuilderToolbar';
 import { PropertiesPanel, type BuilderTab } from './builder/PropertiesPanel';
+import { PageLayoutFields } from './builder/properties/PageLayoutFields';
+import { BuilderMobileDrawer, BuilderMobileTabBar, type BuilderMobilePanel } from './builder/BuilderMobileDrawer';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { useBuilderPersistence } from './builder/useBuilderPersistence';
 import { useUserConfig } from '../hooks/useStoreEntity';
 import { resolvePlan } from '../lib/store';
@@ -145,6 +148,8 @@ export default function Builder({
   const [previewMode, setPreviewMode] = useState(initialPreviewMode);
   const [viewport, setViewport] = useState<BuilderViewport>(embedded ? 'mobile' : 'desktop');
   const [activeTab, setActiveTab] = useState<BuilderTab>('properties');
+  const [mobilePanel, setMobilePanel] = useState<BuilderMobilePanel>('none');
+  const isMobile = useIsMobile();
   const [mobileReviewed, setMobileReviewed] = useState(false);
   const [showViewportTooltip, setShowViewportTooltip] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -165,6 +170,12 @@ export default function Builder({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (isMobile && !embedded) {
+      setViewport('mobile');
+    }
+  }, [isMobile, embedded]);
 
   useEffect(() => {
     if (initialPageLayout) setPageLayout(normalizePageLayout(initialPageLayout));
@@ -347,17 +358,36 @@ export default function Builder({
   const selectedElement = selectedId ? findElementRecursiveTree(elements, selectedId) : undefined;
   const rootHeight = embedded ? 'h-full min-h-0 flex-1' : 'h-screen';
 
+  const paletteProps = {
+    embedded,
+    onDragStart: handleDragStart,
+    allowedWidgets,
+    onLockedWidgetClick: openUpgradeForWidget,
+  };
+
+  const propertiesProps = {
+    embedded,
+    elements,
+    selectedId,
+    selectedElement,
+    activeTab,
+    setActiveTab,
+    setSelectedId,
+    updateElement,
+    pageLayout,
+    onPageLayoutChange: updatePageLayout,
+    showPageLayoutPanel,
+  };
+
   return (
-    <div className={`${rootHeight} w-full min-w-0 flex bg-transparent font-sans overflow-hidden text-zinc-900`}>
+    <div className={`${rootHeight} w-full min-w-0 flex flex-col md:flex-row bg-transparent font-sans overflow-hidden text-zinc-900`}>
       {!previewMode && (
-        <BuilderWidgetPalette
-          embedded={embedded}
-          onDragStart={handleDragStart}
-          allowedWidgets={allowedWidgets}
-          onLockedWidgetClick={openUpgradeForWidget}
-        />
+        <div className="hidden md:flex h-full min-h-0 shrink-0">
+          <BuilderWidgetPalette {...paletteProps} />
+        </div>
       )}
 
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
       <BuilderCanvas
         embedded={embedded}
         elements={elements}
@@ -397,24 +427,54 @@ export default function Builder({
             canUndo={canUndo}
             canRedo={canRedo}
             onSave={onSave ? handleSaveClick : undefined}
+            compact={isMobile}
           />
         }
       />
 
-      {!previewMode && (
-        <PropertiesPanel
-          embedded={embedded}
-          elements={elements}
-          selectedId={selectedId}
-          selectedElement={selectedElement}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          setSelectedId={setSelectedId}
-          updateElement={updateElement}
-          pageLayout={pageLayout}
-          onPageLayoutChange={updatePageLayout}
-          showPageLayoutPanel={showPageLayoutPanel}
+      {!previewMode && isMobile && (
+        <BuilderMobileTabBar
+          active={mobilePanel}
+          onSelect={setMobilePanel}
+          showLayout={showPageLayoutPanel}
         />
+      )}
+      </div>
+
+      {!previewMode && (
+        <div className="hidden md:flex h-full min-h-0 shrink-0">
+          <PropertiesPanel {...propertiesProps} />
+        </div>
+      )}
+
+      {!previewMode && isMobile && (
+        <>
+          <BuilderMobileDrawer
+            open={mobilePanel === 'widgets'}
+            title="Widgets"
+            onClose={() => setMobilePanel('none')}
+          >
+            <BuilderWidgetPalette {...paletteProps} inDrawer />
+          </BuilderMobileDrawer>
+          <BuilderMobileDrawer
+            open={mobilePanel === 'properties'}
+            title="Propriedades"
+            onClose={() => setMobilePanel('none')}
+          >
+            <PropertiesPanel {...propertiesProps} inDrawer />
+          </BuilderMobileDrawer>
+          {showPageLayoutPanel && (
+            <BuilderMobileDrawer
+              open={mobilePanel === 'layout'}
+              title="Layout da página"
+              onClose={() => setMobilePanel('none')}
+            >
+              <div className="p-4">
+                <PageLayoutFields layout={pageLayout} onChange={updatePageLayout} />
+              </div>
+            </BuilderMobileDrawer>
+          )}
+        </>
       )}
 
       <UpgradeGate

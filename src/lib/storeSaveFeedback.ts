@@ -27,6 +27,23 @@ export function subscribeStoreSaveErrors(listener: SaveErrorListener): () => voi
 
 export function formatStoreSaveError(err: unknown): string {
   if (err instanceof ApiError) {
+    if (err.status === 401) {
+      return 'Sessão expirada. Faça login novamente.';
+    }
+    if (err.status === 503) {
+      const body = err.body;
+      if (body && typeof body === 'object' && 'error' in body && typeof (body as { error: unknown }).error === 'string') {
+        return (body as { error: string }).error;
+      }
+      return 'Serviço temporariamente indisponível. Tente novamente em alguns segundos.';
+    }
+    if (err.status === 409) {
+      const body = err.body;
+      if (body && typeof body === 'object' && 'error' in body && typeof (body as { error: unknown }).error === 'string') {
+        return (body as { error: string }).error;
+      }
+      return 'Conflito ao salvar. Recarregue a página e tente novamente.';
+    }
     if (err.status === 504) {
       return 'O servidor demorou para responder. Tente salvar novamente. Se persistir, reduza o conteúdo do contrato inline ou entre em contato com o suporte.';
     }

@@ -27,6 +27,7 @@ export interface PropertiesPanelProps {
   onPageLayoutChange: (layout: BuilderPageLayout) => void;
   embedded?: boolean;
   showPageLayoutPanel?: boolean;
+  inDrawer?: boolean;
 }
 
 export function PropertiesPanel({
@@ -41,11 +42,16 @@ export function PropertiesPanel({
   onPageLayoutChange,
   embedded = false,
   showPageLayoutPanel = true,
+  inDrawer = false,
 }: PropertiesPanelProps) {
-  const widthClass = embedded ? 'w-[280px] shrink-0 min-w-0' : 'w-[320px]';
+  const widthClass = inDrawer
+    ? 'w-full min-w-0'
+    : embedded
+      ? 'w-[280px] shrink-0 min-w-0'
+      : 'w-[320px] shrink-0 min-w-0';
 
   return (
-    <div className={`${widthClass} h-full min-h-0 glass-panel border-l border-black/5 flex flex-col z-10 shadow-[-4px_0_24px_rgba(0,0,0,0.02)] transition-all`}>
+    <div className={`${widthClass} ${inDrawer ? '' : 'h-full min-h-0 glass-panel border-l border-black/5 z-10 shadow-[-4px_0_24px_rgba(0,0,0,0.02)]'} flex flex-col transition-all`}>
       <div className="flex border-b border-black/5 bg-zinc-50/80 shrink-0 p-2 gap-2">
         <button type="button" onClick={() => setActiveTab('properties')} className={`flex-1 py-2 px-4 flex items-center justify-center gap-2 font-medium text-sm transition-all rounded-xl ${activeTab === 'properties' ? 'text-zinc-900 bg-white shadow-sm border border-black/5' : 'text-zinc-500 hover:text-zinc-700 hover:bg-black/5'}`}>
           <Settings className="w-4 h-4" /> Propriedades
