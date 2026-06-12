@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { ExternalLink, LayoutTemplate, Plus, Lock, Sparkles, Eye } from 'lucide-react';
+import { ExternalLink, LayoutTemplate, Lock, Sparkles, Eye } from 'lucide-react';
 import type { ModeloProposta } from '../../lib/store';
 import { resolvePlan } from '../../lib/store';
 import {
@@ -100,16 +100,6 @@ export function Step1ModeloSelect({ modelos, formData, onSelectModelo, onNext, o
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <motion.div
-            className="p-8 rounded-[2.5rem] border-2 border-dashed border-zinc-200 bg-zinc-50/60 flex flex-col items-center justify-center text-center min-h-[220px] shadow-sm opacity-80"
-          >
-            <div className="w-16 h-16 rounded-2xl bg-zinc-100 flex items-center justify-center mb-6">
-              <Plus className="w-8 h-8 text-zinc-900" />
-            </div>
-            <h3 className="text-lg font-semibold text-zinc-700">Começar do Zero</h3>
-            <p className="text-sm text-zinc-500 mt-2">Indisponível neste fluxo. Selecione um modelo para gerar a proposta.</p>
-          </motion.div>
-
           {modelos.map((m) => {
             const locked = !isTemplateAllowed(plan, m.tier);
             const requiredPlan = getTemplateRequiredPlan(m.tier);

@@ -1,6 +1,8 @@
 import type { Pool } from 'pg';
 import type { MailClient } from '../../mail/client.js';
+import type { EnvironmentConfig } from '../../env.js';
 import { flowHasStep, parseProposalFlow, type ProposalFlowConfig } from '../../../types/proposalFlow.js';
+import { notifyProposalEventAsync } from '../notificationService.js';
 
 export type JourneyMethodId = 'SIGNATURE_ON_SCREEN' | 'EMAIL_OTP' | 'PAYMENT';
 
@@ -26,6 +28,7 @@ export interface LinkProposalContext {
   linkId: string;
   token: string;
   documentId: string;
+  proposalId: string | null;
   signerEmail: string;
   signerName: string;
   used: boolean;
@@ -125,6 +128,7 @@ export async function loadLinkProposalContext(pool: Pool, token: string): Promis
     linkId: row.id,
     token: row.token,
     documentId: row.document_id,
+    proposalId: row.proposta_id,
     signerEmail: row.signer_email,
     signerName: row.signer_name,
     used: row.used,
@@ -283,6 +287,8 @@ export async function verifyEmailOtp(deps: {
 export async function completePaymentStep(deps: {
   pool: Pool;
   token: string;
+  mail?: MailClient;
+  config?: EnvironmentConfig;
 }): Promise<{ ok: boolean; error?: string; status?: number }> {
   const ctx = await loadLinkProposalContext(deps.pool, deps.token);
   if (!ctx) return { ok: false, error: 'Link inválido', status: 404 };
@@ -308,6 +314,15 @@ export async function completePaymentStep(deps: {
      WHERE sl.id = $1 AND p.id = cd.proposta_id AND cd.proposta_id IS NOT NULL`,
     [ctx.linkId],
   );
+  if (ctx.proposalId && deps.mail && deps.config) {
+    notifyProposalEventAsync({
+      pool: deps.pool,
+      mail: deps.mail,
+      config: deps.config,
+      proposalId: ctx.proposalId,
+      type: 'proposal_paid',
+    });
+  }
   return { ok: true };
 }
 

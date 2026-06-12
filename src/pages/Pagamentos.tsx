@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { DollarSign, CheckCircle2, Clock, Search, ArrowUpRight, Check, X } from 'lucide-react';
-import { store } from '../lib/store';
+import { store, updateProposta } from '../lib/store';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatBRL } from '../lib/format';
 import { usePropostas } from '../hooks/useStoreEntity';
@@ -19,18 +19,17 @@ export default function Pagamentos({ navigate }: { navigate: NavigateFn }) {
   const [listView, setListView] = useListingViewPref(PAGAMENTOS_VIEW_KEY, 'list');
 
   const toggleStatus = (id: string) => {
-    const updated = allPropostas.map(p => {
-      if (p.id === id) {
-        const isPago = !p.pago;
-        return {
-          ...p,
-          pago: isPago,
-          data_pagamento: isPago ? new Date().toISOString() : undefined,
-        };
-      }
-      return p;
+    const proposta = allPropostas.find(p => p.id === id);
+    if (!proposta) return;
+    const isPago = !proposta.pago;
+    const patch = {
+      pago: isPago,
+      data_pagamento: isPago ? new Date().toISOString() : undefined,
+    };
+    store.savePropostas(allPropostas.map(p => (p.id === id ? { ...p, ...patch } : p)));
+    void updateProposta(id, patch).catch(() => {
+      store.savePropostas(allPropostas);
     });
-    store.savePropostas(updated);
   };
 
   const filteredPropostas = propostas.filter(p => {

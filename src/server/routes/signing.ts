@@ -73,7 +73,7 @@ export function createSigningRouter(deps: {
   });
 
   router.post('/:token/auth/payment/complete', async (req: Request, res: Response) => {
-    const result = await completePaymentStep({ pool, token: req.params.token });
+    const result = await completePaymentStep({ pool, token: req.params.token, mail, config });
     if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
     const payload = await getJourneyMethodsPayload(pool, req.params.token);
     return res.json({ success: true, ...payload });

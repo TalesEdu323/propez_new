@@ -3,9 +3,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, FileText, XCircle } from 'lucide-react';
+import { CheckCircle2, Copy, ExternalLink, FileText, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api, apiFetch, ApiError } from '../lib/apiClient';
+import { formatBRL } from '../lib/format';
 import { friendlySignaturePrepareError } from '../lib/signatureErrors';
 import { RenderElement } from '../components/builder/RenderElement';
 import type { ProposalDecision } from '../components/builder/RenderElement';
@@ -490,9 +491,51 @@ export default function PublicProposta({ token }: Props) {
               />
             )}
             {!showSign && !flowHasStep(fluxo, 'sign') && (
-              <div className="max-w-lg mx-auto my-12 p-6 rounded-2xl bg-emerald-50 text-emerald-800 text-center font-medium border border-emerald-100">
-                Proposta aprovada. Obrigado!
-              </div>
+              flowHasStep(fluxo, 'pay') ? (
+                proposta.pago ? (
+                  <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-emerald-50 border border-emerald-100 text-center">
+                    <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-emerald-900">Pagamento confirmado</h3>
+                    <p className="text-emerald-700 mt-2 text-sm">Obrigado! Seu pagamento foi registrado.</p>
+                  </div>
+                ) : (
+                  <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-white border border-black/5 shadow-lg text-center space-y-4">
+                    <h3 className="text-xl font-bold text-zinc-900">Proposta aprovada!</h3>
+                    <p className="text-zinc-500 text-sm">Agora efetue o pagamento de <strong>{formatBRL(proposta.valor)}</strong> usando os dados abaixo.</p>
+                    {proposta.chavePix && (
+                      <div className="flex items-center justify-between gap-3 bg-zinc-50 rounded-2xl px-5 py-4 border border-black/[0.04]">
+                        <div className="text-left">
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Chave PIX</p>
+                          <p className="font-mono text-sm text-zinc-900 break-all">{proposta.chavePix}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void navigator.clipboard.writeText(proposta.chavePix!)}
+                          className="shrink-0 p-2 rounded-xl hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-colors"
+                          title="Copiar chave PIX"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                    {proposta.linkPagamento && (
+                      <a
+                        href={proposta.linkPagamento}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4" /> Pagar online
+                      </a>
+                    )}
+                    <p className="text-xs text-zinc-400">Após o pagamento, {org.name} confirmará o recebimento.</p>
+                  </div>
+                )
+              ) : (
+                <div className="max-w-lg mx-auto my-12 p-6 rounded-2xl bg-emerald-50 text-emerald-800 text-center font-medium border border-emerald-100">
+                  Proposta aprovada. Obrigado!
+                </div>
+              )
             )}
           </>
         )}

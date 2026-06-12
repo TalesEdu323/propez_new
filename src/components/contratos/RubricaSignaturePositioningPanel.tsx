@@ -27,7 +27,6 @@ export interface RubricaSignaturePositioningPanelProps {
   setMarcadores: React.Dispatch<React.SetStateAction<Marcador[]>>;
   selectedSignerId: string | null;
   onSelectSigner: (id: string) => void;
-  documentPages: number;
   currentPage: number;
   onCurrentPageChange: (page: number) => void;
   pdfSource: PdfPreviewSource | null;
@@ -52,7 +51,6 @@ export function RubricaSignaturePositioningPanel({
   setMarcadores,
   selectedSignerId,
   onSelectSigner,
-  documentPages: _documentPages,
   currentPage,
   onCurrentPageChange,
   pdfSource,
@@ -106,6 +104,10 @@ export function RubricaSignaturePositioningPanel({
     window.addEventListener('resize', updateWidth);
     return () => window.removeEventListener('resize', updateWidth);
   }, [pdfSource, previewReloadKey]);
+
+  useEffect(() => {
+    pageRefs.current[currentPage]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [currentPage]);
 
   const getPageRect = useCallback((pageNum: number) => {
     return pageRefs.current[pageNum]?.getBoundingClientRect() ?? null;
@@ -342,7 +344,7 @@ export function RubricaSignaturePositioningPanel({
             </div>
           ) : !pdfSource ? (
             <div className="text-center py-12 space-y-4">
-              <p className="text-sm text-zinc-400">Carregando documento…</p>
+              <p className="text-sm text-zinc-500">Preview indisponível.</p>
               {onReloadPreview ? (
                 <button
                   type="button"

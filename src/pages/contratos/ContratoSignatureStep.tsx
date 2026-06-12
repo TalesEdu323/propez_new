@@ -8,7 +8,6 @@ export interface ContratoSignatureStepProps {
   setMarcadores: React.Dispatch<React.SetStateAction<Marcador[]>>;
   selectedSignerId: string | null;
   onSelectSigner: (id: string) => void;
-  documentPages: number;
   currentPage: number;
   onCurrentPageChange: (page: number) => void;
   pdfSource: PdfPreviewSource | null;
@@ -33,7 +32,6 @@ export function ContratoSignatureStep(props: ContratoSignatureStepProps) {
         setMarcadores={props.setMarcadores}
         selectedSignerId={props.selectedSignerId}
         onSelectSigner={props.onSelectSigner}
-        documentPages={props.documentPages}
         currentPage={props.currentPage}
         onCurrentPageChange={props.onCurrentPageChange}
         pdfSource={props.pdfSource}

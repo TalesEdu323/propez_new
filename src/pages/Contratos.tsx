@@ -109,6 +109,7 @@ export default function Contratos() {
     uploadPdf,
     removePdf,
     setUploadError,
+    setInlineError,
   } = useContratoPdfUpload({
     currentContrato,
     setCurrentContrato,
@@ -347,7 +348,7 @@ export default function Contratos() {
           onClick={() => void handleAdvanceToSignature()}
           className="bg-[#0a0a0a] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-zinc-800"
         >
-          Salvar Modelo
+          Próximo: Assinaturas →
         </button>
       );
     }
@@ -394,15 +395,6 @@ export default function Contratos() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {wizardStep === 'content' && currentContrato?.id && (
-                <button
-                  type="button"
-                  onClick={() => void handleAdvanceToSignature()}
-                  className="text-sm text-zinc-600 hover:text-zinc-900 font-medium"
-                >
-                  Ajustar assinaturas
-                </button>
-              )}
               {headerCta()}
             </div>
           </div>
@@ -441,7 +433,7 @@ export default function Contratos() {
                 pendingFileSize={pendingFileSize}
                 pendingFileName={pendingFileName}
                 onUploadPdf={(f) => void uploadPdf(f)}
-                onUploadValidationError={setUploadError}
+                onUploadValidationError={setInlineError}
                 onRemovePdf={handleRemovePdf}
                 pdfSource={pdfSource}
                 previewLoading={previewLoading}
@@ -457,7 +449,7 @@ export default function Contratos() {
                 setMarcadores={setMarcadores}
                 selectedSignerId={selectedSignerId}
                 onSelectSigner={setSelectedSignerId}
-                documentPages={pageCount}
+
                 currentPage={currentPage}
                 onCurrentPageChange={setCurrentPage}
                 pdfSource={pdfSource}

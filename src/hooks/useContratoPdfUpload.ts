@@ -185,5 +185,6 @@ export function useContratoPdfUpload({
     removePdf,
     clearError,
     setUploadError: reportError,
+    setInlineError: setUploadError,
   };
 }

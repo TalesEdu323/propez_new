@@ -87,7 +87,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
       nome: proposta.cliente_nome,
       email: proposta.clienteEmail?.trim() || prev.email,
     }));
-    if (proposta.status === 'aprovada' && flowHasStep(proposta.fluxo, 'sign') && proposta.contratoTexto) {
+    if (proposta.status === 'aprovada' && flowHasStep(proposta.fluxo, 'sign') && (proposta.contratoTexto || proposta.contratoId)) {
       setViewState('contract');
     }
     if (proposta.contractSignStatus) {
@@ -99,7 +99,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
   useEffect(() => {
     if (!proposta) return;
     if (proposta.status !== 'aprovada') return;
-    if (!proposta.contratoTexto) return;
+    if (!proposta.contratoTexto && !proposta.contratoId) return;
     if (contractSignStatus === 'signed' || contractSignStatus === 'cancelled' || contractSignStatus === 'failed') return;
 
     let cancelled = false;
@@ -134,7 +134,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [proposta?.id, proposta?.status, proposta?.contratoTexto, contractSignStatus]);
+  }, [proposta?.id, proposta?.status, proposta?.contratoTexto, proposta?.contratoId, contractSignStatus]);
 
   const persistProposta = (patch: Partial<Proposta>) => {
     const all = store.getPropostas();

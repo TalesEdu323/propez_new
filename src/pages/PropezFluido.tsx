@@ -196,6 +196,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
           modeloId: prop.modelo_id || '',
           clienteId: prop.cliente_id ?? '',
           clienteNome: prop.cliente_nome,
+          clienteEmail: prop.clienteEmail?.trim() || prev.clienteEmail,
           prosyncLeadId: prop.prosyncLeadId || '',
           servicos: prop.servicos || [],
           valor: prop.valor.toString(),
@@ -212,6 +213,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
           chavePix: prop.chavePix || '',
           linkPagamento: prop.linkPagamento || '',
           whatsappComprovante: prop.whatsappComprovante || '',
+          fluxo: prop.fluxo ?? prev.fluxo,
         }));
         setStep(2);
       }
