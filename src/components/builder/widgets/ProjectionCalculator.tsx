@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { BuilderViewport } from '../../../types/builder';
 import type { ProjectionOutputConfig, ProjectionSliderConfig } from '../../../lib/projectionCalculator';
 import {
   computeTrafficRoi,
@@ -7,6 +8,12 @@ import {
   initialSliderValues,
   rawValuesToTrafficRoi,
 } from '../../../lib/projectionCalculator';
+import {
+  calculatorPadding,
+  calculatorSliderGrid,
+  headingScale,
+  outputGridClass,
+} from '../viewportLayout';
 
 export interface ProjectionCalculatorProps {
   title?: string;
@@ -17,6 +24,7 @@ export interface ProjectionCalculatorProps {
   accentColor?: string;
   headerBg?: string;
   profitPositiveColor?: string;
+  viewport?: BuilderViewport;
 }
 
 export function ProjectionCalculator({
@@ -28,6 +36,7 @@ export function ProjectionCalculator({
   accentColor = '#e94560',
   headerBg = '#1a1a2e',
   profitPositiveColor = '#00b894',
+  viewport = 'desktop',
 }: ProjectionCalculatorProps) {
   const [raw, setRaw] = useState<Record<string, number>>(() => initialSliderValues(sliders));
 
@@ -45,13 +54,13 @@ export function ProjectionCalculator({
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border-2 border-black/10 shadow-lg bg-white">
-      <div className="px-6 py-5 sm:px-8" style={{ backgroundColor: headerBg, color: '#fff' }}>
+      <div className={calculatorPadding(viewport)} style={{ backgroundColor: headerBg, color: '#fff' }}>
         <h3 className="text-lg font-bold tracking-tight">{title}</h3>
         {subtitle ? <p className="text-sm opacity-70 mt-1">{subtitle}</p> : null}
       </div>
 
-      <div className="p-6 sm:p-8" onPointerDown={stopPointer}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+      <div className={viewport === 'desktop' ? 'p-6 sm:p-8' : 'p-4'} onPointerDown={stopPointer}>
+        <div className={`grid ${calculatorSliderGrid(viewport)} ${viewport === 'desktop' ? 'gap-5 sm:gap-6' : 'gap-5'}`}>
           {sliders.map((slider) => {
             const value = raw[slider.id] ?? slider.default;
             const hint = slider.hintMin && slider.hintMax
@@ -63,7 +72,7 @@ export function ProjectionCalculator({
                   {slider.label}
                 </label>
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xl sm:text-2xl font-extrabold text-zinc-900 tracking-tight">
+                  <span className={`${headingScale(viewport, { mobile: 'text-lg', tablet: 'text-xl', desktop: 'text-xl sm:text-2xl' })} font-extrabold text-zinc-900 tracking-tight`}>
                     {formatSliderDisplay(slider, value)}
                   </span>
                   <span className="text-[11px] text-zinc-400 font-medium">{hint}</span>
@@ -84,14 +93,14 @@ export function ProjectionCalculator({
         </div>
 
         <div className="mt-7 pt-7 border-t-2 border-zinc-100">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <div className={`grid ${outputGridClass(viewport, outputs.length)} ${viewport === 'desktop' ? 'gap-3 sm:gap-4' : 'gap-3'}`}>
             {outputs.map((out) => {
               const highlight = out.highlight === 'green';
               const val = formatOutputValue(out, result);
               return (
                 <div key={out.id} className="rounded-xl bg-zinc-50 p-4 text-center">
                   <div
-                    className={`text-xl sm:text-2xl font-extrabold tracking-tight ${highlight ? '' : 'text-zinc-900'}`}
+                    className={`${headingScale(viewport, { mobile: 'text-lg', tablet: 'text-xl', desktop: 'text-xl sm:text-2xl' })} font-extrabold tracking-tight ${highlight ? '' : 'text-zinc-900'}`}
                     style={highlight ? { color: profitPositiveColor } : undefined}
                   >
                     {val}

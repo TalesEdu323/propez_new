@@ -160,9 +160,10 @@ export function BuilderCanvas({
       )}
       <div className={`${outerMinH} flex justify-center ${previewMode ? 'p-0' : embedded ? 'p-3 sm:p-4' : 'p-6'}`}>
         <div
-          className={`w-full bg-white ${canvasMinH} transition-all duration-300 ${previewMode ? '' : 'shadow-xl border border-black/5 ring-1 ring-black/5'}`}
+          className={`w-full bg-white ${canvasMinH} transition-all duration-300 @container/canvas ${previewMode ? '' : 'shadow-xl border border-black/5 ring-1 ring-black/5'}`}
           style={{
             maxWidth: viewportWidth ? `${viewportWidth}px` : '100%',
+            containerType: 'inline-size',
           }}
         >
           <PageShell layout={pageLayout} className={previewMode ? '' : 'min-h-full'}>

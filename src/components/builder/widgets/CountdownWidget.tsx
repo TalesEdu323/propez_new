@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
+import type { BuilderViewport } from '../../../types/builder';
+import { countdownLayout } from '../viewportLayout';
 
 interface CountdownWidgetProps {
   targetDate: string;
@@ -8,6 +10,7 @@ interface CountdownWidgetProps {
   bgColor?: string;
   labelColor?: string;
   expiredText?: string;
+  viewport?: BuilderViewport;
 }
 
 function getRemaining(target: Date) {
@@ -26,9 +29,11 @@ export function CountdownWidget({
   bgColor = '#ffffff',
   labelColor = '#52525b',
   expiredText = 'Oferta Encerrada!',
+  viewport = 'desktop',
 }: CountdownWidgetProps) {
   const target = new Date(`${targetDate}T${targetTime}:00`);
   const [remaining, setRemaining] = useState(() => getRemaining(target));
+  const layout = countdownLayout(viewport);
 
   useEffect(() => {
     const tick = () => setRemaining(getRemaining(target));
@@ -40,7 +45,7 @@ export function CountdownWidget({
   if (remaining.expired) {
     return (
       <div
-        className="flex items-center justify-center p-10 rounded-[2.5rem] shadow-lg glass-panel border border-black/5"
+        className={`flex items-center justify-center ${layout.padding} rounded-[2.5rem] shadow-lg glass-panel border border-black/5`}
         style={{ backgroundColor: bgColor }}
       >
         <p className="text-2xl font-bold" style={{ color }}>{expiredText}</p>
@@ -60,15 +65,15 @@ export function CountdownWidget({
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      className="flex flex-col items-center justify-center p-10 rounded-[2.5rem] shadow-lg glass-panel border border-black/5 relative overflow-hidden"
+      className={`flex flex-col items-center justify-center ${layout.padding} rounded-[2.5rem] shadow-lg glass-panel border border-black/5 relative overflow-hidden`}
       style={{ backgroundColor: bgColor }}
     >
       <div className="absolute inset-0 bg-gradient-to-b from-white/50 to-transparent pointer-events-none" />
-      <div className="flex gap-6 md:gap-10 text-center relative z-10">
+      <div className={`flex flex-wrap justify-center ${layout.gap} text-center relative z-10`}>
         {values.map(({ label, value }) => (
           <div key={label} className="flex flex-col items-center">
-            <div className="w-20 h-24 md:w-28 md:h-32 rounded-2xl bg-white/80 backdrop-blur-md border border-black/5 flex items-center justify-center shadow-sm mb-3">
-              <span className="text-4xl md:text-6xl font-black font-mono tracking-tighter" style={{ color }}>
+            <div className={`${layout.box} rounded-2xl bg-white/80 backdrop-blur-md border border-black/5 flex items-center justify-center shadow-sm mb-3`}>
+              <span className={`${layout.value} font-black font-mono tracking-tighter`} style={{ color }}>
                 {value}
               </span>
             </div>

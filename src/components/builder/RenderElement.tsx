@@ -10,6 +10,25 @@ import { BuilderIcon } from './icons/BuilderIcon';
 import { normalizeIconItems } from './icons/normalizeIconItem';
 import { DEFAULT_LIST_ICON } from './icons/iconCatalog';
 import { featureGridColsClass, gridColsClass } from './gridUtils';
+import {
+  cardLayout,
+  cardPadding,
+  comparisonTableMinWidth,
+  funnelPadding,
+  funnelStageStyle,
+  galleryColsClass,
+  gridColumns,
+  headingScale,
+  heroSectionClass,
+  navbarPadding,
+  pricingCardPadding,
+  sectionPadding,
+  sectionPaddingCompact,
+  showNavbarLinks,
+  stackDirection,
+  statsGridClass,
+  timelineMargin,
+} from './viewportLayout';
 import { resolvePagePadding } from './pageLayoutUtils';
 import { ProjectionCalculator } from './widgets/ProjectionCalculator';
 import { MetricsTable } from './widgets/MetricsTable';
@@ -296,15 +315,16 @@ export function RenderElement({
         </motion.div>
       );
 
-    case 'card':
+    case 'card': {
+      const layout = cardLayout(viewport);
       return (
         <motion.div
           {...getAnimationProps('fade-up')}
           whileHover={{ y: -5 }}
-          className={`flex flex-col md:flex-row overflow-hidden ${props.radius} ${props.shadow} glass-panel border border-black/5 transition-all duration-500`}
+          className={`${layout.root} ${props.radius} ${props.shadow} glass-panel border border-black/5 transition-all duration-500`}
           style={{ backgroundColor: props.bgColor }}
         >
-          <div className="md:w-2/5 h-64 md:h-auto relative overflow-hidden">
+          <div className={layout.media}>
             {pickSafeImageUrl(props.imageUrl) ? (
               <motion.img
                 whileHover={{ scale: 1.05 }}
@@ -316,9 +336,9 @@ export function RenderElement({
             ) : (
               <ImagePlaceholder className="w-full h-full min-h-[16rem]" />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent md:bg-gradient-to-r" />
+            <div className={`absolute inset-0 ${layout.gradient}`} />
           </div>
-          <div className="p-8 md:p-10 md:w-3/5 flex flex-col justify-center relative z-10">
+          <div className={layout.body}>
             <h3 className="text-3xl font-bold text-zinc-900 mb-4 tracking-tight">{props.title}</h3>
             <p className="text-zinc-600 mb-8 leading-relaxed text-lg">{props.description}</p>
             {shouldRenderApproveCta('card', props, proposalDecision) && (
@@ -336,10 +356,11 @@ export function RenderElement({
           </div>
         </motion.div>
       );
+    }
 
     case 'stats': {
       const statItems = normalizeStatsItems(props);
-      const cols = statItems.length <= 1 ? 'grid-cols-1' : statItems.length === 2 ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3';
+      const cols = statsGridClass(viewport, statItems.length);
       const darkBg = props.bgColor === '#0a0a0a' || props.textColor === '#ffffff';
       return (
         <motion.div
@@ -358,11 +379,11 @@ export function RenderElement({
                 whileInView={{ scale: 1, opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ type: 'spring', stiffness: 100, damping: 15 }}
-                className="text-5xl md:text-6xl font-black tracking-tighter mb-3 relative z-10 drop-shadow-sm"
+                className={`${headingScale(viewport, { mobile: 'text-4xl', tablet: 'text-5xl', desktop: 'text-5xl md:text-6xl' })} font-black tracking-tighter mb-3 relative z-10 drop-shadow-sm`}
                 style={{ color: stat.color }}
               >
                 {stat.value}
-                {stat.suffix && <span className="text-2xl md:text-3xl ml-1 opacity-80">{stat.suffix}</span>}
+                {stat.suffix && <span className={`${headingScale(viewport, { mobile: 'text-lg', tablet: 'text-xl', desktop: 'text-2xl md:text-3xl' })} ml-1 opacity-80`}>{stat.suffix}</span>}
               </motion.div>
               <div className={`font-bold uppercase tracking-widest text-sm relative z-10 ${darkBg ? 'text-gray-400' : 'text-zinc-500'}`}>
                 {stat.label}
@@ -405,7 +426,7 @@ export function RenderElement({
         proposalAction: props.secondaryButtonAction ?? 'none',
       });
       return (
-        <div className="relative min-h-[600px] flex flex-col items-center justify-center text-center p-8 overflow-hidden" style={{ backgroundColor: '#000' }}>
+        <div className={`relative ${heroSectionClass(viewport)} flex flex-col items-center justify-center text-center overflow-hidden`} style={{ backgroundColor: '#000' }}>
           {bgImage ? (
             <>
               <SafeImg
@@ -433,13 +454,13 @@ export function RenderElement({
                 {hero.badge}
               </span>
             )}
-            <h1 className="text-5xl md:text-7xl font-bold text-white mb-8 leading-tight whitespace-pre-line">{hero.title}</h1>
+            <h1 className={`${headingScale(viewport, { mobile: 'text-3xl', tablet: 'text-4xl', desktop: 'text-5xl md:text-7xl' })} font-bold text-white mb-8 leading-tight whitespace-pre-line`}>{hero.title}</h1>
             {hero.description && (
-              <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-12 leading-relaxed whitespace-pre-line">{hero.description}</p>
+              <p className={`${headingScale(viewport, { mobile: 'text-base', tablet: 'text-lg', desktop: 'text-xl' })} text-gray-300 max-w-2xl mx-auto mb-12 leading-relaxed whitespace-pre-line`}>{hero.description}</p>
             )}
             {(shouldRenderApproveCta('marketing_hero', props, proposalDecision) ||
               (secondaryText && shouldRenderApproveCta('marketing_hero', { ...props, proposalAction: props.secondaryButtonAction ?? 'none' }, proposalDecision))) && (
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className={`flex ${stackDirection(viewport)} gap-4 justify-center`}>
               {shouldRenderApproveCta('marketing_hero', props, proposalDecision) && (
               <button
                 {...proposalClickProps('marketing_hero', props, previewMode, onProposalAction)}
@@ -470,15 +491,15 @@ export function RenderElement({
       const description = normalizeContextDescription(props);
       const accent = theme.primaryColor;
       return (
-        <div className="py-24" style={{ backgroundColor: '#0a0a0a', paddingLeft: contentPad, paddingRight: contentPad }}>
-          <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center w-full">
+        <div className={sectionPaddingCompact(viewport)} style={{ backgroundColor: '#0a0a0a', paddingLeft: contentPad, paddingRight: contentPad }}>
+          <div className={`max-w-6xl mx-auto grid ${gridColumns(viewport, 2)} ${viewport === 'desktop' ? 'gap-16' : 'gap-8'} items-center w-full`}>
             <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }}>
               <SectionLabel label={props.sectionLabel} accent={accent} />
-              <h2 className="text-4xl font-bold text-white mb-6">{props.title}</h2>
+              <h2 className={`${headingScale(viewport, { mobile: 'text-2xl', tablet: 'text-3xl', desktop: 'text-4xl' })} font-bold text-white mb-6`}>{props.title}</h2>
               {description && (
                 <p className="text-gray-400 text-lg mb-8 leading-relaxed whitespace-pre-line">{description}</p>
               )}
-              <div className="grid grid-cols-2 gap-6">
+              <div className={`grid ${gridColumns(viewport, 2)} ${viewport === 'desktop' ? 'gap-6' : 'gap-4'}`}>
                 {props.stats?.map((stat: { value: string; label: string }, i: number) => (
                   <div key={i} className="p-6 rounded-2xl border border-white/10 bg-white/5">
                     <div className="text-3xl font-bold text-white mb-1">{stat.value}</div>
@@ -509,12 +530,12 @@ export function RenderElement({
       const steps = normalizeStrategySteps(props.steps ?? []);
       const accent = theme.primaryColor;
       return (
-        <div className="py-24 px-8" style={{ backgroundColor: '#000' }}>
-          <div className="max-w-5xl mx-auto text-center mb-16">
+        <div className={sectionPadding(viewport)} style={{ backgroundColor: '#000' }}>
+          <div className={`max-w-5xl mx-auto text-center ${viewport === 'desktop' ? 'mb-16' : 'mb-10'}`}>
             <SectionLabel label={props.sectionLabel} accent={accent} />
-            <h2 className="text-4xl font-bold text-white mb-4">{props.title}</h2>
+            <h2 className={`${headingScale(viewport, { mobile: 'text-2xl', tablet: 'text-3xl', desktop: 'text-4xl' })} font-bold text-white mb-4`}>{props.title}</h2>
           </div>
-          <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8">
+          <div className={`max-w-6xl mx-auto grid ${gridColumns(viewport, 3)} ${viewport === 'desktop' ? 'gap-8' : 'gap-6'}`}>
             {steps.map((step, i) => (
               <motion.div
                 key={i}
@@ -540,10 +561,10 @@ export function RenderElement({
 
     case 'marketing_services':
       return (
-        <div className="py-24 px-8" style={{ backgroundColor: '#0a0a0a' }}>
+        <div className={sectionPadding(viewport)} style={{ backgroundColor: '#0a0a0a' }}>
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-4xl font-bold text-white mb-12 text-center">{props.title}</h2>
-            <div className="grid md:grid-cols-2 gap-8">
+            <h2 className={`${headingScale(viewport, { mobile: 'text-2xl', tablet: 'text-3xl', desktop: 'text-4xl' })} font-bold text-white ${viewport === 'desktop' ? 'mb-12' : 'mb-8'} text-center`}>{props.title}</h2>
+            <div className={`grid ${gridColumns(viewport, 2)} ${viewport === 'desktop' ? 'gap-8' : 'gap-6'}`}>
               {props.services?.map((service: any, i: number) => (
                 <motion.div
                   key={i}
@@ -565,8 +586,8 @@ export function RenderElement({
 
     case 'marketing_pricing':
       return (
-        <div className="py-24 px-8" style={{ backgroundColor: '#000' }}>
-          <div className="max-w-4xl mx-auto p-12 rounded-[40px] border-2 border-amber-600/30 bg-gradient-to-br from-amber-900/20 to-black relative overflow-hidden">
+        <div className={sectionPadding(viewport)} style={{ backgroundColor: '#000' }}>
+          <div className={`max-w-4xl mx-auto ${pricingCardPadding(viewport)} ${viewport === 'desktop' ? 'rounded-[40px]' : 'rounded-[24px]'} border-2 border-amber-600/30 bg-gradient-to-br from-amber-900/20 to-black relative overflow-hidden`}>
             <div className="absolute top-0 right-0 p-8">
               <div className="px-4 py-1 rounded-full bg-amber-600 text-white text-xs font-bold uppercase tracking-widest">
                 Recomendado
@@ -580,7 +601,7 @@ export function RenderElement({
                 <span className="text-6xl font-bold text-white">{props.price}</span>
                 <span className="text-gray-400">/mês</span>
               </div>
-              <div className="grid md:grid-cols-2 gap-6 mb-12">
+              <div className={`grid ${gridColumns(viewport, 2)} ${viewport === 'desktop' ? 'gap-6 mb-12' : 'gap-4 mb-8'}`}>
                 {normalizeIconItems(props.items, (props.listIcon as string) ?? DEFAULT_LIST_ICON).map((item, i) => (
                   <div key={i} className="flex items-center gap-3 text-gray-300">
                     <BuilderIcon name={item.icon} className="text-amber-600 w-5 h-5 shrink-0" />
@@ -603,14 +624,14 @@ export function RenderElement({
 
     case 'marketing_cta':
       return (
-        <div className="py-24 px-8 text-center" style={{ backgroundColor: '#0a0a0a' }}>
+        <div className={`${sectionPadding(viewport)} text-center`} style={{ backgroundColor: '#0a0a0a' }}>
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             whileInView={{ opacity: 1, scale: 1 }}
             className="max-w-3xl mx-auto"
           >
             <SectionLabel label={props.sectionLabel} accent={theme.primaryColor} />
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
+            <h2 className={`${headingScale(viewport, { mobile: 'text-2xl', tablet: 'text-3xl', desktop: 'text-4xl md:text-5xl' })} font-bold text-white mb-6 leading-tight`}>
               {props.title}
             </h2>
             <p className="text-xl text-gray-400 mb-12 leading-relaxed">
@@ -633,7 +654,7 @@ export function RenderElement({
       return (
         <motion.div
           {...getAnimationProps('fade-up')}
-          className="flex items-center justify-between py-5 px-8 glass-panel border-b border-black/5 backdrop-blur-2xl sticky top-0 z-50"
+          className={`flex items-center justify-between ${navbarPadding(viewport)} glass-panel border-b border-black/5 backdrop-blur-2xl sticky top-0 z-50`}
           style={{ backgroundColor: props.bgColor }}
         >
           <div className="flex items-center gap-3">
@@ -649,7 +670,7 @@ export function RenderElement({
               </div>
             )}
           </div>
-          <div className="hidden md:flex items-center gap-8">
+          <div className={showNavbarLinks(viewport)}>
             {props.links.map((link: string, idx: number) => (
               <motion.a
                 whileHover={{ scale: 1.05 }}
@@ -711,8 +732,8 @@ export function RenderElement({
       );
     }
 
-    case 'gallery':
-      const galCols = props.columns === '1' ? 'grid-cols-1' : props.columns === '2' ? 'grid-cols-2' : props.columns === '4' ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2 md:grid-cols-3';
+    case 'gallery': {
+      const galCols = galleryColsClass(String(props.columns ?? '3'), viewport);
       return (
         <motion.div
           {...getAnimationProps('fade-up')}
@@ -735,12 +756,13 @@ export function RenderElement({
           ))}
         </motion.div>
       );
+    }
 
     case 'funnel':
       return (
         <motion.div
           {...getAnimationProps('fade-up')}
-          className="flex flex-col items-center gap-4 w-full py-12 px-8"
+          className={`flex flex-col items-center gap-4 w-full ${funnelPadding(viewport)}`}
         >
           <SectionLabel label={props.sectionLabel} accent={theme.primaryColor} />
           {props.stages.map((stage: any, idx: number) => {
@@ -752,8 +774,8 @@ export function RenderElement({
                 whileInView={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.1, type: "spring" }}
                 whileHover={{ scale: 1.02 }}
-                className="flex items-center justify-between px-8 py-5 rounded-2xl text-white shadow-lg border border-black/5 backdrop-blur-md relative overflow-hidden group"
-                style={{ width: `${width}%`, backgroundColor: props.color, opacity: 1 - (idx * 0.1) }}
+                className={`flex items-center justify-between ${viewport === 'mobile' ? 'px-4 py-4' : 'px-8 py-5'} rounded-2xl text-white shadow-lg border border-black/5 backdrop-blur-md relative overflow-hidden group w-full max-w-full`}
+                style={{ ...funnelStageStyle(viewport, width), backgroundColor: props.color, opacity: 1 - (idx * 0.1) }}
               >
                 <div className="absolute inset-0 bg-white/0 group-hover:bg-white/20 transition-colors duration-300" />
                 <span className="font-bold text-xl relative z-10">{stage.name}</span>
@@ -833,13 +855,13 @@ export function RenderElement({
         <motion.div
           {...getAnimationProps('fade-up')}
           whileHover={{ scale: 1.02 }}
-          className="p-10 md:p-12 rounded-[2.5rem] shadow-lg relative mt-10 glass-panel border border-black/5 group"
+          className={`${cardPadding(viewport)} rounded-[2.5rem] shadow-lg relative mt-10 glass-panel border border-black/5 group`}
           style={{ backgroundColor: props.bgColor }}
         >
           <div className="absolute -top-8 left-10 w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-md transform -rotate-6 group-hover:rotate-0 transition-transform duration-300">
             <BuilderIcon name={(props.quoteIcon as string) ?? 'Quote'} className="w-8 h-8 text-white" />
           </div>
-          <p className="text-2xl md:text-3xl font-medium italic text-zinc-600 mb-10 relative z-10 leading-relaxed tracking-tight">
+          <p className={`${headingScale(viewport, { mobile: 'text-lg', tablet: 'text-xl', desktop: 'text-2xl md:text-3xl' })} font-medium italic text-zinc-600 mb-10 relative z-10 leading-relaxed tracking-tight`}>
             "{props.quote}"
           </p>
           <div className="flex items-center gap-5">
@@ -857,7 +879,7 @@ export function RenderElement({
       return (
         <motion.div
           {...getAnimationProps('fade-up')}
-          className="relative border-l-4 ml-4 md:ml-10 py-6 space-y-12"
+          className={`relative border-l-4 ${timelineMargin(viewport)} py-6 space-y-12`}
           style={{ borderColor: props.color }}
         >
           {timelineSteps.map((step: any, idx: number) => (
@@ -891,6 +913,7 @@ export function RenderElement({
           bgColor={props.bgColor as string}
           labelColor={props.labelColor as string}
           expiredText={String(props.expiredText ?? 'Oferta Encerrada!')}
+          viewport={viewport}
         />
       );
 
@@ -943,7 +966,7 @@ export function RenderElement({
           </h3>
 
           {showSyntheticPreview ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto mb-4">
+            <div className={`grid ${gridColumns(viewport, 3)} gap-4 max-w-3xl mx-auto mb-4`}>
               {previewLabels.map((label, i) => (
                 <div
                   key={i}
@@ -1043,7 +1066,7 @@ export function RenderElement({
           {props.title && (
             <h3 className="p-6 pb-0 text-2xl font-bold text-zinc-900">{props.title as string}</h3>
           )}
-          <table className="w-full text-left border-collapse min-w-[320px] sm:min-w-[600px]">
+          <table className={`w-full text-left border-collapse ${comparisonTableMinWidth(viewport)}`}>
             <thead>
               <tr>
                 {headers.map((header, idx) => (
@@ -1133,6 +1156,7 @@ export function RenderElement({
             accentColor={props.accentColor as string}
             headerBg={props.headerBg as string}
             profitPositiveColor={props.profitPositiveColor as string}
+            viewport={viewport}
           />
         </motion.div>
       );
@@ -1147,6 +1171,7 @@ export function RenderElement({
             headerBg={props.headerBg as string}
             highlightColor={props.highlightColor as string}
             bgColor={props.bgColor as string}
+            viewport={viewport}
           />
         </motion.div>
       );
