@@ -9,7 +9,7 @@ import type { NavigateFn, ModelosTab } from '../types/navigation';
 import { LojaTemplatesPanel } from './modelos/LojaTemplatesPanel';
 import { ListingViewToggle } from '../components/listing/ListingViewToggle';
 import { useListingViewPref } from '../hooks/useListingViewPref';
-import { LISTING_GRID_CLASS, LISTING_LIST_CLASS } from '../components/listing/listingLayout';
+import { confirmDelete, confirmDuplicate } from '../lib/feedback';
 
 const MODELOS_VIEW_KEY = 'listing_view:modelos';
 
@@ -29,14 +29,14 @@ export default function Modelos({
     setTab(initialTab);
   }, [initialTab]);
 
-  const handleDelete = (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este modelo?')) {
-      store.saveModelos(modelos.filter((m) => m.id !== id));
-    }
+  const handleDelete = async (id: string) => {
+    const modelo = modelos.find((m) => m.id === id);
+    if (!(await confirmDelete('propez_modelos', modelo?.nome))) return;
+    store.saveModelos(modelos.filter((m) => m.id !== id));
   };
 
-  const handleDuplicate = (id: string) => {
-    if (!window.confirm('Duplicar este modelo?')) return;
+  const handleDuplicate = async (id: string) => {
+    if (!(await confirmDuplicate('propez_modelos'))) return;
     const source = modelos.find((m) => m.id === id);
     if (!source) return;
     store.saveModelos([duplicateModelo(source), ...modelos]);

@@ -7,6 +7,7 @@ import { serializeModelo, serializeModeloSummary } from '../db/serializers.js'
 import { toJsonbParam } from '../db/jsonbParam.js'
 import { fetchOrgBrand, mergePageLayoutWithOrgBrand } from '../services/orgBrandDefaults.js'
 import { modeloBodySchema, modeloPatchSchema } from '../validation/modeloPayload.js'
+import { captureHandledErrorDetail } from '../services/apiErrorTracking.js'
 import { MODELO_MAX_PAYLOAD_BYTES, modeloErrorResponse } from './modeloErrors.js'
 import {
   assertModeloJsonFields,
@@ -238,7 +239,11 @@ export function createModelosRouter(deps: {
 
       return res.status(201).json(serializeModeloSummary(rows[0]))
     } catch (err) {
-      logModeloPgError('POST', err)
+      captureHandledErrorDetail(err, res, {
+        payloadBytes: payloadByteLength(req.body ?? {}),
+        idempotent: Boolean((req.body as { id?: string })?.id),
+      })
+      logModeloPgError('POST', err, { orgId: req.auth.orgId })
       const { status, error } = modeloErrorResponse(err)
       return res.status(status).json({ error })
     }
@@ -394,7 +399,11 @@ export function createModelosRouter(deps: {
       return res.json(serializeModelo(rows[0]))
     } catch (err) {
       const pg = err as { code?: string }
-      logModeloPgError('PATCH', err, pg.code === '22P02' ? patchJsonbFields : undefined)
+      captureHandledErrorDetail(err, res, {
+        modeloId: req.params.id,
+        ...(pg.code === '22P02' ? patchJsonbFields : {}),
+      })
+      logModeloPgError('PATCH', err, pg.code === '22P02' ? patchJsonbFields : { orgId: req.auth.orgId })
       const { status, error } = modeloErrorResponse(err)
       return res.status(status).json({ error })
     }

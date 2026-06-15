@@ -3,7 +3,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Copy, ExternalLink, FileText, XCircle } from 'lucide-react';
+import { CheckCircle2, Copy, ExternalLink, FileText, Loader2, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api, apiFetch, ApiError } from '../lib/apiClient';
 import { formatBRL } from '../lib/format';
@@ -16,7 +16,7 @@ import { PropezWatermark } from './visualizarProposta/PropezWatermark';
 import { shouldShowWatermark } from '../lib/featureFlags';
 import { resolveOrgBrand } from '../lib/orgBrand';
 import { PublicOrgHeader } from './publicProposta/PublicOrgHeader';
-import { flowHasStep, getContractSignPhase, parseProposalFlow } from '../types/proposalFlow';
+import { flowHasStep, getContractSignPhase, parseProposalFlow, proposalValorFinal, resolveClientActionAfterApprove } from '../types/proposalFlow';
 import { resolveSigningPath } from '../lib/publicProposalUrls';
 import type { BuilderElement } from '../types/builder';
 import type { ProposalFlowConfig } from '../types/proposalFlow';
@@ -34,6 +34,7 @@ interface PublicProposta {
   clienteEmail?: string;
   servicos: string[];
   valor: number;
+  desconto?: number;
   status: 'pendente' | 'aprovada' | 'recusada';
   elementos: BuilderElement[];
   pageLayout?: import('../types/builder').BuilderPageLayout;
@@ -172,14 +173,24 @@ export default function PublicProposta({ token }: Props) {
     () => parseProposalFlow(proposta?.fluxo ?? data?.journey?.fluxo),
     [proposta?.fluxo, data?.journey?.fluxo],
   );
-  const isDecided = proposta?.status === 'aprovada' || proposta?.status === 'recusada';
-  const showSign = isDecided && proposta?.status === 'aprovada' && flowHasStep(fluxo, 'sign');
+  const clientPostApproveAction = useMemo(() => {
+    if (!proposta || proposta.status !== 'aprovada') return 'idle' as const;
+    return resolveClientActionAfterApprove(fluxo, {
+      pago: proposta.pago,
+      contractSignStatus: proposta.contractSignStatus,
+    });
+  }, [proposta, fluxo]);
+  const valorFinal = proposta ? proposalValorFinal(proposta.valor, proposta.desconto ?? 0) : 0;
+  const showPayBlock = proposta?.status === 'aprovada' && clientPostApproveAction === 'show_pay';
+  const shouldRedirectSign = proposta?.status === 'aprovada' && clientPostApproveAction === 'redirect_sign';
+  const showSign =
+    proposta?.status === 'aprovada' && flowHasStep(fluxo, 'sign') && !showPayBlock;
 
   const signStatus = proposta?.contractSignStatus;
   const signingUrl = proposta?.contractSigningUrl;
 
   const awaitingSigningLink =
-    showSign &&
+    shouldRedirectSign &&
     !signingUrl &&
     signStatus !== 'signed' &&
     signStatus !== 'failed' &&
@@ -317,9 +328,9 @@ export default function PublicProposta({ token }: Props) {
     const q = new URLSearchParams(window.location.search);
     if (q.get('done') === '1') return;
     if (contractPrepareState !== 'idle') return;
-    if (!showSign || signPhase !== 'sign_pending' || !signingPath) return;
+    if (!shouldRedirectSign || signPhase !== 'sign_pending' || !signingPath) return;
     redirectToSigning(signingPath);
-  }, [showSign, signPhase, signingPath, contractPrepareState, redirectToSigning]);
+  }, [shouldRedirectSign, signPhase, signingPath, contractPrepareState, redirectToSigning]);
 
   const showPrepareOverlay = contractPrepareState !== 'idle';
 
@@ -371,7 +382,11 @@ export default function PublicProposta({ token }: Props) {
 
       if (action === 'approve') {
         const approvedFluxo = parseProposalFlow(res.proposta.fluxo);
-        if (flowHasStep(approvedFluxo, 'sign')) {
+        const nextAction = resolveClientActionAfterApprove(approvedFluxo, {
+          pago: res.proposta.pago,
+          contractSignStatus: res.proposta.contractSignStatus,
+        });
+        if (nextAction === 'redirect_sign') {
           autoPrepareStartedRef.current = true;
           const immediatePath = pathFromProposta(res.proposta, token);
           if (immediatePath) {
@@ -383,6 +398,35 @@ export default function PublicProposta({ token }: Props) {
       }
     } catch (err) {
       setDecisionError(err instanceof ApiError ? err.message : 'Erro ao enviar decisão.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const confirmPublicPayment = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await api.post<{ proposta: PublicProposta; journey?: JourneyInfo }>(
+        `/api/public/propostas/${encodeURIComponent(token)}/payment/complete`,
+        {},
+        { skipRefresh: true },
+      );
+      setData((prev) => (prev ? { ...prev, proposta: res.proposta, journey: res.journey } : prev));
+      const nextAction = resolveClientActionAfterApprove(
+        parseProposalFlow(res.proposta.fluxo),
+        { pago: res.proposta.pago, contractSignStatus: res.proposta.contractSignStatus },
+      );
+      if (nextAction === 'redirect_sign') {
+        autoPrepareStartedRef.current = true;
+        const immediatePath = pathFromProposta(res.proposta, token);
+        if (immediatePath) {
+          redirectToSigning(immediatePath);
+        } else {
+          await runPrepareAndRedirect(res.proposta);
+        }
+      }
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Não foi possível registrar o pagamento.');
     } finally {
       setIsSubmitting(false);
     }
@@ -478,7 +522,61 @@ export default function PublicProposta({ token }: Props) {
 
         {proposta.status === 'aprovada' && !showPrepareOverlay && (
           <>
-            {showSign && (
+            {showPayBlock && (
+              proposta.pago ? (
+                <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-emerald-50 border border-emerald-100 text-center">
+                  <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-emerald-900">Pagamento confirmado</h3>
+                  <p className="text-emerald-700 mt-2 text-sm">Obrigado! Seu pagamento foi registrado.</p>
+                </div>
+              ) : (
+                <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-white border border-black/5 shadow-lg text-center space-y-4">
+                  <h3 className="text-xl font-bold text-zinc-900">Proposta aprovada!</h3>
+                  <p className="text-zinc-500 text-sm">
+                    Agora efetue o pagamento de <strong>{formatBRL(valorFinal)}</strong> usando os dados abaixo.
+                  </p>
+                  {proposta.chavePix && (
+                    <div className="flex items-center justify-between gap-3 bg-zinc-50 rounded-2xl px-5 py-4 border border-black/[0.04]">
+                      <div className="text-left">
+                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Chave PIX</p>
+                        <p className="font-mono text-sm text-zinc-900 break-all">{proposta.chavePix}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void navigator.clipboard.writeText(proposta.chavePix!)}
+                        className="shrink-0 p-2 rounded-xl hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-colors"
+                        title="Copiar chave PIX"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                  {proposta.linkPagamento && (
+                    <a
+                      href={proposta.linkPagamento}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" /> Pagar online
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void confirmPublicPayment()}
+                    disabled={isSubmitting}
+                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-70"
+                  >
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Marcar como pago
+                  </button>
+                  <p className="text-xs text-zinc-400">
+                    Após o pagamento, {org.name} confirmará o recebimento.
+                  </p>
+                </div>
+              )
+            )}
+            {showSign && !showPayBlock && (
               <PublicSignStep
                 proposta={proposta}
                 fluxo={fluxo}
@@ -490,52 +588,17 @@ export default function PublicProposta({ token }: Props) {
                 retrying={retryingSignature}
               />
             )}
-            {!showSign && !flowHasStep(fluxo, 'sign') && (
-              flowHasStep(fluxo, 'pay') ? (
-                proposta.pago ? (
-                  <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-emerald-50 border border-emerald-100 text-center">
-                    <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-emerald-900">Pagamento confirmado</h3>
-                    <p className="text-emerald-700 mt-2 text-sm">Obrigado! Seu pagamento foi registrado.</p>
-                  </div>
-                ) : (
-                  <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-white border border-black/5 shadow-lg text-center space-y-4">
-                    <h3 className="text-xl font-bold text-zinc-900">Proposta aprovada!</h3>
-                    <p className="text-zinc-500 text-sm">Agora efetue o pagamento de <strong>{formatBRL(proposta.valor)}</strong> usando os dados abaixo.</p>
-                    {proposta.chavePix && (
-                      <div className="flex items-center justify-between gap-3 bg-zinc-50 rounded-2xl px-5 py-4 border border-black/[0.04]">
-                        <div className="text-left">
-                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Chave PIX</p>
-                          <p className="font-mono text-sm text-zinc-900 break-all">{proposta.chavePix}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void navigator.clipboard.writeText(proposta.chavePix!)}
-                          className="shrink-0 p-2 rounded-xl hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-colors"
-                          title="Copiar chave PIX"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                    {proposta.linkPagamento && (
-                      <a
-                        href={proposta.linkPagamento}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors"
-                      >
-                        <ExternalLink className="w-4 h-4" /> Pagar online
-                      </a>
-                    )}
-                    <p className="text-xs text-zinc-400">Após o pagamento, {org.name} confirmará o recebimento.</p>
-                  </div>
-                )
-              ) : (
-                <div className="max-w-lg mx-auto my-12 p-6 rounded-2xl bg-emerald-50 text-emerald-800 text-center font-medium border border-emerald-100">
-                  Proposta aprovada. Obrigado!
-                </div>
-              )
+            {!showSign && !showPayBlock && flowHasStep(fluxo, 'pay') && proposta.pago && (
+              <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-emerald-50 border border-emerald-100 text-center">
+                <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-emerald-900">Pagamento confirmado</h3>
+                <p className="text-emerald-700 mt-2 text-sm">Obrigado! Seu pagamento foi registrado.</p>
+              </div>
+            )}
+            {!showSign && !showPayBlock && !flowHasStep(fluxo, 'pay') && !flowHasStep(fluxo, 'sign') && (
+              <div className="max-w-lg mx-auto my-12 p-6 rounded-2xl bg-emerald-50 text-emerald-800 text-center font-medium border border-emerald-100">
+                Proposta aprovada. Obrigado!
+              </div>
             )}
           </>
         )}
@@ -610,7 +673,7 @@ export default function PublicProposta({ token }: Props) {
 
       {showPrepareOverlay && (
         <ContractPreparingOverlay
-          state={contractPrepareState === 'idle' ? 'preparing' : contractPrepareState}
+          state={contractPrepareState}
           errorMessage={prepareError}
           onRetry={contractPrepareState === 'error' ? () => void retryPrepareFromOverlay() : undefined}
           retrying={retryingSignature}

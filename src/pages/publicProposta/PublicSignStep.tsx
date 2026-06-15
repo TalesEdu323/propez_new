@@ -5,6 +5,7 @@ import type { ProposalFlowConfig } from '../../types/proposalFlow';
 
 interface PropostaSignFields {
   contractSignStatus?: string | null;
+  contractSignDocumentId?: string | null;
   contractSigningUrl?: string | null;
   publicToken?: string | null;
   clienteContratoRecebidoAt?: string | null;
@@ -59,6 +60,7 @@ export function PublicSignStep({
 }: Props) {
   const phase = getContractSignPhase({
     contractSignStatus: proposta.contractSignStatus,
+    contractSignDocumentId: proposta.contractSignDocumentId,
     clienteContratoRecebidoAt: proposta.clienteContratoRecebidoAt,
     orgContratoAceitoAt: proposta.orgContratoAceitoAt,
     contratoConcluidoAt: proposta.contratoConcluidoAt,

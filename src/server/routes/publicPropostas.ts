@@ -13,10 +13,12 @@ import {
   triggerContractSignAfterApproval,
   readSignedPdfForProposal,
 } from '../services/proposalJourney.js';
+import { flowHasStep, parseProposalFlow, shouldTriggerContractSign } from '../../types/proposalFlow.js';
 import { PROPOSTA_SELECT, PROPOSTA_FIELDS } from '../db/propostaColumns.js';
 import type { IntegrationsConfig } from '../config.js';
 import type { EnsureSuiteCredential } from '../integrations/ensureSuiteCredential.js';
 import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js';
+import { captureHandledErrorDetail } from '../services/apiErrorTracking.js';
 
 const approveSchema = z.object({
   action: z.enum(['approve', 'reject']),
@@ -177,13 +179,23 @@ export function createPublicPropostasRouter(deps: {
 
     try {
       const status = action === 'approve' ? 'aprovada' : 'recusada';
-      const current = await pool.query<{ status: string }>(
-        `SELECT status FROM propostas WHERE public_token = $1`,
+      const current = await pool.query<{ status: string; fluxo: unknown; pago: boolean }>(
+        `SELECT status, fluxo, pago FROM propostas WHERE public_token = $1`,
         [token],
       );
       if (!current.rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' });
       if (current.rows[0].status !== 'pendente') {
         return res.status(409).json({ error: 'Decisão já registrada para esta proposta' });
+      }
+
+      const fluxo = parseProposalFlow(current.rows[0].fluxo);
+      if (action === 'approve') {
+        if (!clientDocument?.trim()) {
+          return res.status(400).json({ error: 'Informe CPF ou CNPJ para aprovar a proposta' });
+        }
+        if (flowHasStep(fluxo, 'sign') && !clientEmail?.trim()) {
+          return res.status(400).json({ error: 'Informe o e-mail para prosseguir com a assinatura do contrato' });
+        }
       }
 
       const emailNorm = clientEmail?.trim().toLowerCase() ?? null;
@@ -203,13 +215,23 @@ export function createPublicPropostasRouter(deps: {
       const updated = rows[0];
 
       if (status === 'aprovada' && config) {
-        await triggerContractSignAfterApproval({
-          pool,
-          envConfig: config,
-          mail,
-          proposalId: String(updated.id),
-          organizationId: String(updated.organization_id),
-        });
+        const fluxoAfter = parseProposalFlow(updated.fluxo);
+        if (shouldTriggerContractSign(fluxoAfter, { pago: !!updated.pago })) {
+          const signResult = await triggerContractSignAfterApproval({
+            pool,
+            envConfig: config,
+            mail,
+            proposalId: String(updated.id),
+            organizationId: String(updated.organization_id),
+          });
+          if (signResult.error && !signResult.skipped) {
+            return res.status(422).json({
+              error: signResult.error,
+              proposta: serializeProposta(updated),
+              journey: buildJourneyPayload(updated),
+            });
+          }
+        }
         const { rows: afterSign } = await pool.query(
           `SELECT ${PROPOSTA_FIELDS} FROM propostas WHERE public_token = $1`,
           [token],
@@ -255,6 +277,7 @@ export function createPublicPropostasRouter(deps: {
       });
     } catch (err) {
       console.error('[public/decision] erro:', err);
+      captureHandledErrorDetail(err, res, { action: (req.body as { action?: string })?.action });
       return res.status(500).json({ error: 'Erro ao registrar decisão' });
     }
   });
@@ -351,7 +374,77 @@ export function createPublicPropostasRouter(deps: {
       });
     } catch (err) {
       console.error('[public/prepare-signature] erro:', err);
+      captureHandledErrorDetail(err, res, { proposalToken: req.params.token });
       return res.status(500).json({ error: 'Erro ao preparar assinatura' });
+    }
+  });
+
+  router.post('/:token/payment/complete', async (req: Request, res: Response) => {
+    const token = String(req.params.token || '').trim();
+    if (!token) return res.status(400).json({ error: 'Token obrigatório' });
+    if (!config) return res.status(503).json({ error: 'Servidor não configurado' });
+
+    try {
+      const { rows } = await pool.query(
+        `SELECT ${PROPOSTA_FIELDS}, organization_id FROM propostas WHERE public_token = $1`,
+        [token],
+      );
+      const row = rows[0];
+      if (!row) return res.status(404).json({ error: 'Proposta não encontrada' });
+      if (row.status !== 'aprovada') {
+        return res.status(409).json({ error: 'A proposta precisa estar aprovada antes do pagamento' });
+      }
+      if (row.pago) {
+        return res.json({
+          proposta: serializeProposta(row),
+          journey: buildJourneyPayload(row),
+        });
+      }
+
+      const fluxo = parseProposalFlow(row.fluxo);
+      if (!flowHasStep(fluxo, 'pay')) {
+        return res.status(400).json({ error: 'Pagamento não faz parte deste fluxo' });
+      }
+
+      const { rows: updatedRows } = await pool.query(
+        `UPDATE propostas SET pago = true, data_pagamento = NOW()
+         WHERE public_token = $1
+         RETURNING ${PROPOSTA_FIELDS}, organization_id`,
+        [token],
+      );
+      const updated = updatedRows[0];
+      if (!updated) return res.status(404).json({ error: 'Proposta não encontrada' });
+
+      notifyProposalEventAsync({
+        pool,
+        mail,
+        config,
+        proposalId: String(updated.id),
+        type: 'proposal_paid',
+      });
+
+      if (shouldTriggerContractSign(fluxo, { pago: true })) {
+        await triggerContractSignAfterApproval({
+          pool,
+          envConfig: config,
+          mail,
+          proposalId: String(updated.id),
+          organizationId: String(updated.organization_id),
+        });
+        const { rows: afterSign } = await pool.query(
+          `SELECT ${PROPOSTA_FIELDS}, organization_id FROM propostas WHERE public_token = $1`,
+          [token],
+        );
+        if (afterSign[0]) Object.assign(updated, afterSign[0]);
+      }
+
+      return res.json({
+        proposta: serializeProposta(updated),
+        journey: buildJourneyPayload(updated),
+      });
+    } catch (err) {
+      console.error('[public/payment/complete] erro:', err);
+      return res.status(500).json({ error: 'Erro ao registrar pagamento' });
     }
   });
 

@@ -4,6 +4,7 @@ Este diretorio concentra a documentacao funcional e operacional do Propez.
 
 ## Estrutura
 
+- `FLUXO_NOVA_PROPOSTA.md`: fluxo ponta a ponta da proposta (criacao, envio, aprovacao, assinatura e pagamento).
 - `DEPLOY.md`: checklist de variaveis de ambiente e deploy por plataforma (Cloud Run, Vercel, Render, VPS).
 - `INTEGRACOES_SMOKE_TEST.md`: runbook de validacao ponta a ponta das integracoes.
 - `NEON_SQL_POR_APP.md`: orientacoes de SQL/migrations por aplicacao (Propez, ProSync e Rubrica).

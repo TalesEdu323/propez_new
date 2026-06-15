@@ -20,9 +20,47 @@ interface ApiErrorLog {
   createdAt: string;
 }
 
+function getPgCode(detail: Record<string, unknown> | null): string | null {
+  if (!detail?.cause || typeof detail.cause !== 'object') return null;
+  const cause = detail.cause as Record<string, unknown>;
+  if (!cause.pg || typeof cause.pg !== 'object') return null;
+  const pg = cause.pg as Record<string, unknown>;
+  return typeof pg.code === 'string' ? pg.code : null;
+}
+
+function ErrorDetailSections({ detail }: { detail: Record<string, unknown> }) {
+  const sections: { label: string; data: unknown }[] = [];
+  if (detail.request) sections.push({ label: 'Request', data: detail.request });
+  if (detail.cause) sections.push({ label: 'Causa', data: detail.cause });
+  if (detail.context) sections.push({ label: 'Contexto', data: detail.context });
+  if (detail.response) sections.push({ label: 'Resposta', data: detail.response });
+
+  if (sections.length === 0) {
+    return (
+      <pre className="mx-3 mb-3 p-3 bg-zinc-900 text-zinc-100 text-xs rounded-lg overflow-x-auto max-h-48">
+        {JSON.stringify(detail, null, 2)}
+      </pre>
+    );
+  }
+
+  return (
+    <div className="mx-3 mb-3 space-y-2">
+      {sections.map(({ label, data }) => (
+        <div key={label}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">{label}</p>
+          <pre className="p-3 bg-zinc-900 text-zinc-100 text-xs rounded-lg overflow-x-auto max-h-40">
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ErrorLogRow({ log }: { log: ApiErrorLog }) {
   const [expanded, setExpanded] = useState(false);
   const hasDetail = Boolean(log.errorDetail && Object.keys(log.errorDetail).length > 0);
+  const pgCode = getPgCode(log.errorDetail);
 
   return (
     <div className="border border-zinc-100 rounded-xl overflow-hidden bg-white">
@@ -41,6 +79,11 @@ function ErrorLogRow({ log }: { log: ApiErrorLog }) {
           {log.requestPath.split('?')[0]}
         </span>
         <span className="text-red-600 font-semibold shrink-0">{log.statusCode}</span>
+        {pgCode && (
+          <span className="text-[10px] font-mono bg-red-50 text-red-700 px-1.5 py-0.5 rounded shrink-0">
+            PG {pgCode}
+          </span>
+        )}
         {log.durationMs != null && (
           <span className="text-zinc-400 shrink-0">{log.durationMs} ms</span>
         )}
@@ -62,10 +105,8 @@ function ErrorLogRow({ log }: { log: ApiErrorLog }) {
           </p>
         )}
       </div>
-      {expanded && hasDetail && (
-        <pre className="mx-3 mb-3 p-3 bg-zinc-900 text-zinc-100 text-xs rounded-lg overflow-x-auto max-h-48">
-          {JSON.stringify(log.errorDetail, null, 2)}
-        </pre>
+      {expanded && hasDetail && log.errorDetail && (
+        <ErrorDetailSections detail={log.errorDetail} />
       )}
     </div>
   );
@@ -233,7 +274,7 @@ export default function AdminOperations({ navigate }: { navigate: NavigateFn }) 
           <div className="apple-card p-6">
             <h2 className="text-sm font-semibold text-zinc-500 uppercase mb-1">Erros 5xx (7d)</h2>
             <p className="text-xs text-zinc-400 mb-4">
-              Clique em uma rota para ver os logs detalhados (horário, path, mensagem e stack).
+              Clique em uma rota para ver os logs detalhados (horário, path, parâmetros, causa e stack).
             </p>
             {!data?.topErrors?.length ? (
               <p className="text-sm text-zinc-500">Nenhum erro registrado.</p>

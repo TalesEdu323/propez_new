@@ -16,7 +16,7 @@ import { OrgBrandProvider } from './components/OrgBrandProvider';
 import { resolveOrgBrand } from './lib/orgBrand';
 import { AppTopBar, AppTopBarMobileButton } from './components/AppTopBar';
 import { DESKTOP_NAV_ITEMS, MobileAppNav } from './components/MobileAppNav';
-import { StoreSaveErrorListener } from './components/StoreSaveErrorListener';
+import { FeedbackProviders } from './components/FeedbackProviders';
 import { PageErrorBoundary } from './components/PageErrorBoundary';
 import { useNotifications } from './lib/useNotifications';
 import { lazyWithRetry } from './lib/lazyWithRetry';
@@ -214,7 +214,7 @@ export default function AuthenticatedApp() {
   if (route === 'propez-fluido' || route === 'visualizar-proposta' || route === 'criar-modelo') {
     return (
       <OrgBrandProvider>
-        <StoreSaveErrorListener />
+        <FeedbackProviders>
         <AnimatePresence mode="wait">
         <motion.div
           key={route}
@@ -227,6 +227,7 @@ export default function AuthenticatedApp() {
           {pageContent}
         </motion.div>
       </AnimatePresence>
+        </FeedbackProviders>
       </OrgBrandProvider>
     );
   }
@@ -245,7 +246,7 @@ export default function AuthenticatedApp() {
 
   return (
     <OrgBrandProvider>
-    <StoreSaveErrorListener />
+    <FeedbackProviders>
     <div className="flex h-screen bg-[#F5F5F7] font-sans overflow-hidden">
       <div className="hidden md:flex flex-col w-64 bg-white/80 backdrop-blur-2xl border-r border-black/[0.05] z-40 relative">
         <div className="p-6">
@@ -354,6 +355,7 @@ export default function AuthenticatedApp() {
         onLogout={() => void authLogout().then(() => { window.location.href = '/'; })}
       />
     </div>
+    </FeedbackProviders>
     </OrgBrandProvider>
   );
 }

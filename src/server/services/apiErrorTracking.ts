@@ -1,9 +1,16 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { Pool } from 'pg';
+import {
+  buildRequestContext,
+  capErrorDetailSize,
+  extractPgError,
+  type PgErrorInfo,
+} from './apiErrorRequestContext.js';
 
-interface ApiErrorLocals {
+export interface ApiErrorLocals {
   apiErrorBody?: unknown;
-  apiErrorDetail?: { message?: string; stack?: string };
+  apiErrorDetail?: { message?: string; stack?: string; pg?: PgErrorInfo };
+  apiErrorContext?: Record<string, unknown>;
 }
 
 function extractErrorMessage(body: unknown): string | null {
@@ -14,24 +21,52 @@ function extractErrorMessage(body: unknown): string | null {
   return null;
 }
 
-function buildErrorDetail(locals: ApiErrorLocals): Record<string, unknown> | null {
+function buildCause(locals: ApiErrorLocals): Record<string, unknown> | null {
+  const cause: Record<string, unknown> = {};
+  if (locals.apiErrorDetail?.message) cause.message = locals.apiErrorDetail.message;
+  if (locals.apiErrorDetail?.stack) cause.stack = locals.apiErrorDetail.stack.slice(0, 2000);
+  if (locals.apiErrorDetail?.pg) cause.pg = locals.apiErrorDetail.pg;
+  return Object.keys(cause).length > 0 ? cause : null;
+}
+
+function buildErrorDetail(
+  locals: ApiErrorLocals,
+  request: Record<string, unknown>,
+): Record<string, unknown> | null {
   const detail: Record<string, unknown> = {};
-  if (locals.apiErrorDetail?.message) detail.message = locals.apiErrorDetail.message;
-  if (locals.apiErrorDetail?.stack) detail.stack = locals.apiErrorDetail.stack.slice(0, 2000);
+  if (Object.keys(request).length > 0) detail.request = request;
+  const cause = buildCause(locals);
+  if (cause) detail.cause = cause;
+  if (locals.apiErrorContext && Object.keys(locals.apiErrorContext).length > 0) {
+    detail.context = locals.apiErrorContext;
+  }
   if (locals.apiErrorBody && typeof locals.apiErrorBody === 'object') {
     detail.response = locals.apiErrorBody;
   }
-  return Object.keys(detail).length > 0 ? detail : null;
+  return Object.keys(detail).length > 0 ? capErrorDetailSize(detail) : null;
 }
 
-export function captureUnhandledErrorDetail(
-  error: unknown,
+function applyErrorDetail(err: unknown, locals: ApiErrorLocals): void {
+  const message = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack : undefined;
+  const pg = extractPgError(err);
+  locals.apiErrorDetail = { message, stack, ...(pg ? { pg } : {}) };
+}
+
+export function captureUnhandledErrorDetail(error: unknown, res: Response): void {
+  applyErrorDetail(error, res.locals as ApiErrorLocals);
+}
+
+export function captureHandledErrorDetail(
+  err: unknown,
   res: Response,
+  context?: Record<string, unknown>,
 ): void {
   const locals = res.locals as ApiErrorLocals;
-  const message = error instanceof Error ? error.message : String(error);
-  const stack = error instanceof Error ? error.stack : undefined;
-  locals.apiErrorDetail = { message, stack };
+  applyErrorDetail(err, locals);
+  if (context && Object.keys(context).length > 0) {
+    locals.apiErrorContext = context;
+  }
 }
 
 export function createApiErrorTrackingMiddleware(pool: Pool) {
@@ -60,7 +95,12 @@ export function createApiErrorTrackingMiddleware(pool: Pool) {
         extractErrorMessage(locals.apiErrorBody) ??
         locals.apiErrorDetail?.message?.slice(0, 500) ??
         null;
-      const errorDetail = buildErrorDetail(locals);
+      const requestContext = buildRequestContext(
+        req.params as Record<string, unknown>,
+        req.query as Record<string, unknown>,
+        req.body,
+      );
+      const errorDetail = buildErrorDetail(locals, requestContext);
       const durationMs = Date.now() - start;
 
       pool

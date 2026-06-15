@@ -29,6 +29,7 @@ import { ContratoSignatureStep } from './contratos/ContratoSignatureStep';
 import { ListingViewToggle } from '../components/listing/ListingViewToggle';
 import { useListingViewPref } from '../hooks/useListingViewPref';
 import { LISTING_GRID_CLASS, LISTING_LIST_CLASS } from '../components/listing/listingLayout';
+import { toast, confirmDelete, confirmDuplicate } from '../lib/feedback';
 
 const CONTRATOS_VIEW_KEY = 'listing_view:contratos';
 
@@ -48,8 +49,10 @@ export default function Contratos() {
   const [currentPage, setCurrentPage] = useState(1);
   const [previewReloadKey, setPreviewReloadKey] = useState(0);
   const [aiOpen, setAiOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   const wizardRestoreAttemptedRef = useRef(false);
+
+  const notifyWarning = (msg: string) => toast.warning(msg);
+  const notifyError = (msg: string) => toast.error(msg);
 
   const persistWizardSession = useCallback(
     (
@@ -91,11 +94,6 @@ export default function Contratos() {
     previewReloadKey,
   );
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    window.setTimeout(() => setToast(null), 4000);
-  };
-
   const handleReloadPreview = useCallback(() => {
     setPreviewReloadKey(Date.now());
   }, []);
@@ -115,7 +113,7 @@ export default function Contratos() {
     setCurrentContrato,
     sourceType,
     setSourceType,
-    onError: showToast,
+    onError: notifyError,
     onUploadSuccess: (updated) => {
       persistWizardSession(updated.id, wizardStep, 'pdf');
       setPreviewReloadKey(Date.now());
@@ -185,7 +183,7 @@ export default function Contratos() {
       setPreviewReloadKey(Date.now());
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao salvar rascunho do contrato';
-      showToast(msg);
+      notifyError(msg);
     }
   };
 
@@ -195,7 +193,7 @@ export default function Contratos() {
   }): Promise<ContratoTemplate | null> => {
     const titulo = (opts?.titulo ?? currentContrato?.titulo)?.trim();
     if (!titulo) {
-      showToast('Informe o título do contrato.');
+      notifyWarning('Informe o título do contrato.');
       return null;
     }
 
@@ -234,15 +232,15 @@ export default function Contratos() {
 
   const persistContent = async (): Promise<ContratoTemplate | null> => {
     if (!currentContrato?.titulo?.trim()) {
-      showToast('Preencha o título do contrato.');
+      notifyWarning('Preencha o título do contrato.');
       return null;
     }
     if (sourceType === 'text' && !currentContrato.texto?.trim()) {
-      showToast('Preencha o texto do contrato ou envie um PDF.');
+      notifyWarning('Preencha o texto do contrato ou envie um PDF.');
       return null;
     }
     if (sourceType === 'pdf' && currentContrato.sourceType !== 'pdf') {
-      showToast('Envie um arquivo PDF antes de continuar.');
+      notifyWarning('Envie um arquivo PDF antes de continuar.');
       return null;
     }
     if (
@@ -251,7 +249,7 @@ export default function Contratos() {
       !currentContrato.pdfFileName &&
       !(currentContrato.pageCount && currentContrato.pageCount > 0)
     ) {
-      showToast('PDF não encontrado. Envie o arquivo novamente.');
+      notifyWarning('PDF não encontrado. Envie o arquivo novamente.');
       return null;
     }
 
@@ -294,7 +292,7 @@ export default function Contratos() {
     const signatureConfig = marcadoresToConfig(marcadores, templateSigners);
     const err = validateTemplateSignatureConfig(signatureConfig);
     if (err) {
-      showToast(err);
+      notifyWarning(err);
       return;
     }
 
@@ -311,21 +309,22 @@ export default function Contratos() {
       }
       resetEditor();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Erro ao salvar contrato');
+      notifyError(err instanceof Error ? err.message : 'Erro ao salvar contrato');
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este contrato?')) return;
+  const handleDelete = async (id: string) => {
+    const contrato = contratos.find((c) => c?.id === id);
+    if (!(await confirmDelete('propez_contratos', contrato?.titulo))) return;
     store.saveContratos(contratos.filter((c): c is ContratoTemplate => !!c?.id && c.id !== id));
   };
 
   const handleDuplicate = async (id: string) => {
-    if (!window.confirm('Duplicar este contrato?')) return;
+    if (!(await confirmDuplicate('propez_contratos'))) return;
     try {
       await store.duplicateContrato(id);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao duplicar contrato');
+      notifyError(err instanceof Error ? err.message : 'Erro ao duplicar contrato');
     }
   };
 
@@ -399,12 +398,6 @@ export default function Contratos() {
             </div>
           </div>
 
-          {toast && (
-            <div className="mx-6 mt-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-100 text-sm text-amber-900">
-              {toast}
-            </div>
-          )}
-
           <div className="flex-1 overflow-y-auto">
             {wizardStep === 'choose' && (
               <ContratoOriginStep
@@ -456,7 +449,7 @@ export default function Contratos() {
                 previewLoading={previewLoading}
                 previewError={previewError}
                 previewReloadKey={previewReloadKey}
-                onNotify={showToast}
+                onNotify={notifyWarning}
                 onReloadPreview={handleReloadPreview}
               />
             )}

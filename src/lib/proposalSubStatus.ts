@@ -3,6 +3,7 @@ import {
   DEFAULT_FLOW,
   flowHasStep,
   getContractSignPhase,
+  isSignFlowStepDone,
   parseProposalFlow,
   type ProposalFlowStep,
 } from '../types/proposalFlow';
@@ -25,14 +26,13 @@ export function getProposalSubStatusLabel(proposta: Proposta): string | null {
 function signStepDone(proposta: Proposta): boolean {
   const fluxo = parseProposalFlow(proposta.fluxo);
   if (!flowHasStep(fluxo, 'sign')) return true;
-  const phase = getContractSignPhase({
+  return isSignFlowStepDone({
     contractSignStatus: proposta.contractSignStatus,
     contractSignDocumentId: proposta.contractSignDocumentId,
     clienteContratoRecebidoAt: proposta.clienteContratoRecebidoAt,
     orgContratoAceitoAt: proposta.orgContratoAceitoAt,
     contratoConcluidoAt: proposta.contratoConcluidoAt,
   });
-  return phase === 'complete';
 }
 
 function payStepDone(proposta: Proposta): boolean {

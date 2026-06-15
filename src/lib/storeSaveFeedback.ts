@@ -1,4 +1,8 @@
 import { ApiError } from './apiClient';
+import {
+  storeSaveSuccessMessage,
+  type CatalogEntityKey,
+} from './feedback/messages';
 
 export type StoreSaveOperation = 'create' | 'update' | 'delete';
 
@@ -17,13 +21,28 @@ const OP_LABELS: Record<StoreSaveOperation, string> = {
 };
 
 type SaveErrorListener = (message: string) => void;
+type SaveSuccessListener = (message: string) => void;
 
 const listeners = new Set<SaveErrorListener>();
+const successListeners = new Set<SaveSuccessListener>();
 
 export function subscribeStoreSaveErrors(listener: SaveErrorListener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
+
+export function subscribeStoreSaveSuccess(listener: SaveSuccessListener): () => void {
+  successListeners.add(listener);
+  return () => successListeners.delete(listener);
+}
+
+const CATALOG_KEYS = new Set<string>([
+  'propez_clientes',
+  'propez_servicos',
+  'propez_modelos',
+  'propez_propostas',
+  'propez_contratos',
+]);
 
 export function formatStoreSaveError(err: unknown): string {
   if (err instanceof ApiError) {
@@ -91,4 +110,29 @@ export function notifyStoreSaveError(
       /* ignore listener errors */
     }
   });
+}
+
+export function notifyStoreSaveSuccess(
+  storeKey: string,
+  operation: StoreSaveOperation,
+): void {
+  if (!CATALOG_KEYS.has(storeKey)) return;
+  const message = storeSaveSuccessMessage(storeKey as CatalogEntityKey, operation);
+  successListeners.forEach((fn) => {
+    try {
+      fn(message);
+    } catch {
+      /* ignore listener errors */
+    }
+  });
+}
+
+export function pickAggregatedSaveOperation(
+  operations: StoreSaveOperation[],
+): StoreSaveOperation | null {
+  if (!operations.length) return null;
+  if (operations.includes('delete')) return 'delete';
+  if (operations.includes('create')) return 'create';
+  if (operations.includes('update')) return 'update';
+  return operations[0] ?? null;
 }

@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import type { MailClient } from '../../mail/client.js';
 import type { EnvironmentConfig } from '../../env.js';
-import { flowHasStep, parseProposalFlow, type ProposalFlowConfig } from '../../../types/proposalFlow.js';
+import { flowHasStep, parseProposalFlow, proposalValorFinalCents, type ProposalFlowConfig, journeyMethodOrder } from '../../../types/proposalFlow.js';
 import { notifyProposalEventAsync } from '../notificationService.js';
 
 export type JourneyMethodId = 'SIGNATURE_ON_SCREEN' | 'EMAIL_OTP' | 'PAYMENT';
@@ -36,6 +36,7 @@ export interface LinkProposalContext {
   fluxo: ProposalFlowConfig;
   publicToken: string | null;
   valorCents: number | null;
+  descontoCents: number | null;
   chavePix: string | null;
   linkPagamento: string | null;
   whatsappComprovante: string | null;
@@ -52,39 +53,36 @@ function isMethodCompleted(auth: AuthDataShape, id: JourneyMethodId): boolean {
 }
 
 export function buildJourneyMethods(fluxo: ProposalFlowConfig, auth: AuthDataShape): JourneyMethod[] {
-  const methods: JourneyMethod[] = [];
-  if (flowHasStep(fluxo, 'sign')) {
-    methods.push({
+  const methodDefs: Record<JourneyMethodId, Omit<JourneyMethod, 'order' | 'completed'>> = {
+    SIGNATURE_ON_SCREEN: {
       id: 'SIGNATURE_ON_SCREEN',
       name: 'Assinatura na tela',
       description: 'Desenhe ou digite sua assinatura digital',
       icon: '✎',
-      order: 900,
       available: true,
-      completed: isMethodCompleted(auth, 'SIGNATURE_ON_SCREEN'),
-    });
-    methods.push({
+    },
+    EMAIL_OTP: {
       id: 'EMAIL_OTP',
       name: 'Código por e-mail',
       description: 'Receba um código de verificação no seu e-mail',
       icon: '📧',
-      order: 1000,
       available: true,
-      completed: isMethodCompleted(auth, 'EMAIL_OTP'),
-    });
-  }
-  if (flowHasStep(fluxo, 'pay')) {
-    methods.push({
+    },
+    PAYMENT: {
       id: 'PAYMENT',
       name: 'Pagamento',
       description: 'Efetue o pagamento acordado na proposta',
       icon: '💳',
-      order: 1100,
       available: true,
-      completed: isMethodCompleted(auth, 'PAYMENT'),
-    });
-  }
-  return methods.sort((a, b) => a.order - b.order);
+    },
+  };
+
+  const orderedIds = journeyMethodOrder(fluxo);
+  return orderedIds.map((id, index) => ({
+    ...methodDefs[id],
+    order: (index + 1) * 100,
+    completed: isMethodCompleted(auth, id),
+  }));
 }
 
 export function journeyProgress(methods: JourneyMethod[]) {
@@ -109,13 +107,14 @@ export async function loadLinkProposalContext(pool: Pool, token: string): Promis
     public_token: string | null;
     fluxo: unknown;
     valor_cents: number | null;
+    desconto_cents: number | null;
     chave_pix: string | null;
     link_pagamento: string | null;
     whatsapp_comprovante: string | null;
   }>(
     `SELECT sl.id, sl.token, sl.document_id, sl.signer_email, sl.signer_name, sl.used,
             sl.authentication_data, cd.title, cd.proposta_id,
-            p.public_token, p.fluxo, p.valor_cents, p.chave_pix, p.link_pagamento, p.whatsapp_comprovante
+            p.public_token, p.fluxo, p.valor_cents, p.desconto_cents, p.chave_pix, p.link_pagamento, p.whatsapp_comprovante
      FROM signature_links sl
      JOIN contract_documents cd ON cd.id = sl.document_id
      LEFT JOIN propostas p ON p.id = cd.proposta_id
@@ -136,6 +135,7 @@ export async function loadLinkProposalContext(pool: Pool, token: string): Promis
     fluxo: parseProposalFlow(row.fluxo),
     publicToken: row.public_token,
     valorCents: row.valor_cents,
+    descontoCents: row.desconto_cents,
     chavePix: row.chave_pix,
     linkPagamento: row.link_pagamento,
     whatsappComprovante: row.whatsapp_comprovante,
@@ -358,7 +358,7 @@ export async function getJourneyMethodsPayload(pool: Pool, token: string) {
     fluxo: ctx.fluxo,
     payment: flowHasStep(ctx.fluxo, 'pay')
       ? {
-          valorCents: ctx.valorCents,
+          valorCents: proposalValorFinalCents(ctx.valorCents, ctx.descontoCents ?? 0),
           chavePix: ctx.chavePix,
           linkPagamento: ctx.linkPagamento,
           whatsappComprovante: ctx.whatsappComprovante,

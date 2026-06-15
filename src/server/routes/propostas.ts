@@ -23,6 +23,7 @@ import {
   renderProposalSentClient,
 } from '../mail/templates/business/index.js'
 import { isMailConfigured } from '../env.js'
+import { captureHandledErrorDetail } from '../services/apiErrorTracking.js'
 import { normalizeEmailBranding } from '../mail/layout.js'
 
 const builderElement = z.object({}).passthrough()
@@ -336,11 +337,33 @@ export function createPropostasRouter(deps: {
     }
     const d = parsed.data
     try {
-      const before = await pool.query<{ status: string; pago: boolean; data_envio: Date | null }>(
-        `SELECT status, pago, data_envio FROM propostas WHERE organization_id = $1 AND id = $2`,
+      const before = await pool.query<{
+        status: string;
+        pago: boolean;
+        data_envio: Date | null;
+        contract_sign_status: string | null;
+      }>(
+        `SELECT status, pago, data_envio, contract_sign_status FROM propostas WHERE organization_id = $1 AND id = $2`,
         [req.auth.orgId, req.params.id],
       )
       if (!before.rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
+
+      const prev = before.rows[0]
+      if (d.status === 'pendente' && prev.status !== 'pendente') {
+        return res.status(409).json({
+          error: 'Não é possível reabrir uma proposta já enviada ou decidida',
+        })
+      }
+      if (
+        d.status &&
+        d.status !== prev.status &&
+        prev.contract_sign_status === 'signed' &&
+        d.status !== 'aprovada'
+      ) {
+        return res.status(409).json({
+          error: 'Não é possível alterar o status após assinatura do contrato',
+        })
+      }
 
       let clienteEmailPatch: string | null = null
       if ('clienteEmail' in d) {
@@ -369,6 +392,7 @@ export function createPropostasRouter(deps: {
            chave_pix = CASE WHEN $30::boolean THEN $31 ELSE chave_pix END,
            link_pagamento = CASE WHEN $32::boolean THEN $33 ELSE link_pagamento END,
            whatsapp_comprovante = CASE WHEN $41::boolean THEN $42 ELSE whatsapp_comprovante END,
+           fluxo = CASE WHEN $43::boolean THEN $44::jsonb ELSE fluxo END,
            pago = COALESCE($34, pago),
            data_pagamento = CASE WHEN $35::boolean THEN $36 ELSE data_pagamento END,
            creator_plan = COALESCE($37, creator_plan),
@@ -418,6 +442,8 @@ export function createPropostasRouter(deps: {
           clienteEmailPatch,
           'whatsappComprovante' in d,
           d.whatsappComprovante ?? null,
+          'fluxo' in d,
+          d.fluxo !== undefined ? JSON.stringify(d.fluxo) : null,
         ],
       )
       if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' })
@@ -588,6 +614,7 @@ export function createPropostasRouter(deps: {
       return res.json({ sent: true, to })
     } catch (err) {
       console.error('[propostas/send-email] erro:', err)
+      captureHandledErrorDetail(err, res, { propostaId: req.params.id })
       return res.status(502).json({
         sent: false,
         reason: 'send_failed',

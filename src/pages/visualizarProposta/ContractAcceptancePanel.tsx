@@ -11,6 +11,7 @@ interface Props {
 export function ContractAcceptancePanel({ proposta, onAccept, accepting }: Props) {
   const phase = getContractSignPhase({
     contractSignStatus: proposta.contractSignStatus,
+    contractSignDocumentId: proposta.contractSignDocumentId,
     clienteContratoRecebidoAt: proposta.clienteContratoRecebidoAt,
     orgContratoAceitoAt: proposta.orgContratoAceitoAt,
     contratoConcluidoAt: proposta.contratoConcluidoAt,

@@ -36,6 +36,8 @@ Essa ordem e critica para evitar quebra de webhooks e parsing de payload.
 
 ## 2. Contratos frontend/backend (fluxo proposta)
 
+Documentacao completa do fluxo (criacao ate pagamento): [`FLUXO_NOVA_PROPOSTA.md`](./FLUXO_NOVA_PROPOSTA.md).
+
 ### 2.1 Criacao e edicao
 
 - Frontend: `src/pages/PropezFluido.tsx` chama `createProposta`/`updateProposta` de `src/lib/store.ts`.

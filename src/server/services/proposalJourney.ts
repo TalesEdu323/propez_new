@@ -2,7 +2,7 @@ import type { Pool } from 'pg';
 import type { EnvironmentConfig } from '../env.js';
 import type { MailClient } from '../mail/client.js';
 import { logIntegrationEvent } from '../db/mappings.js';
-import { flowHasStep, parseProposalFlow, getContractSignPhase } from '../../types/proposalFlow.js';
+import { flowHasStep, parseProposalFlow, getContractSignPhase, resolveClientActionAfterApprove, shouldTriggerContractSign } from '../../types/proposalFlow.js';
 import { notifyProposalEventAsync } from './notificationService.js';
 import {
   sendContractForSigning,
@@ -65,6 +65,7 @@ export async function triggerContractSignAfterApproval(deps: {
     public_token: string | null;
     valor_cents: number;
     desconto_cents: number;
+    pago: boolean;
     org_name: string;
     org_cnpj: string | null;
     org_signature_url: string | null;
@@ -81,7 +82,7 @@ export async function triggerContractSignAfterApproval(deps: {
     rubrica_status: string | null;
   }>(
     `SELECT p.contrato_texto, p.contrato_id, p.cliente_nome, p.cliente_email, p.cliente_documento, p.fluxo, p.public_token,
-            p.valor_cents, p.desconto_cents,
+            p.valor_cents, p.desconto_cents, p.pago,
             p.contract_signing_url, p.rubrica_signing_url, p.contract_sign_status, p.rubrica_status,
             o.name AS org_name, o.cnpj AS org_cnpj, o.signature_url AS org_signature_url,
             m.signature_config AS modelo_signature_config,
@@ -120,6 +121,9 @@ export async function triggerContractSignAfterApproval(deps: {
   const fluxo = parseProposalFlow(row.fluxo);
   if (!flowHasStep(fluxo, 'sign')) {
     return { ok: false, skipped: 'sem_passo_sign' };
+  }
+  if (!shouldTriggerContractSign(fluxo, { pago: !!row.pago })) {
+    return { ok: false, skipped: 'aguardando_pagamento' };
   }
   const email = row.cliente_email?.trim();
   if (!email) {
@@ -291,10 +295,12 @@ export function buildJourneyPayload(proposta: Record<string, unknown>) {
     orgContratoAceitoAt: (proposta.org_contrato_aceito_at ?? proposta.orgContratoAceitoAt) as string | null,
     contratoConcluidoAt: (proposta.contrato_concluido_at ?? proposta.contratoConcluidoAt) as string | null,
   });
+  const pago = Boolean(proposta.pago);
+  const contractSignStatus = (proposta.contract_sign_status ?? proposta.contractSignStatus ?? proposta.rubrica_status ?? proposta.rubricaStatus) as string | null;
   return {
     fluxo,
     contractPhase: phase,
-    canPay: !flowHasStep(fluxo, 'sign') || !!(proposta.contrato_concluido_at ?? proposta.org_contrato_aceito_at),
+    canPay: resolveClientActionAfterApprove(fluxo, { pago, contractSignStatus }) === 'show_pay',
   };
 }
 

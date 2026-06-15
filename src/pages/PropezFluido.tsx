@@ -105,6 +105,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
     requiredPlan: 'pro',
   });
   const returnHandledRef = useRef(false);
+  const editingSnapshotRef = useRef<Pick<Proposta, 'status' | 'pago' | 'data_criacao'> | null>(null);
 
   const applyModeloToForm = useCallback(
     (modeloId: string, options?: ApplyModeloOptions | BuilderElement[]) => {
@@ -191,6 +192,11 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
         prop = (await fetchPropostaById(initialData.editId!)) ?? prop;
       }
       if (prop) {
+        editingSnapshotRef.current = {
+          status: prop.status,
+          pago: prop.pago,
+          data_criacao: prop.data_criacao,
+        };
         setFormData(prev => ({
           ...prev,
           modeloId: prop.modelo_id || '',
@@ -301,6 +307,8 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
     let resolvedClienteId = asUuidOrUndefined(formData.clienteId);
     const modeloId = asUuidOrUndefined(formData.modeloId);
 
+    const snapshot = isEditing ? editingSnapshotRef.current : null;
+
     const newProposta: Proposta = {
       id: newPropostaId,
       cliente_id: resolvedClienteId ?? null,
@@ -315,8 +323,8 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
       duracao_recorrencia: Number(formData.duracaoRecorrencia) || 0,
       data_envio: formData.envio,
       data_validade: formData.validade,
-      status: 'pendente',
-      data_criacao: new Date().toISOString(),
+      status: snapshot?.status ?? 'pendente',
+      data_criacao: snapshot?.data_criacao ?? new Date().toISOString(),
       elementos: finalElements,
       pageLayout: finalPageLayout ?? formData.pageLayout,
       contratoTexto: finalContractText,
@@ -324,7 +332,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
       chavePix: formData.chavePix,
       linkPagamento: formData.linkPagamento,
       whatsappComprovante: formData.whatsappComprovante,
-      pago: false,
+      pago: snapshot?.pago ?? false,
       prosyncLeadId: formData.prosyncLeadId || undefined,
       creatorPlan: resolvePlan(userConfig),
       fluxo: formData.fluxo,

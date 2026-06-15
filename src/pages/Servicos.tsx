@@ -8,7 +8,7 @@ import { createId } from '../lib/ids';
 import { useContratos, useServicos } from '../hooks/useStoreEntity';
 import type { NavigateFn } from '../types/navigation';
 import type { BuilderElement } from '../types/builder';
-import { ServicoEditorModal, type ServicoFormData } from './servicos/ServicoEditorModal';
+import { confirmDelete, confirmDuplicate } from '../lib/feedback';
 
 export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn }) {
   const servicos = useServicos();
@@ -50,13 +50,14 @@ export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn
     closeModal();
   };
 
-  const handleDelete = (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este serviço?')) return;
-    store.saveServicos(servicos.filter(s => s.id !== id));
+  const handleDelete = async (id: string) => {
+    const servico = servicos.find((s) => s.id === id);
+    if (!(await confirmDelete('propez_servicos', servico?.nome))) return;
+    store.saveServicos(servicos.filter((s) => s.id !== id));
   };
 
-  const handleDuplicate = (id: string) => {
-    if (!window.confirm('Duplicar este serviço?')) return;
+  const handleDuplicate = async (id: string) => {
+    if (!(await confirmDuplicate('propez_servicos'))) return;
     const source = servicos.find((s) => s.id === id);
     if (!source) return;
     store.saveServicos([duplicateServico(source), ...servicos]);

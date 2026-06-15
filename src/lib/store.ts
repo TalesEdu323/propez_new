@@ -28,7 +28,7 @@ import { parseProposalFlow } from '../types/proposalFlow';
 import { api, ApiError } from './apiClient';
 import { mergeModeloAfterSave } from './mergeModeloAfterSave';
 import { normalizeUuidOrNull } from './normalizeUuid';
-import { notifyStoreSaveError } from './storeSaveFeedback';
+import { notifyStoreSaveError, notifyStoreSaveSuccess, pickAggregatedSaveOperation, type StoreSaveOperation } from './storeSaveFeedback';
 import {
   getSession,
   patchOrganization,
@@ -596,6 +596,7 @@ async function diffSave<T extends { id: string }, TPayload>(
 
   const ops: Promise<void>[] = [];
   const failed: Array<{ id: string; err: unknown }> = [];
+  const successes: StoreSaveOperation[] = [];
 
   // DELETEs
   for (const [id, deletedItem] of prevById) {
@@ -604,6 +605,7 @@ async function diffSave<T extends { id: string }, TPayload>(
         impl
           .delete(id)
           .then(() => {
+            successes.push('delete');
             setList(removeCacheItem(getList(), id));
             notify(key);
           })
@@ -628,6 +630,7 @@ async function diffSave<T extends { id: string }, TPayload>(
         impl
           .create(impl.toPayload(item))
           .then((saved) => {
+            successes.push('create');
             const next =
               key === 'propez_modelos'
                 ? mergeModeloAfterSave(item as ModeloProposta, saved as ModeloProposta)
@@ -647,6 +650,7 @@ async function diffSave<T extends { id: string }, TPayload>(
         impl
           .update(id, impl.toPayload(item))
           .then((saved) => {
+            successes.push('update');
             const next =
               key === 'propez_modelos'
                 ? mergeModeloAfterSave(item as ModeloProposta, saved as ModeloProposta)
@@ -665,6 +669,10 @@ async function diffSave<T extends { id: string }, TPayload>(
   }
 
   await Promise.allSettled(ops);
+  const aggregated = pickAggregatedSaveOperation(successes);
+  if (aggregated) {
+    notifyStoreSaveSuccess(key, aggregated);
+  }
   return { failed };
 }
 

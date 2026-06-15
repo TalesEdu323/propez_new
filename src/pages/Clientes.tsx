@@ -9,7 +9,7 @@ import { ClientesTable } from './clientes/ClientesTable';
 import { ClientesCards } from './clientes/ClientesCards';
 import type { NavigateFn } from '../types/navigation';
 import { ListingViewToggle } from '../components/listing/ListingViewToggle';
-import { useListingViewPref } from '../hooks/useListingViewPref';
+import { confirmDelete } from '../lib/feedback';
 
 const CLIENTES_VIEW_KEY = 'listing_view:clientes';
 
@@ -48,8 +48,10 @@ export default function Clientes({ navigate: _navigate }: { navigate: NavigateFn
     setFormData({});
   };
 
-  const handleDelete = (id: string) => {
-    store.saveClientes(clientes.filter(c => c.id !== id));
+  const handleDelete = async (id: string) => {
+    const cliente = clientes.find((c) => c.id === id);
+    if (!(await confirmDelete('propez_clientes', cliente?.nome))) return;
+    store.saveClientes(clientes.filter((c) => c.id !== id));
   };
 
   const containerVariants = {

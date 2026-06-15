@@ -3,6 +3,7 @@ import { ChevronLeft, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { store, ModeloProposta, fetchModeloById } from '../lib/store';
 import { formatStoreSaveError } from '../lib/storeSaveFeedback';
+import { toast } from '../lib/feedback';
 import Builder from '../components/Builder';
 import { createId } from '../lib/ids';
 import { useContratos, useServicos, useUserConfig } from '../hooks/useStoreEntity';
@@ -92,26 +93,26 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
 
   const handleSave = async (finalElements: BuilderElement[], finalPageLayout: BuilderPageLayout) => {
     if (!formData.nome?.trim()) {
-      alert('Informe o nome do modelo antes de salvar.');
+      toast.warning('Informe o nome do modelo antes de salvar.');
       return;
     }
     if (flowHasStep(formData.fluxo, 'sign') && !formData.contratoId) {
-      alert('Selecione um template de contrato no passo "Contrato Padrão" antes de salvar.');
+      toast.warning('Selecione um template de contrato no passo "Contrato Padrão" antes de salvar.');
       return;
     }
     if (hasUnresolvedImagePrompts(finalElements)) {
-      alert('Resolva as imagens pendentes no passo "Imagens e banners" antes de salvar o modelo.');
+      toast.warning('Resolva as imagens pendentes no passo "Imagens e banners" antes de salvar o modelo.');
       return;
     }
     if (formData.contratoId && !contratos.some((c) => c.id === formData.contratoId)) {
-      alert('O contrato vinculado não existe mais. Selecione outro no passo "Contrato Padrão".');
+      toast.warning('O contrato vinculado não existe mais. Selecione outro no passo "Contrato Padrão".');
       return;
     }
     const missingServicos = formData.servicos.filter(
       (id) => !servicosDisponiveis.some((s) => s.id === id),
     );
     if (missingServicos.length > 0) {
-      alert('Um ou mais serviços vinculados não existem mais. Atualize a seleção de serviços.');
+      toast.warning('Um ou mais serviços vinculados não existem mais. Atualize a seleção de serviços.');
       return;
     }
 
@@ -255,7 +256,7 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
   const handleAdvance = () => {
     if (step === 1) {
       if (!formData.nome) {
-        alert('Por favor, dê um nome ao modelo.');
+        toast.warning('Por favor, dê um nome ao modelo.');
         return;
       }
       setStep(2);
@@ -264,13 +265,13 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
       else goToImagensOrBuilder();
     } else if (step === 3) {
       if (!formData.contratoId) {
-        alert('Por favor, selecione um template de contrato.');
+        toast.warning('Por favor, selecione um template de contrato.');
         return;
       }
       goToImagensOrBuilder();
     } else if (step === IMAGENS_STEP) {
       if (hasUnresolvedImagePrompts(elementos)) {
-        alert('Gere ou resolva as imagens pendentes antes de continuar para o editor visual.');
+        toast.warning('Gere ou resolva as imagens pendentes antes de continuar para o editor visual.');
         return;
       }
       setStep(BUILDER_STEP);

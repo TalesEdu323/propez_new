@@ -13,6 +13,7 @@ import { ProposalListingCard } from '../components/listing/proposals/ProposalLis
 import { ProposalListingRow } from '../components/listing/proposals/ProposalListingRow';
 import { ProposalWaitingPanel } from '../components/listing/proposals/ProposalWaitingPanel';
 import { AnimatePresence } from 'motion/react';
+import { confirmDelete, confirmDuplicate } from '../lib/feedback';
 
 const VIEW_PREF_KEY = 'listing_view:propostas';
 
@@ -38,14 +39,15 @@ export default function Propostas({ navigate }: { navigate: NavigateFn }) {
     return matchesSearch && matchesStatus;
   });
 
-  const handleDelete = (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta proposta?')) return;
+  const handleDelete = async (id: string) => {
+    const proposta = propostas.find((p) => p.id === id);
+    if (!(await confirmDelete('propez_propostas', proposta?.cliente_nome))) return;
     store.savePropostas(propostas.filter((p) => p.id !== id));
     if (activeId === id) setActiveId(null);
   };
 
-  const handleDuplicate = (id: string) => {
-    if (!window.confirm('Duplicar esta proposta? Será criada uma cópia com status pendente.')) return;
+  const handleDuplicate = async (id: string) => {
+    if (!(await confirmDuplicate('propez_propostas'))) return;
     const source = propostas.find((p) => p.id === id);
     if (!source) return;
     store.savePropostas([duplicateProposta(source), ...propostas]);

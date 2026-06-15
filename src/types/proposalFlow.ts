@@ -58,3 +58,89 @@ export function getContractSignPhase(proposta: {
   if (documentId) return 'sign_pending';
   return 'not_started';
 }
+
+/** Passos do fluxo após a aprovação (ordem preservada). */
+export function getPostApproveSteps(flow: ProposalFlowConfig | undefined | null): ProposalFlowStep[] {
+  return (flow ?? DEFAULT_FLOW).steps.filter((s) => s !== 'approve');
+}
+
+export function proposalValorFinal(valor: number, desconto = 0): number {
+  const v = Number(valor);
+  const d = Number(desconto);
+  if (!Number.isFinite(v)) return 0;
+  if (!Number.isFinite(d)) return Math.max(0, v);
+  return Math.max(0, v - d);
+}
+
+export function proposalValorFinalCents(valorCents: number | null | undefined, descontoCents = 0): number {
+  const v = typeof valorCents === 'number' && Number.isFinite(valorCents) ? valorCents : 0;
+  const d = typeof descontoCents === 'number' && Number.isFinite(descontoCents) ? descontoCents : 0;
+  return Math.max(0, v - d);
+}
+
+export interface ProposalJourneyState {
+  pago: boolean;
+  contractSignStatus?: string | null;
+}
+
+/** Dispara geração do contrato quando o passo `sign` está liberado na ordem do fluxo. */
+export function shouldTriggerContractSign(
+  flow: ProposalFlowConfig | undefined | null,
+  state: ProposalJourneyState,
+): boolean {
+  const fluxo = flow ?? DEFAULT_FLOW;
+  if (!flowHasStep(fluxo, 'sign')) return false;
+  const post = getPostApproveSteps(fluxo);
+  const signIdx = post.indexOf('sign');
+  const payIdx = post.indexOf('pay');
+  if (signIdx === -1) return false;
+  if (payIdx === -1) return true;
+  if (signIdx < payIdx) return true;
+  return state.pago;
+}
+
+export type ClientPostApproveAction = 'redirect_sign' | 'show_pay' | 'idle';
+
+function isSignClientStepDone(state: ProposalJourneyState): boolean {
+  const status = state.contractSignStatus;
+  return status === 'signed' || status === 'sent';
+}
+
+/** Próxima ação do cliente na página pública após aprovação. */
+export function resolveClientActionAfterApprove(
+  flow: ProposalFlowConfig | undefined | null,
+  state: ProposalJourneyState,
+): ClientPostApproveAction {
+  for (const step of getPostApproveSteps(flow)) {
+    if (step === 'pay' && !state.pago) return 'show_pay';
+    if (step === 'sign' && !isSignClientStepDone(state)) return 'redirect_sign';
+  }
+  return 'idle';
+}
+
+/** Passo `sign` concluído para barra de progresso (cliente assinou ou contrato finalizado). */
+export function isSignFlowStepDone(proposta: {
+  contractSignStatus?: string | null;
+  contractSignDocumentId?: string | null;
+  clienteContratoRecebidoAt?: string | null;
+  orgContratoAceitoAt?: string | null;
+  contratoConcluidoAt?: string | null;
+}): boolean {
+  const phase = getContractSignPhase(proposta);
+  return phase !== 'not_started' && phase !== 'sign_pending';
+}
+
+/** Ordem dos métodos do wizard de assinatura conforme `fluxo.steps`. */
+export function journeyMethodOrder(
+  flow: ProposalFlowConfig | undefined | null,
+): Array<'SIGNATURE_ON_SCREEN' | 'EMAIL_OTP' | 'PAYMENT'> {
+  const ordered: Array<'SIGNATURE_ON_SCREEN' | 'EMAIL_OTP' | 'PAYMENT'> = [];
+  for (const step of getPostApproveSteps(flow)) {
+    if (step === 'sign') {
+      ordered.push('SIGNATURE_ON_SCREEN', 'EMAIL_OTP');
+    } else if (step === 'pay') {
+      ordered.push('PAYMENT');
+    }
+  }
+  return ordered;
+}
