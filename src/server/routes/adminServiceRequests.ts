@@ -25,7 +25,7 @@ const reviewSchema = z.object({
   enableWhitelabel: z.boolean().optional(),
 });
 
-function allowedIframeOrigins(config: EnvironmentConfig): string[] {
+function allowedIframeOrigins(_config: EnvironmentConfig): string[] {
   const raw = process.env.ALLOWED_REQUEST_IFRAME_ORIGINS ?? '';
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }

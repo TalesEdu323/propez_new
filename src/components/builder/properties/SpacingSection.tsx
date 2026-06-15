@@ -1,4 +1,3 @@
-import type { BuilderElement } from '../../../types/builder';
 import type { SpacingPreset } from '../../../types/builder';
 import { SPACING_PRESET_VALUES, spacingPresetFromProps } from '../constants';
 import type { FieldProps } from './TextFields';
@@ -26,7 +25,6 @@ export function SpacingSection({
     props.margin as string | undefined,
   );
   const paddingNum = parseInt(String(props.padding ?? '16'), 10);
-  const marginNum = parseInt(String(props.margin ?? '0'), 10);
   const showDoubleWarning = pageHorizontalPadding >= 48 && paddingNum >= 48;
 
   const applyPreset = (p: SpacingPreset) => {

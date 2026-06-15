@@ -1,7 +1,6 @@
 import type { OfferType } from '../../../lib/layoutContext.js';
 import {
   buildSlotPrompt,
-  getDefaultSlotForElementType,
   getSlotDimensions,
   type ImageSlot,
 } from './imageSlotCatalog.js';

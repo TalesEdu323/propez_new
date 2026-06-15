@@ -78,8 +78,6 @@ export function ContractPreparingOverlay({ state, errorMessage, onRetry, retryin
               Proposta aprovada
             </div>
 
-            <h2 className="text-xl font-bold text-zinc-900 mb-2 tracking-tight">PropEZ</h2>
-
             <AnimatePresence mode="wait">
               <motion.p
                 key={subtitle}

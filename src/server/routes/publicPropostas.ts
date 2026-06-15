@@ -14,11 +14,17 @@ import {
   readSignedPdfForProposal,
 } from '../services/proposalJourney.js';
 import { flowHasStep, parseProposalFlow, shouldTriggerContractSign } from '../../types/proposalFlow.js';
-import { PROPOSTA_SELECT, PROPOSTA_FIELDS } from '../db/propostaColumns.js';
+import { PROPOSTA_FIELDS } from '../db/propostaColumns.js';
 import type { IntegrationsConfig } from '../config.js';
 import type { EnsureSuiteCredential } from '../integrations/ensureSuiteCredential.js';
 import type { OrgIntegrationCredentialsRepo } from '../storage/orgIntegrationCredentials.js';
 import { captureHandledErrorDetail } from '../services/apiErrorTracking.js';
+import {
+  conflictDecisionMessage,
+  resolvePublicDecisionIntent,
+  targetStatusForAction,
+  type ProposalDecisionStatus,
+} from './publicPropostaDecisionHelpers.js';
 
 const approveSchema = z.object({
   action: z.enum(['approve', 'reject']),
@@ -31,6 +37,26 @@ const approveSchema = z.object({
     .optional()
     .refine((v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), { message: 'E-mail inválido' }),
 });
+
+async function fetchPropostaRowByToken(pool: Pool, token: string) {
+  const { rows } = await pool.query(
+    `SELECT ${PROPOSTA_FIELDS}, organization_id FROM propostas WHERE public_token = $1`,
+    [token],
+  );
+  return rows[0] ?? null;
+}
+
+function respondWithProposta(
+  res: Response,
+  row: Record<string, unknown>,
+  extra?: { warning?: string; alreadyDecided?: boolean },
+) {
+  return res.json({
+    proposta: serializeProposta(row),
+    journey: buildJourneyPayload(row),
+    ...extra,
+  });
+}
 
 export function createPublicPropostasRouter(deps: {
   pool: Pool;
@@ -46,9 +72,6 @@ export function createPublicPropostasRouter(deps: {
     mail,
     suiteProposalEvents,
     config,
-    integrationsConfig,
-    orgCredentialsRepo,
-    ensureSuiteCredential,
   } = deps;
   const router = express.Router();
 
@@ -178,14 +201,26 @@ export function createPublicPropostasRouter(deps: {
     const { action, clientName, clientEmail, clientDocument } = parsed.data;
 
     try {
-      const status = action === 'approve' ? 'aprovada' : 'recusada';
+      const targetStatus = targetStatusForAction(action);
       const current = await pool.query<{ status: string; fluxo: unknown; pago: boolean }>(
         `SELECT status, fluxo, pago FROM propostas WHERE public_token = $1`,
         [token],
       );
       if (!current.rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' });
-      if (current.rows[0].status !== 'pendente') {
-        return res.status(409).json({ error: 'Decisão já registrada para esta proposta' });
+
+      const currentStatus = current.rows[0].status as ProposalDecisionStatus;
+      const intent = resolvePublicDecisionIntent(currentStatus, action);
+
+      if (intent === 'idempotent_ok') {
+        const row = await fetchPropostaRowByToken(pool, token);
+        if (!row) return res.status(404).json({ error: 'Proposta não encontrada' });
+        return respondWithProposta(res, row, { alreadyDecided: true });
+      }
+
+      if (intent === 'conflict') {
+        return res.status(409).json({
+          error: conflictDecisionMessage(currentStatus, action),
+        });
       }
 
       const fluxo = parseProposalFlow(current.rows[0].fluxo);
@@ -207,76 +242,111 @@ export function createPublicPropostasRouter(deps: {
            cliente_email = COALESCE(NULLIF($4, ''), cliente_email),
            cliente_documento = COALESCE(NULLIF($5, ''), cliente_documento),
            data_envio = COALESCE(data_envio, NOW())
-         WHERE public_token = $1
+         WHERE public_token = $1 AND status = 'pendente'
          RETURNING ${PROPOSTA_FIELDS}, organization_id`,
-        [token, status, clientName ?? null, emailNorm, clientDocument ?? null],
+        [token, targetStatus, clientName ?? null, emailNorm, clientDocument ?? null],
       );
-      if (!rows[0]) return res.status(404).json({ error: 'Proposta não encontrada' });
-      const updated = rows[0];
 
-      if (status === 'aprovada' && config) {
-        const fluxoAfter = parseProposalFlow(updated.fluxo);
-        if (shouldTriggerContractSign(fluxoAfter, { pago: !!updated.pago })) {
-          const signResult = await triggerContractSignAfterApproval({
-            pool,
-            envConfig: config,
-            mail,
-            proposalId: String(updated.id),
-            organizationId: String(updated.organization_id),
-          });
-          if (signResult.error && !signResult.skipped) {
-            return res.status(422).json({
-              error: signResult.error,
-              proposta: serializeProposta(updated),
-              journey: buildJourneyPayload(updated),
-            });
-          }
+      if (!rows[0]) {
+        const row = await fetchPropostaRowByToken(pool, token);
+        if (!row) return res.status(404).json({ error: 'Proposta não encontrada' });
+        const retryIntent = resolvePublicDecisionIntent(String(row.status) as ProposalDecisionStatus, action);
+        if (retryIntent === 'idempotent_ok') {
+          return respondWithProposta(res, row, { alreadyDecided: true });
         }
-        const { rows: afterSign } = await pool.query(
-          `SELECT ${PROPOSTA_FIELDS} FROM propostas WHERE public_token = $1`,
+        return res.status(409).json({
+          error: conflictDecisionMessage(String(row.status) as ProposalDecisionStatus, action),
+        });
+      }
+
+      let updated = rows[0];
+      let warning: string | undefined;
+
+      try {
+        if (targetStatus === 'aprovada' && config) {
+          const fluxoAfter = parseProposalFlow(updated.fluxo);
+          if (shouldTriggerContractSign(fluxoAfter, { pago: !!updated.pago })) {
+            try {
+              const signResult = await triggerContractSignAfterApproval({
+                pool,
+                envConfig: config,
+                mail,
+                proposalId: String(updated.id),
+                organizationId: String(updated.organization_id),
+              });
+              if (signResult.error && !signResult.skipped) {
+                warning = signResult.error;
+              }
+            } catch (signErr) {
+              console.error('[public/decision] contract sign failed:', signErr);
+              warning =
+                signErr instanceof Error
+                  ? signErr.message
+                  : 'Não foi possível preparar a assinatura do contrato.';
+            }
+          }
+          const { rows: afterSign } = await pool.query(
+            `SELECT ${PROPOSTA_FIELDS}, organization_id FROM propostas WHERE public_token = $1`,
+            [token],
+          );
+          if (afterSign[0]) updated = afterSign[0];
+        }
+
+        if (suiteProposalEvents?.isEnabled() && updated.prosync_lead_id && config) {
+          const valor = typeof updated.valor_cents === 'number' ? updated.valor_cents : null;
+          const desconto = typeof updated.desconto_cents === 'number' ? updated.desconto_cents : 0;
+          const finalValueCents = valor != null ? Math.max(0, valor - desconto) : null;
+          const baseUrl = config.appUrl.replace(/\/+$/, '');
+          const publicUrl = updated.public_token ? `${baseUrl}/p/${updated.public_token}` : null;
+          suiteProposalEvents.fireAndForget({
+            propezOrganizationId: String(updated.organization_id),
+            event: targetStatus === 'aprovada' ? 'proposal.approved' : 'proposal.rejected',
+            externalId: String(updated.id),
+            leadId: String(updated.prosync_lead_id),
+            title: updated.cliente_nome
+              ? `Proposta para ${updated.cliente_nome}`
+              : `Proposta ${String(updated.id).slice(0, 8)}`,
+            publicUrl,
+            status: targetStatus,
+            valueCents: finalValueCents,
+            currency: 'BRL',
+            externalUpdatedAt: new Date(),
+          });
+        }
+
+        if (config) {
+          notifyProposalEventAsync({
+            pool,
+            mail,
+            config,
+            proposalId: String(updated.id),
+            type: targetStatus === 'aprovada' ? 'proposal_approved' : 'proposal_rejected',
+          });
+        }
+      } catch (sideErr) {
+        console.error('[public/decision] side effects failed:', sideErr);
+        if (!warning) {
+          warning =
+            sideErr instanceof Error
+              ? sideErr.message
+              : 'Decisão registrada, mas houve um problema ao concluir os próximos passos.';
+        }
+        const { rows: fresh } = await pool.query(
+          `SELECT ${PROPOSTA_FIELDS}, organization_id FROM propostas WHERE public_token = $1`,
           [token],
         );
-        if (afterSign[0]) Object.assign(updated, afterSign[0]);
+        if (fresh[0]) updated = fresh[0];
       }
 
-      if (suiteProposalEvents?.isEnabled() && updated.prosync_lead_id && config) {
-        const valor = typeof updated.valor_cents === 'number' ? updated.valor_cents : null;
-        const desconto = typeof updated.desconto_cents === 'number' ? updated.desconto_cents : 0;
-        const finalValueCents = valor != null ? Math.max(0, valor - desconto) : null;
-        const baseUrl = config.appUrl.replace(/\/+$/, '');
-        const publicUrl = updated.public_token ? `${baseUrl}/p/${updated.public_token}` : null;
-        suiteProposalEvents.fireAndForget({
-          propezOrganizationId: String(updated.organization_id),
-          event: status === 'aprovada' ? 'proposal.approved' : 'proposal.rejected',
-          externalId: String(updated.id),
-          leadId: String(updated.prosync_lead_id),
-          title: updated.cliente_nome
-            ? `Proposta para ${updated.cliente_nome}`
-            : `Proposta ${String(updated.id).slice(0, 8)}`,
-          publicUrl,
-          status,
-          valueCents: finalValueCents,
-          currency: 'BRL',
-          externalUpdatedAt: new Date(),
-        });
-      }
-
-      if (config) {
-        notifyProposalEventAsync({
-          pool,
-          mail,
-          config,
-          proposalId: String(updated.id),
-          type: status === 'aprovada' ? 'proposal_approved' : 'proposal_rejected',
-        });
-      }
-
-      return res.json({
-        proposta: serializeProposta(updated),
-        journey: buildJourneyPayload(updated),
-      });
+      return respondWithProposta(res, updated, warning ? { warning } : undefined);
     } catch (err) {
       console.error('[public/decision] erro:', err);
+      const row = await fetchPropostaRowByToken(pool, token).catch(() => null);
+      if (row && String(row.status) !== 'pendente') {
+        return respondWithProposta(res, row, {
+          warning: 'Decisão registrada, mas houve um problema ao concluir a resposta.',
+        });
+      }
       captureHandledErrorDetail(err, res, { action: (req.body as { action?: string })?.action });
       return res.status(500).json({ error: 'Erro ao registrar decisão' });
     }
@@ -290,8 +360,7 @@ export function createPublicPropostasRouter(deps: {
     }
     try {
       const { rows } = await pool.query(
-        `SELECT id, organization_id, status, contract_signing_url, rubrica_signing_url,
-                contract_sign_status, rubrica_status
+        `SELECT id, organization_id, status, contract_signing_url, contract_sign_status
          FROM propostas WHERE public_token = $1`,
         [token],
       );
@@ -301,8 +370,8 @@ export function createPublicPropostasRouter(deps: {
         return res.status(409).json({ error: 'Aprovação da proposta é necessária antes da assinatura' });
       }
 
-      const existingSigningUrl = row.contract_signing_url ?? row.rubrica_signing_url;
-      const existingSignStatus = row.contract_sign_status ?? row.rubrica_status;
+      const existingSigningUrl = row.contract_signing_url;
+      const existingSignStatus = row.contract_sign_status;
       if (
         existingSigningUrl &&
         existingSignStatus !== 'failed' &&
@@ -322,7 +391,13 @@ export function createPublicPropostasRouter(deps: {
       }
 
       await pool.query(
-        `UPDATE propostas SET contract_sign_status = NULL, contract_sign_last_sync_at = NULL
+        `UPDATE propostas SET
+           contract_sign_status = NULL,
+           contract_sign_last_sync_at = NULL,
+           contract_sign_document_id = CASE
+             WHEN contract_signing_url IS NULL THEN NULL
+             ELSE contract_sign_document_id
+           END
          WHERE public_token = $1 AND contract_sign_status IN ('failed', 'cancelled')`,
         [token],
       );
@@ -354,8 +429,15 @@ export function createPublicPropostasRouter(deps: {
         });
       }
       if (signResult.skipped) {
+        const skippedMessages: Record<string, string> = {
+          sem_contrato: 'Esta proposta não possui contrato configurado.',
+          sem_email: 'Informe um e-mail válido para gerar a assinatura.',
+          sem_passo_sign: 'Esta proposta não inclui etapa de assinatura.',
+          aguardando_pagamento: 'Conclua o pagamento antes de assinar o contrato.',
+        };
         return res.status(409).json({
-          error: `Não foi possível preparar assinatura (${signResult.skipped})`,
+          error: skippedMessages[signResult.skipped] ?? `Não foi possível preparar assinatura (${signResult.skipped})`,
+          skipped: signResult.skipped,
           proposta: serializeProposta(fresh[0]),
           journey: buildJourneyPayload(fresh[0]),
         });
@@ -363,8 +445,15 @@ export function createPublicPropostasRouter(deps: {
 
       const signingUrl =
         signResult.signingUrl ??
-        fresh[0].contract_signing_url ??
-        fresh[0].rubrica_signing_url;
+        fresh[0].contract_signing_url;
+
+      if (!signingUrl) {
+        return res.status(502).json({
+          error: 'Não foi possível gerar o link de assinatura. Tente novamente.',
+          proposta: serializeProposta(fresh[0]),
+          journey: buildJourneyPayload(fresh[0]),
+        });
+      }
 
       return res.json({
         ok: true,

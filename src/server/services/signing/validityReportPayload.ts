@@ -1,7 +1,6 @@
 import type { Pool } from 'pg';
 import type { ContractDocumentRow, ContractFieldRow, SignatureLinkRow } from './types.js';
 import { buildValidationCode, sha256Buffer } from './documentHash.js';
-import { VALIDITY_BRANDING } from './validityBranding.js';
 
 export interface ValidityReportPayload {
   document: {

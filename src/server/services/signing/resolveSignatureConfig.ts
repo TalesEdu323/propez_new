@@ -1,5 +1,4 @@
 import {
-  parseSavedSignatureConfig,
   resolveSignatureConfigWithDefaults,
   resolveClientSignatureFieldLegacy,
 } from '../../../lib/signatureConfig.js';

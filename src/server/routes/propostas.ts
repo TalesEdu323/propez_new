@@ -13,7 +13,7 @@ import { proposalFlowConfigSchema } from '../validation/proposalFlow.js'
 import { acceptContractByOrg, triggerContractSignAfterApproval } from '../services/proposalJourney.js'
 import { buildProposalTimeline } from '../services/proposalTimeline.js'
 import { PROPOSTA_SELECT, PROPOSTA_SUMMARY_SELECT } from '../db/propostaColumns.js'
-import { loadPdfAttachmentForProposal, resolveProposalEmailAttachment } from '../services/contractSignedPdf.js'
+import { resolveProposalEmailAttachment } from '../services/contractSignedPdf.js'
 import { readSignedPdfForProposal, readPartialPdfForProposal } from '../services/signing/contractSigningService.js'
 import {
   loadProposalNotificationContext,
@@ -647,27 +647,23 @@ export function createPropostasRouter(deps: {
     if (!req.auth) return res.status(401).end()
     const { rows } = await pool.query<{
       contract_sign_status: string | null
-      rubrica_status: string | null
       contract_sign_document_id: string | null
-      rubrica_document_id: string | null
       contract_signing_url: string | null
-      rubrica_signing_url: string | null
       contract_signed_pdf_path: string | null
-      rubrica_signed_pdf_url: string | null
       validation_token: string | null
     }>(
-      `SELECT p.contract_sign_status, p.rubrica_status, p.contract_sign_document_id, p.rubrica_document_id,
-              p.contract_signing_url, p.rubrica_signing_url, p.contract_signed_pdf_path, p.rubrica_signed_pdf_url,
+      `SELECT p.contract_sign_status, p.contract_sign_document_id,
+              p.contract_signing_url, p.contract_signed_pdf_path,
               cd.validation_token
        FROM propostas p
-       LEFT JOIN contract_documents cd ON cd.id = COALESCE(p.contract_sign_document_id, p.rubrica_document_id)
+       LEFT JOIN contract_documents cd ON cd.id = p.contract_sign_document_id
        WHERE p.organization_id = $1 AND p.id = $2`,
       [req.auth.orgId, req.params.id],
     )
     const row = rows[0]
     if (!row) return res.status(404).json({ error: 'Proposta não encontrada' })
-    const status = row.contract_sign_status ?? row.rubrica_status ?? 'pending'
-    const documentId = row.contract_sign_document_id ?? row.rubrica_document_id
+    const status = row.contract_sign_status ?? 'pending'
+    const documentId = row.contract_sign_document_id
     const validationToken = row.validation_token ?? null
     const hasDocument = status === 'sent' || status === 'signed'
     const validationPath = documentId
@@ -677,7 +673,7 @@ export function createPropostasRouter(deps: {
       proposalId: req.params.id,
       status,
       documentId,
-      signingUrl: row.contract_signing_url ?? row.rubrica_signing_url,
+      signingUrl: row.contract_signing_url,
       signedPdfUrl: status === 'signed' ? `/api/propostas/${req.params.id}/contract-signed.pdf` : null,
       originalPdfUrl: hasDocument && documentId ? `/api/propostas/${req.params.id}/contract-original.pdf` : null,
       validationUrl: validationPath,

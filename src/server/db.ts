@@ -42,6 +42,7 @@ export async function runStartupMigrations(pool: pg.Pool): Promise<void> {
     await runMigrations(pool, sqlDir);
     await verifyIntegrationSchema(pool);
     await verifyModeloSchema(pool);
+    await verifyPropostaSchema(pool);
   } catch (err) {
     console.error('[startup] migrations failed:', err);
     const isProd =
@@ -108,5 +109,43 @@ async function verifyModeloSchema(pool: pg.Pool): Promise<void> {
     console.log('[startup] modelos_propostas schema OK');
   } catch (err) {
     console.warn('[startup] verificação do schema de modelos falhou:', err);
+  }
+}
+
+const PROPOSTA_REQUIRED_COLUMNS = [
+  'cliente_email',
+  'fluxo',
+  'page_layout',
+  'cliente_documento',
+  'whatsapp_comprovante',
+  'contract_sign_document_id',
+  'contract_sign_status',
+  'contract_signing_url',
+] as const;
+
+/** Confirma colunas críticas de propostas (evita PG 42703 silencioso pós-deploy). */
+async function verifyPropostaSchema(pool: pg.Pool): Promise<void> {
+  try {
+    const { rows } = await pool.query<{ column_name: string }>(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'propostas'
+         AND column_name = ANY($1::text[])`,
+      [PROPOSTA_REQUIRED_COLUMNS],
+    );
+    const found = new Set(rows.map((r) => r.column_name));
+    const missing = PROPOSTA_REQUIRED_COLUMNS.filter((c) => !found.has(c));
+    if (missing.length > 0) {
+      console.error(
+        '[startup] propostas incompleto — colunas ausentes:',
+        missing.join(', '),
+        '(execute npm run migrate:apply)',
+      );
+      return;
+    }
+    console.log('[startup] propostas schema OK');
+  } catch (err) {
+    console.warn('[startup] verificação do schema de propostas falhou:', err);
   }
 }

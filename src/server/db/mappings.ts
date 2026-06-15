@@ -78,7 +78,7 @@ export async function upsertMapping(
 export async function logIntegrationEvent(
   pool: Pool,
   input: {
-    source: 'rubrica' | 'prosync' | 'internal'
+    source: 'rubrica' | 'prosync' | 'internal' | 'public'
     event: string
     proposalId?: string | null
     organizationId?: string | null

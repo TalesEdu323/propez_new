@@ -128,7 +128,7 @@ export async function createStripeCouponAndPromo(
     stripeCouponId = stripeCoupon.id;
 
     const promoParams: Stripe.PromotionCodeCreateParams = {
-      coupon: stripeCoupon.id,
+      promotion: { type: 'coupon', coupon: stripeCoupon.id },
       code,
       active: true,
     };

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { X, ArrowRight, ChevronLeft, LayoutTemplate } from 'lucide-react';
 import Builder from '../../components/Builder';
 import { SERVICE_WIDGETS } from '../../components/builder/serviceWidgets';

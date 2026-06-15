@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Search, Edit2, Trash2, LayoutTemplate, Copy } from 'lucide-react';
 import { store, Servico } from '../lib/store';
 import { duplicateServico } from '../lib/duplicateEntity';
@@ -9,6 +9,7 @@ import { useContratos, useServicos } from '../hooks/useStoreEntity';
 import type { NavigateFn } from '../types/navigation';
 import type { BuilderElement } from '../types/builder';
 import { confirmDelete, confirmDuplicate } from '../lib/feedback';
+import { ServicoEditorModal, type ServicoFormData } from './servicos/ServicoEditorModal';
 
 export default function Servicos({ navigate: _navigate }: { navigate: NavigateFn }) {
   const servicos = useServicos();

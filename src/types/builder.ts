@@ -144,6 +144,6 @@ export function isBuilderElement(value: unknown): value is BuilderElement {
 export function isBuilderElementOfType<K extends BuilderElementType>(
   value: BuilderElement,
   type: K,
-): value is BuilderElementOfType<K> {
+): value is Extract<BuilderElement, { type: K }> {
   return value.type === type;
 }

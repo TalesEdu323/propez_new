@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
 import QRCode from 'qrcode';
 import type { ValidityReportPayload } from './validityReportPayload.js';
 import { formatValidityDateTime } from './validityReportPayload.js';

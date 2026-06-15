@@ -14,3 +14,15 @@ export function friendlySignaturePrepareError(message: string): string {
   }
   return message.length > 200 ? 'Não foi possível preparar a assinatura. Tente novamente.' : message;
 }
+
+const SKIPPED_REASON_MESSAGES: Record<string, string> = {
+  sem_contrato: 'Esta proposta não possui contrato configurado. Entre em contato com quem enviou a proposta.',
+  sem_email: 'É necessário informar um e-mail válido para gerar a assinatura.',
+  sem_passo_sign: 'Esta proposta não inclui etapa de assinatura.',
+  aguardando_pagamento: 'Conclua o pagamento antes de assinar o contrato.',
+};
+
+/** Mensagem amigável para respostas 409 com motivo `skipped` na preparação da assinatura. */
+export function friendlySignatureSkippedReason(skipped: string): string {
+  return SKIPPED_REASON_MESSAGES[skipped] ?? friendlySignaturePrepareError(`skipped:${skipped}`);
+}

@@ -5,8 +5,6 @@ import { z } from 'zod'
 import type { EnvironmentConfig } from '../env.js'
 import { buildRequireAuth, requireOrgRole } from '../auth/middleware.js'
 
-import type { OfferType } from '../../../lib/layoutContext.js';
-
 const OFFER_TYPES = [
   'consultoria',
   'agencia',

@@ -8,7 +8,7 @@ function toUint8Array(buf: ArrayBuffer | Buffer): Uint8Array {
   if (buf instanceof ArrayBuffer) {
     return new Uint8Array(buf);
   }
-  return new Uint8Array(buf as ArrayBuffer);
+  return new Uint8Array(buf as unknown as ArrayBuffer);
 }
 
 export function isPdfBuffer(buf: ArrayBuffer | Buffer): boolean {

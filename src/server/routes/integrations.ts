@@ -45,7 +45,6 @@ export function buildIntegrationsRouter(deps: {
     envConfig,
     ensureSuiteCredential,
     orgCredentialsRepo,
-    suiteProposalEvents,
   } = deps
 
   router.use(buildRequireAuth(envConfig.auth))

@@ -1,8 +1,8 @@
 import {
   fieldsForSigner,
-  hasClientSignatureField,
   normalizeSignatureConfig,
   resolveClientSignatureFieldLegacy,
+  resolveSignatureConfigWithDefaults,
   type DbContractField,
 } from '../../../lib/signatureConfig.js';
 import type { SignatureFieldConfig } from './types.js';

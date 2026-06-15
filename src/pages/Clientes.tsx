@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Search, Users } from 'lucide-react';
 import { store, Cliente } from '../lib/store';
-import { motion } from 'motion/react';
+import { motion, type Variants } from 'motion/react';
 import { createId } from '../lib/ids';
 import { useClientes } from '../hooks/useStoreEntity';
 import { ClienteModal } from './clientes/ClienteModal';
@@ -9,6 +9,7 @@ import { ClientesTable } from './clientes/ClientesTable';
 import { ClientesCards } from './clientes/ClientesCards';
 import type { NavigateFn } from '../types/navigation';
 import { ListingViewToggle } from '../components/listing/ListingViewToggle';
+import { useListingViewPref } from '../hooks/useListingViewPref';
 import { confirmDelete } from '../lib/feedback';
 
 const CLIENTES_VIEW_KEY = 'listing_view:clientes';
@@ -54,7 +55,7 @@ export default function Clientes({ navigate: _navigate }: { navigate: NavigateFn
     store.saveClientes(clientes.filter((c) => c.id !== id));
   };
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
@@ -62,7 +63,7 @@ export default function Clientes({ navigate: _navigate }: { navigate: NavigateFn
     }
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, y: 20 },
     show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } }
   };

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DEFAULT_FLOW, parseProposalFlow, proposalFlowConfigSchema } from './proposalFlow.js';
+import { parseProposalFlow, proposalFlowConfigSchema } from './proposalFlow.js';
 
 const builderElement = z.object({}).passthrough();
 

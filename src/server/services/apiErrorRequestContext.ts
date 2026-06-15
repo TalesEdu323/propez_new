@@ -157,17 +157,34 @@ export function summarizeRequestBody(body: unknown): Record<string, unknown> | n
   return summarizeObjectBody(body as Record<string, unknown>);
 }
 
+function isPgErrorLike(value: unknown): value is PgErrorInfo {
+  if (!value || typeof value !== 'object') return false;
+  const pg = value as PgErrorInfo;
+  return Boolean(pg.code || pg.constraint || pg.column || pg.detail);
+}
+
+function extractPgErrorFromChain(err: unknown, depth = 0): PgErrorInfo | null {
+  if (!err || depth > 5) return null;
+  if (isPgErrorLike(err)) {
+    return {
+      code: err.code,
+      constraint: err.constraint,
+      column: err.column,
+      detail: err.detail ? truncateString(err.detail, 500) : undefined,
+      message: err.message ? truncateString(err.message, 500) : undefined,
+    };
+  }
+  if (err instanceof Error && err.cause) {
+    return extractPgErrorFromChain(err.cause, depth + 1);
+  }
+  if (typeof err === 'object' && 'cause' in err) {
+    return extractPgErrorFromChain((err as { cause?: unknown }).cause, depth + 1);
+  }
+  return null;
+}
+
 export function extractPgError(err: unknown): PgErrorInfo | null {
-  if (!err || typeof err !== 'object') return null;
-  const pg = err as PgErrorInfo;
-  if (!pg.code && !pg.constraint && !pg.column && !pg.detail) return null;
-  return {
-    code: pg.code,
-    constraint: pg.constraint,
-    column: pg.column,
-    detail: pg.detail ? truncateString(pg.detail, 500) : undefined,
-    message: pg.message ? truncateString(pg.message, 500) : undefined,
-  };
+  return extractPgErrorFromChain(err);
 }
 
 export function buildRequestContext(

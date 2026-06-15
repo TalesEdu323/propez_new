@@ -12,6 +12,11 @@ import { RenderElement } from '../components/builder/RenderElement';
 import type { ProposalDecision } from '../components/builder/RenderElement';
 import { PageShell } from '../components/builder/PageShell';
 import { normalizePageLayout, mergeOrgBrandIntoPageLayout } from '../lib/pageLayout';
+import { resolveThemeColors } from '../lib/proposalTheme';
+import {
+  decisionRecoveryMessage,
+  extractDecisionPayload,
+} from '../lib/publicPropostaDecisionClient';
 import { PropezWatermark } from './visualizarProposta/PropezWatermark';
 import { shouldShowWatermark } from '../lib/featureFlags';
 import { resolveOrgBrand } from '../lib/orgBrand';
@@ -71,6 +76,13 @@ interface JourneyInfo {
   canPay: boolean;
 }
 
+interface DecisionResponse {
+  proposta: PublicProposta;
+  journey?: JourneyInfo;
+  warning?: string;
+  alreadyDecided?: boolean;
+}
+
 interface PublicResponse {
   proposta: PublicProposta;
   organization: PublicOrg;
@@ -102,6 +114,7 @@ export default function PublicProposta({ token }: Props) {
   const [clientDoc, setClientDoc] = useState('');
   const [formOpen, setFormOpen] = useState<false | 'approve' | 'reject'>(false);
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [decisionWarning, setDecisionWarning] = useState<string | null>(null);
   const [dockVisible, setDockVisible] = useState(false);
   const [contractPrepareState, setContractPrepareState] = useState<ContractPrepareState>('idle');
   const [prepareError, setPrepareError] = useState<string | null>(null);
@@ -168,6 +181,7 @@ export default function PublicProposta({ token }: Props) {
     if (!proposta) return normalizePageLayout(undefined);
     return mergeOrgBrandIntoPageLayout(normalizePageLayout(proposta.pageLayout), orgBrand);
   }, [proposta, orgBrand]);
+  const pageTheme = useMemo(() => resolveThemeColors(pageLayout), [pageLayout]);
   const showOrgHeader = orgBrand.isWhiteLabel;
   const fluxo = useMemo(
     () => parseProposalFlow(proposta?.fluxo ?? data?.journey?.fluxo),
@@ -192,11 +206,30 @@ export default function PublicProposta({ token }: Props) {
   const awaitingSigningLink =
     shouldRedirectSign &&
     !signingUrl &&
-    signStatus !== 'signed' &&
-    signStatus !== 'failed' &&
-    signStatus !== 'cancelled';
+    signStatus !== 'signed';
 
-  const callPrepareSignature = useCallback(async () => {
+  type PrepareSignatureJson = {
+    proposta?: PublicProposta;
+    journey?: JourneyInfo;
+    signingUrl?: string;
+    error?: string;
+  };
+
+  const resolvePathFromPrepareJson = useCallback(
+    (json: PrepareSignatureJson): string | null => {
+      if (json.proposta) {
+        const fromProposta = pathFromProposta(json.proposta, token);
+        if (fromProposta) return fromProposta;
+      }
+      if (json.signingUrl) {
+        return resolveSigningPath(json.signingUrl, token);
+      }
+      return null;
+    },
+    [token],
+  );
+
+  const callPrepareSignature = useCallback(async (): Promise<PrepareSignatureJson> => {
     const url = `/api/public/propostas/${encodeURIComponent(token)}/prepare-signature`;
     const res = await apiFetch(url, {
       method: 'POST',
@@ -204,9 +237,9 @@ export default function PublicProposta({ token }: Props) {
       headers: { 'Content-Type': 'application/json' },
       skipRefresh: true,
     });
-    let json: { proposta?: PublicProposta; journey?: JourneyInfo; error?: string } = {};
+    let json: PrepareSignatureJson = {};
     try {
-      json = (await res.json()) as typeof json;
+      json = (await res.json()) as PrepareSignatureJson;
     } catch {
       /* empty */
     }
@@ -223,7 +256,8 @@ export default function PublicProposta({ token }: Props) {
   }, [token]);
 
   const ensureSigningPath = useCallback(
-    async (initial?: PublicProposta): Promise<string | null> => {
+    async (initial?: PublicProposta): Promise<{ path: string | null; error: string | null }> => {
+      let lastError: string | null = null;
       let current = initial;
       if (!current) {
         const refreshed = await load();
@@ -231,35 +265,36 @@ export default function PublicProposta({ token }: Props) {
       }
 
       let path = pathFromProposta(current, token);
-      if (path) return path;
+      if (path) return { path, error: null };
 
       try {
         const json = await callPrepareSignature();
-        if (json.proposta) {
-          path = pathFromProposta(json.proposta, token);
-          if (path) return path;
-        }
+        path = resolvePathFromPrepareJson(json);
+        if (path) return { path, error: null };
+        lastError = 'Não foi possível gerar o link de assinatura. Tente novamente.';
       } catch (err) {
         if (err instanceof ApiError) {
-          const body = err.body as { proposta?: PublicProposta } | undefined;
-          if (body?.proposta) {
-            path = pathFromProposta(body.proposta, token);
-            if (path) return path;
+          lastError = err.message;
+          const body = err.body as PrepareSignatureJson | undefined;
+          if (body) {
+            path = resolvePathFromPrepareJson(body);
+            if (path) return { path, error: null };
           }
+        } else {
+          lastError = 'Não foi possível preparar a assinatura.';
         }
-        /* tenta polling abaixo */
       }
 
       for (let i = 0; i < 3; i++) {
         await sleep(2000);
         const refreshed = await load();
         path = pathFromProposta(refreshed.proposta, token);
-        if (path) return path;
+        if (path) return { path, error: null };
       }
 
-      return null;
+      return { path: null, error: lastError };
     },
-    [callPrepareSignature, load, token],
+    [callPrepareSignature, load, resolvePathFromPrepareJson, token],
   );
 
   const redirectToSigning = useCallback(
@@ -275,13 +310,13 @@ export default function PublicProposta({ token }: Props) {
       setContractPrepareState('preparing');
       setPrepareError(null);
       try {
-        const path = await ensureSigningPath(initialProposta);
+        const { path, error } = await ensureSigningPath(initialProposta);
         if (path) {
           redirectToSigning(path);
           return;
         }
         setContractPrepareState('error');
-        setPrepareError('Não foi possível gerar o link de assinatura. Tente novamente.');
+        setPrepareError(error ?? 'Não foi possível gerar o link de assinatura. Tente novamente.');
       } catch (err) {
         setContractPrepareState('error');
         setPrepareError(
@@ -355,6 +390,39 @@ export default function PublicProposta({ token }: Props) {
     scrollToDecision();
   };
 
+  const applyDecisionResult = useCallback(
+    async (
+      result: DecisionResponse,
+      action: 'approve' | 'reject',
+      options?: { warning?: string | null; recoveryMessage?: string | null },
+    ) => {
+      setData((prev) =>
+        prev ? { ...prev, proposta: result.proposta, journey: result.journey ?? prev.journey } : prev,
+      );
+      setFormOpen(false);
+      setDecisionError(null);
+      setDecisionWarning(options?.warning ?? options?.recoveryMessage ?? result.warning ?? null);
+
+      if (action === 'approve') {
+        const approvedFluxo = parseProposalFlow(result.proposta.fluxo);
+        const nextAction = resolveClientActionAfterApprove(approvedFluxo, {
+          pago: result.proposta.pago,
+          contractSignStatus: result.proposta.contractSignStatus,
+        });
+        if (nextAction === 'redirect_sign') {
+          autoPrepareStartedRef.current = true;
+          const immediatePath = pathFromProposta(result.proposta, token);
+          if (immediatePath) {
+            redirectToSigning(immediatePath);
+          } else {
+            await runPrepareAndRedirect(result.proposta);
+          }
+        }
+      }
+    },
+    [redirectToSigning, runPrepareAndRedirect, token],
+  );
+
   const decide = async (action: 'approve' | 'reject') => {
     if (!clientName.trim() || !clientEmail.trim()) {
       setDecisionError('Informe nome e e-mail.');
@@ -366,8 +434,9 @@ export default function PublicProposta({ token }: Props) {
     }
     setIsSubmitting(true);
     setDecisionError(null);
+    setDecisionWarning(null);
     try {
-      const res = await api.post<{ proposta: PublicProposta; journey?: JourneyInfo }>(
+      const res = await api.post<DecisionResponse>(
         `/api/public/propostas/${encodeURIComponent(token)}/decision`,
         {
           action,
@@ -377,27 +446,49 @@ export default function PublicProposta({ token }: Props) {
         },
         { skipRefresh: true },
       );
-      setData((prev) => (prev ? { ...prev, proposta: res.proposta, journey: res.journey } : prev));
-      setFormOpen(false);
-
-      if (action === 'approve') {
-        const approvedFluxo = parseProposalFlow(res.proposta.fluxo);
-        const nextAction = resolveClientActionAfterApprove(approvedFluxo, {
-          pago: res.proposta.pago,
-          contractSignStatus: res.proposta.contractSignStatus,
-        });
-        if (nextAction === 'redirect_sign') {
-          autoPrepareStartedRef.current = true;
-          const immediatePath = pathFromProposta(res.proposta, token);
-          if (immediatePath) {
-            redirectToSigning(immediatePath);
-          } else {
-            await runPrepareAndRedirect(res.proposta);
+      await applyDecisionResult(res, action, {
+        warning: res.warning,
+        recoveryMessage: res.alreadyDecided
+          ? decisionRecoveryMessage(res.proposta.status, action)
+          : null,
+      });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const payload = extractDecisionPayload(err.body);
+        if (payload?.proposta) {
+          await applyDecisionResult(
+            {
+              proposta: payload.proposta as unknown as PublicProposta,
+              journey: payload.journey as JourneyInfo | undefined,
+              warning: payload.warning,
+            },
+            action,
+            { warning: payload.warning ?? payload.error ?? err.message },
+          );
+          return;
+        }
+        if (err.status === 409) {
+          try {
+            const refreshed = await load();
+            setFormOpen(false);
+            setDecisionError(null);
+            const recovery = decisionRecoveryMessage(refreshed.proposta.status, action);
+            if (recovery) {
+              await applyDecisionResult(
+                { proposta: refreshed.proposta, journey: refreshed.journey },
+                action,
+                { recoveryMessage: recovery },
+              );
+              return;
+            }
+          } catch {
+            /* fall through */
           }
         }
+        setDecisionError(err.message);
+      } else {
+        setDecisionError('Erro ao enviar decisão.');
       }
-    } catch (err) {
-      setDecisionError(err instanceof ApiError ? err.message : 'Erro ao enviar decisão.');
     } finally {
       setIsSubmitting(false);
     }
@@ -468,14 +559,30 @@ export default function PublicProposta({ token }: Props) {
     );
   }
 
+  const showWatermark = shouldShowWatermark(
+    proposta.creatorPlan as 'free' | 'pro' | 'business' | undefined,
+  );
+  const signStepVisible =
+    showSign && signPhase !== 'sign_pending' && signPhase !== 'not_started';
+  const anchorMinHeightClass = proposta.status === 'pendente' ? 'min-h-[30vh]' : 'min-h-0';
+
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-white relative font-sans">
+    <div
+      className="min-h-screen w-full max-w-[100vw] overflow-x-hidden relative font-sans"
+      style={{ minHeight: '100vh', backgroundColor: pageTheme.backgroundColor, color: pageTheme.textColor }}
+    >
       {showOrgHeader && org && (
         <PublicOrgHeader
           name={org.name}
           logoUrl={org.logoUrl}
           primaryColor={org.primaryColor ?? orgBrand.primaryColor}
         />
+      )}
+
+      {decisionWarning && !showPrepareOverlay && (
+        <div className="sticky top-0 z-40 w-full bg-amber-50 text-amber-900 border-b border-amber-200 px-4 py-3 text-center text-sm">
+          {decisionWarning}
+        </div>
       )}
 
       {proposta.status === 'aprovada' && !showPrepareOverlay && (
@@ -496,7 +603,12 @@ export default function PublicProposta({ token }: Props) {
             <p className="text-zinc-400 font-bold text-[10px] uppercase tracking-[0.2em]">Esta proposta está vazia.</p>
           </div>
         ) : (
-          <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-full overflow-x-hidden bg-white">
+          <motion.div
+            key="content"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="w-full max-w-full overflow-x-hidden"
+          >
             <PageShell layout={pageLayout}>
               {proposta.elementos.map((el) => (
                 <RenderElement
@@ -508,111 +620,113 @@ export default function PublicProposta({ token }: Props) {
                   onProposalAction={proposta.status === 'pendente' ? handleProposalAction : undefined}
                 />
               ))}
+
+              <div
+                ref={anchorRef}
+                id="proposal-decision-anchor"
+                className={`${anchorMinHeightClass} flex flex-col justify-end py-6 sm:py-10 pb-4 sm:pb-8`}
+              >
+                {proposta.status === 'pendente' && !dockVisible && (
+                  <p className="text-center text-sm opacity-60 px-6 py-8">
+                    Role até o final da proposta ou toque em &quot;Aprovar proposta&quot; no conteúdo para abrir as opções.
+                  </p>
+                )}
+
+                {proposta.status === 'aprovada' && !showPrepareOverlay && (
+                  <>
+                    {showPayBlock && (
+                      proposta.pago ? (
+                        <div className="max-w-lg mx-auto my-8 p-8 rounded-3xl bg-emerald-50 border border-emerald-100 text-center">
+                          <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
+                          <h3 className="text-xl font-bold text-emerald-900">Pagamento confirmado</h3>
+                          <p className="text-emerald-700 mt-2 text-sm">Obrigado! Seu pagamento foi registrado.</p>
+                        </div>
+                      ) : (
+                        <div className="max-w-lg mx-auto my-8 p-8 rounded-3xl bg-white/90 border border-black/5 shadow-lg text-center space-y-4">
+                          <h3 className="text-xl font-bold">Proposta aprovada!</h3>
+                          <p className="text-sm opacity-70">
+                            Agora efetue o pagamento de <strong>{formatBRL(valorFinal)}</strong> usando os dados abaixo.
+                          </p>
+                          {proposta.chavePix && (
+                            <div className="flex items-center justify-between gap-3 bg-zinc-50 rounded-2xl px-5 py-4 border border-black/[0.04]">
+                              <div className="text-left">
+                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Chave PIX</p>
+                                <p className="font-mono text-sm break-all">{proposta.chavePix}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void navigator.clipboard.writeText(proposta.chavePix!)}
+                                className="shrink-0 p-2 rounded-xl hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-colors"
+                                title="Copiar chave PIX"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                          {proposta.linkPagamento && (
+                            <a
+                              href={proposta.linkPagamento}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors"
+                            >
+                              <ExternalLink className="w-4 h-4" /> Pagar online
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void confirmPublicPayment()}
+                            disabled={isSubmitting}
+                            className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-70"
+                          >
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                            Marcar como pago
+                          </button>
+                          <p className="text-xs opacity-50">
+                            Após o pagamento, {org.name} confirmará o recebimento.
+                          </p>
+                        </div>
+                      )
+                    )}
+                    {signStepVisible && (
+                      <PublicSignStep
+                        proposta={proposta}
+                        fluxo={fluxo}
+                        orgName={org.name}
+                        publicToken={token}
+                        onConfirmReceipt={confirmReceipt}
+                        onRetrySignature={retryPrepareFromOverlay}
+                        confirming={isSubmitting}
+                        retrying={retryingSignature}
+                      />
+                    )}
+                    {!showSign && !showPayBlock && flowHasStep(fluxo, 'pay') && proposta.pago && (
+                      <div className="max-w-lg mx-auto my-8 p-8 rounded-3xl bg-emerald-50 border border-emerald-100 text-center">
+                        <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-emerald-900">Pagamento confirmado</h3>
+                        <p className="text-emerald-700 mt-2 text-sm">Obrigado! Seu pagamento foi registrado.</p>
+                      </div>
+                    )}
+                    {!showSign && !showPayBlock && !flowHasStep(fluxo, 'pay') && !flowHasStep(fluxo, 'sign') && (
+                      <div className="max-w-lg mx-auto my-8 p-6 rounded-2xl bg-emerald-50 text-emerald-800 text-center font-medium border border-emerald-100">
+                        Proposta aprovada. Obrigado!
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {proposta.status === 'recusada' && (
+                  <div className="max-w-lg mx-auto my-8 p-6 rounded-2xl bg-red-50 text-red-700 text-center font-medium border border-red-100">
+                    Sua resposta foi registrada.
+                  </div>
+                )}
+
+                {showWatermark && <PropezWatermark />}
+              </div>
             </PageShell>
           </motion.div>
         )}
       </AnimatePresence>
-
-      <div ref={anchorRef} id="proposal-decision-anchor" className="min-h-[30vh] flex flex-col justify-end pb-4 sm:pb-8">
-        {proposta.status === 'pendente' && !dockVisible && (
-          <p className="text-center text-sm text-zinc-400 px-6 py-12">
-            Role até o final da proposta ou toque em &quot;Aprovar proposta&quot; no conteúdo para abrir as opções.
-          </p>
-        )}
-
-        {proposta.status === 'aprovada' && !showPrepareOverlay && (
-          <>
-            {showPayBlock && (
-              proposta.pago ? (
-                <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-emerald-50 border border-emerald-100 text-center">
-                  <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
-                  <h3 className="text-xl font-bold text-emerald-900">Pagamento confirmado</h3>
-                  <p className="text-emerald-700 mt-2 text-sm">Obrigado! Seu pagamento foi registrado.</p>
-                </div>
-              ) : (
-                <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-white border border-black/5 shadow-lg text-center space-y-4">
-                  <h3 className="text-xl font-bold text-zinc-900">Proposta aprovada!</h3>
-                  <p className="text-zinc-500 text-sm">
-                    Agora efetue o pagamento de <strong>{formatBRL(valorFinal)}</strong> usando os dados abaixo.
-                  </p>
-                  {proposta.chavePix && (
-                    <div className="flex items-center justify-between gap-3 bg-zinc-50 rounded-2xl px-5 py-4 border border-black/[0.04]">
-                      <div className="text-left">
-                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Chave PIX</p>
-                        <p className="font-mono text-sm text-zinc-900 break-all">{proposta.chavePix}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void navigator.clipboard.writeText(proposta.chavePix!)}
-                        className="shrink-0 p-2 rounded-xl hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-colors"
-                        title="Copiar chave PIX"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                  {proposta.linkPagamento && (
-                    <a
-                      href={proposta.linkPagamento}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4" /> Pagar online
-                    </a>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void confirmPublicPayment()}
-                    disabled={isSubmitting}
-                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-70"
-                  >
-                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    Marcar como pago
-                  </button>
-                  <p className="text-xs text-zinc-400">
-                    Após o pagamento, {org.name} confirmará o recebimento.
-                  </p>
-                </div>
-              )
-            )}
-            {showSign && !showPayBlock && (
-              <PublicSignStep
-                proposta={proposta}
-                fluxo={fluxo}
-                orgName={org.name}
-                publicToken={token}
-                onConfirmReceipt={confirmReceipt}
-                onRetrySignature={retryPrepareFromOverlay}
-                confirming={isSubmitting}
-                retrying={retryingSignature}
-              />
-            )}
-            {!showSign && !showPayBlock && flowHasStep(fluxo, 'pay') && proposta.pago && (
-              <div className="max-w-lg mx-auto my-12 p-8 rounded-3xl bg-emerald-50 border border-emerald-100 text-center">
-                <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-emerald-900">Pagamento confirmado</h3>
-                <p className="text-emerald-700 mt-2 text-sm">Obrigado! Seu pagamento foi registrado.</p>
-              </div>
-            )}
-            {!showSign && !showPayBlock && !flowHasStep(fluxo, 'pay') && !flowHasStep(fluxo, 'sign') && (
-              <div className="max-w-lg mx-auto my-12 p-6 rounded-2xl bg-emerald-50 text-emerald-800 text-center font-medium border border-emerald-100">
-                Proposta aprovada. Obrigado!
-              </div>
-            )}
-          </>
-        )}
-
-        {proposta.status === 'recusada' && (
-          <div className="max-w-lg mx-auto my-12 p-6 rounded-2xl bg-red-50 text-red-700 text-center font-medium border border-red-100">
-            Sua resposta foi registrada.
-          </div>
-        )}
-
-        {shouldShowWatermark(proposta.creatorPlan as 'free' | 'pro' | 'business' | undefined) && (
-          <PropezWatermark />
-        )}
-      </div>
 
       {proposta.status === 'pendente' && (
         <ProposalDecisionDock

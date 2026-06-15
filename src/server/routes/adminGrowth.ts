@@ -286,7 +286,7 @@ export function createAdminGrowthRouter(deps: {
         expiresAt: data.expiresAt,
         appliesToPlans: data.appliesToPlans,
       });
-      res.status(201).json(formatCouponRow(coupon));
+      res.status(201).json(formatCouponRow(coupon as unknown as Record<string, unknown>));
     } catch (err) {
       console.error('[admin/coupons] create:', err);
       const message = err instanceof Error ? err.message : 'Erro ao criar cupom';
@@ -302,7 +302,7 @@ export function createAdminGrowthRouter(deps: {
     try {
       const coupon = await deactivateCoupon(stripe, pool, req.params.id);
       if (!coupon) return res.status(404).json({ error: 'Cupom não encontrado' });
-      res.json(formatCouponRow(coupon));
+      res.json(formatCouponRow(coupon as unknown as Record<string, unknown>));
     } catch (err) {
       console.error('[admin/coupons] deactivate:', err);
       res.status(500).json({ error: 'Erro ao desativar cupom' });

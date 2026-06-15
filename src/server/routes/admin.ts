@@ -649,7 +649,7 @@ export function createAdminRouter(deps: {
         targetIsPlatformAdmin: target.is_platform_admin,
         platformAdminCount,
       })
-      if (!check.ok) return res.status(400).json({ error: check.error })
+      if (!check.ok) return res.status(400).json({ error: 'error' in check ? check.error : 'Não é possível excluir o usuário.' })
 
       await pool.query(`DELETE FROM users WHERE id = $1`, [req.params.id])
       return res.json({ ok: true })

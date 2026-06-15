@@ -12,7 +12,7 @@ import {
   wrapBusinessEmail,
   renderRubricaSignatureNotice,
 } from './shared.js'
-import { renderCtaButton, renderSecondaryLink } from '../../layout.js'
+import { renderCtaButton } from '../../layout.js'
 
 export function renderProposalCreatedOrg(branding: EmailBranding, ctx: ProposalNotificationContext): string {
   return wrapBusinessEmail(

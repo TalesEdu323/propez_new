@@ -77,13 +77,11 @@ export async function triggerContractSignAfterApproval(deps: {
     contrato_signature_config: unknown;
     contract_template_title: string | null;
     contract_signing_url: string | null;
-    rubrica_signing_url: string | null;
     contract_sign_status: string | null;
-    rubrica_status: string | null;
   }>(
     `SELECT p.contrato_texto, p.contrato_id, p.cliente_nome, p.cliente_email, p.cliente_documento, p.fluxo, p.public_token,
             p.valor_cents, p.desconto_cents, p.pago,
-            p.contract_signing_url, p.rubrica_signing_url, p.contract_sign_status, p.rubrica_status,
+            p.contract_signing_url, p.contract_sign_status,
             o.name AS org_name, o.cnpj AS org_cnpj, o.signature_url AS org_signature_url,
             m.signature_config AS modelo_signature_config,
             ct.source_type AS contract_source_type,
@@ -101,8 +99,8 @@ export async function triggerContractSignAfterApproval(deps: {
   );
   const row = rows[0];
 
-  const existingSigningUrl = row?.contract_signing_url ?? row?.rubrica_signing_url;
-  const existingSignStatus = row?.contract_sign_status ?? row?.rubrica_status;
+  const existingSigningUrl = row?.contract_signing_url;
+  const existingSignStatus = row?.contract_sign_status;
   if (
     existingSigningUrl &&
     existingSignStatus !== 'failed' &&
@@ -200,11 +198,10 @@ export async function confirmClientReceipt(deps: {
   const { rows } = await deps.pool.query<{
     id: string;
     contract_sign_status: string | null;
-    rubrica_status: string | null;
     cliente_contrato_recebido_at: string | null;
     organization_id: string;
   }>(
-    `SELECT id, contract_sign_status, rubrica_status, cliente_contrato_recebido_at, organization_id
+    `SELECT id, contract_sign_status, cliente_contrato_recebido_at, organization_id
      FROM propostas WHERE public_token = $1`,
     [deps.token],
   );
@@ -240,12 +237,11 @@ export async function acceptContractByOrg(deps: {
 }): Promise<{ ok: boolean; error?: string; status?: number }> {
   const { rows } = await deps.pool.query<{
     contract_sign_status: string | null;
-    rubrica_status: string | null;
     cliente_contrato_recebido_at: string | null;
     org_contrato_aceito_at: string | null;
     contrato_concluido_at: string | null;
   }>(
-    `SELECT contract_sign_status, rubrica_status, cliente_contrato_recebido_at, org_contrato_aceito_at, contrato_concluido_at
+    `SELECT contract_sign_status, cliente_contrato_recebido_at, org_contrato_aceito_at, contrato_concluido_at
      FROM propostas WHERE id = $1 AND organization_id = $2`,
     [deps.proposalId, deps.organizationId],
   );

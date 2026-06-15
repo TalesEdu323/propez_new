@@ -106,7 +106,6 @@ export default function Contratos() {
     pendingFileSize,
     uploadPdf,
     removePdf,
-    setUploadError,
     setInlineError,
   } = useContratoPdfUpload({
     currentContrato,

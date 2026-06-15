@@ -70,6 +70,7 @@ export interface SerializedProposta {
   duracao_recorrencia?: number | null
   data_envio?: string | null
   data_validade?: string | null
+  viewedAt?: string | null
   status: 'pendente' | 'aprovada' | 'recusada'
   elementos: unknown[]
   pageLayout: BuilderPageLayout
@@ -77,6 +78,7 @@ export interface SerializedProposta {
   contratoId?: string | null
   chavePix?: string | null
   linkPagamento?: string | null
+  whatsappComprovante?: string | null
   pago: boolean
   data_pagamento?: string | null
   data_criacao: string

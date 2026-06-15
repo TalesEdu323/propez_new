@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { Pool } from 'pg';
-import type { EnvironmentConfig } from '../env.js';
-import type { MailClient } from '../mail/client.js';
+import type { EnvironmentConfig } from '../../env.js';
+import type { MailClient } from '../../mail/client.js';
 import { generateContractPdf } from '../contractPdf.js';
 import { logIntegrationEvent } from '../../db/mappings.js';
 import { notifyProposalEventAsync } from '../notificationService.js';
@@ -470,6 +470,12 @@ export async function getSignatureLinkPublic(deps: {
     used: boolean;
     expiresAt: string;
     previewUrl: string;
+    publicToken: string | null;
+    fluxo: unknown;
+    valorCents: number | null;
+    chavePix: string | null;
+    linkPagamento: string | null;
+    identityValidated: boolean;
     clientFields: Array<{
       type: string;
       page: number;

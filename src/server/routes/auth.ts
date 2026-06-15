@@ -5,7 +5,6 @@ import { z } from 'zod'
 import type { EnvironmentConfig } from '../env.js'
 import { hashPassword, verifyPassword } from '../auth/password.js'
 import {
-  createRefreshToken,
   generateEmailCode,
   hashToken,
   signAccessToken,
@@ -16,7 +15,6 @@ import {
   clearAuthCookies,
   refreshCookieName,
   setAccessCookie,
-  setRefreshCookie,
 } from '../auth/cookies.js'
 import { buildRequireAuth } from '../auth/middleware.js'
 import type { MailClient } from '../mail/resend.js'
@@ -27,6 +25,7 @@ import {
   issueEmailVerification,
   issuePasswordReset,
 } from '../services/authMailService.js'
+import { attributeOrganizationToAffiliate } from '../services/affiliateCommissions.js'
 import type { SuiteLookupClient } from '../clients/suiteLookup.js'
 
 const registerSchema = z.object({

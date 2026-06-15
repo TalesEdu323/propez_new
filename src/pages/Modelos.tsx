@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, FileText, Copy } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, type Variants } from 'motion/react';
 import { store } from '../lib/store';
 import { duplicateModelo } from '../lib/duplicateEntity';
 import { useModelos } from '../hooks/useStoreEntity';
@@ -8,6 +8,7 @@ import { formatDateBR } from '../lib/format';
 import type { NavigateFn, ModelosTab } from '../types/navigation';
 import { LojaTemplatesPanel } from './modelos/LojaTemplatesPanel';
 import { ListingViewToggle } from '../components/listing/ListingViewToggle';
+import { LISTING_GRID_CLASS, LISTING_LIST_CLASS } from '../components/listing/listingLayout';
 import { useListingViewPref } from '../hooks/useListingViewPref';
 import { confirmDelete, confirmDuplicate } from '../lib/feedback';
 
@@ -46,7 +47,7 @@ export default function Modelos({
     m.nome.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -54,7 +55,7 @@ export default function Modelos({
     },
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: {
       opacity: 1,

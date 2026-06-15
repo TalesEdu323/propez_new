@@ -1,7 +1,12 @@
-import type { BuilderElement } from '../../../types/builder';
+import type { BuilderElement, BuilderElementType } from '../../../types/builder';
 
 export interface FieldProps {
-  element: BuilderElement;
+  element: {
+    id: string;
+    type: BuilderElementType;
+    props: Record<string, any>;
+    children?: BuilderElement[];
+  };
   updateElement: (id: string, patch: Record<string, any>) => void;
 }
 

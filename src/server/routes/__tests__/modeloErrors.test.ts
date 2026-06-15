@@ -36,4 +36,27 @@ describe('modeloErrorResponse', () => {
       modeloErrorResponse(new ModeloReferenceError('Contrato ausente')).status,
     ).toBe(400);
   });
+
+  it('mapeia NOT NULL violation', () => {
+    expect(modeloErrorResponse({ code: '23502' }).status).toBe(400);
+  });
+
+  it('mapeia tabela inexistente', () => {
+    expect(modeloErrorResponse({ code: '42P01' }).status).toBe(503);
+  });
+
+  it('mapeia datatype mismatch', () => {
+    expect(modeloErrorResponse({ code: '42804' }).status).toBe(400);
+  });
+
+  it('mapeia erro de conexão', () => {
+    expect(modeloErrorResponse({ code: 'ECONNREFUSED' }).status).toBe(503);
+  });
+
+  it('mapeia erro PG encapsulado em cause', () => {
+    const wrapped = new Error('query failed', {
+      cause: { code: '42703', column: 'fluxo' },
+    });
+    expect(modeloErrorResponse(wrapped).status).toBe(503);
+  });
 });

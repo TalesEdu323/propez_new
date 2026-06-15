@@ -138,7 +138,7 @@ export function RenderElement({
   viewport = 'desktop',
   pageLayout,
 }: {
-  element: ElementData;
+  element: BuilderElement;
   previewMode?: boolean;
   allowInteraction?: boolean;
   onProposalAction?: ProposalActionHandler;
@@ -147,7 +147,9 @@ export function RenderElement({
   pageLayout?: BuilderPageLayout | null;
   key?: React.Key;
 }) {
-  const { type, props } = element;
+  const { type } = element;
+  // Props do builder são dinâmicas por tipo de elemento; o acesso é validado em runtime.
+  const props = element.props as Record<string, any>;
   const childRenderProps = { previewMode, allowInteraction, onProposalAction, proposalDecision, viewport, pageLayout };
   const contentPad = pageLayout?.widthMode === 'boxed' ? resolvePagePadding(pageLayout) : undefined;
   const theme = resolveThemeColors(pageLayout);

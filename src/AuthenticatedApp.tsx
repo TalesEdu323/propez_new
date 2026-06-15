@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Settings, LogOut, Bell, User } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';

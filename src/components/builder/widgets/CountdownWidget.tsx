@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import type { BuilderViewport } from '../../../types/builder';
 import { countdownLayout } from '../viewportLayout';

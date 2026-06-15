@@ -84,7 +84,7 @@ export function SuccessStep({
   );
 
   const runAutoSend = useCallback(
-    async (url: string, email: string) => {
+    async (_url: string, email: string) => {
       if (autoSendTriggeredRef.current || emailSentRef.current) return;
       autoSendTriggeredRef.current = true;
 

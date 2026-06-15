@@ -631,10 +631,11 @@ async function diffSave<T extends { id: string }, TPayload>(
           .create(impl.toPayload(item))
           .then((saved) => {
             successes.push('create');
-            const next =
+            const next = (
               key === 'propez_modelos'
-                ? mergeModeloAfterSave(item as ModeloProposta, saved as ModeloProposta)
-                : saved;
+                ? mergeModeloAfterSave(item as unknown as ModeloProposta, saved as unknown as ModeloProposta)
+                : saved
+            ) as T;
             setList(replaceCacheItem(getList(), id, next));
             notify(key);
           })
@@ -651,10 +652,11 @@ async function diffSave<T extends { id: string }, TPayload>(
           .update(id, impl.toPayload(item))
           .then((saved) => {
             successes.push('update');
-            const next =
+            const next = (
               key === 'propez_modelos'
-                ? mergeModeloAfterSave(item as ModeloProposta, saved as ModeloProposta)
-                : saved;
+                ? mergeModeloAfterSave(item as unknown as ModeloProposta, saved as unknown as ModeloProposta)
+                : saved
+            ) as T;
             setList(replaceCacheItem(getList(), id, next));
             notify(key);
           })
@@ -1140,7 +1142,7 @@ export async function createCliente(input: Omit<Cliente, 'id' | 'data_cadastro'>
 
 export async function createProposta(input: Omit<Proposta, 'id' | 'data_criacao'>): Promise<Proposta> {
   const saved = fromApiProposta(
-    await api.post<ApiProposta>('/api/propostas', toPropostaPayload(input as Proposta)),
+    await api.post<ApiProposta>('/api/propostas', toPropostaPayload(input as Proposta) as unknown as Record<string, unknown>),
   );
   cache.propostas = [saved, ...cache.propostas];
   notify('propez_propostas');
@@ -1149,7 +1151,7 @@ export async function createProposta(input: Omit<Proposta, 'id' | 'data_criacao'
 
 export async function updateProposta(id: string, patch: Partial<Proposta>): Promise<Proposta> {
   const saved = fromApiProposta(
-    await api.patch<ApiProposta>(`/api/propostas/${id}`, toPropostaPayload({ id, ...patch } as Proposta)),
+    await api.patch<ApiProposta>(`/api/propostas/${id}`, toPropostaPayload({ id, ...patch } as Proposta) as unknown as Record<string, unknown>),
   );
   cache.propostas = cache.propostas.map((p) => (p.id === id ? saved : p));
   notify('propez_propostas');

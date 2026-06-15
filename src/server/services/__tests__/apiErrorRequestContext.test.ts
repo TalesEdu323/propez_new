@@ -45,6 +45,20 @@ describe('apiErrorRequestContext', () => {
     expect(pg?.detail).toContain('contratos_templates');
   });
 
+  it('extrai erro Postgres de cause encapsulado', () => {
+    const wrapped = new Error('query failed', {
+      cause: {
+        code: '42703',
+        column: 'rubrica_status',
+        detail: 'column "rubrica_status" does not exist',
+      },
+    });
+
+    const pg = extractPgError(wrapped);
+    expect(pg?.code).toBe('42703');
+    expect(pg?.column).toBe('rubrica_status');
+  });
+
   it('monta request context com params, query e body', () => {
     const ctx = buildRequestContext(
       { id: 'dba38d48-2fdb-4da1-a8c6-cf078ae06c23' },
