@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../lib/apiClient';
+import { toast, confirmAction } from '../../lib/feedback';
 
 export interface IntegrationCredentialSummary {
   configured: boolean;
@@ -66,8 +67,9 @@ export function IntegrationProviderCard({
       });
       setApiKey('');
       await onRefresh();
+      toast.success('Credencial salva com sucesso.');
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Erro ao salvar credencial');
+      toast.error(err instanceof ApiError ? err.message : 'Erro ao salvar credencial');
     } finally {
       setBusy(null);
     }
@@ -83,25 +85,33 @@ export function IntegrationProviderCard({
         `/api/integrations/credentials/${provider}/verify`,
         body,
       );
-      if (!res.ok) alert(res.error || 'Falha na verificação');
-      else alert('Conexão OK com o serviço.');
+      if (!res.ok) toast.error(res.error || 'Falha na verificação');
+      else toast.success('Conexão OK com o serviço.');
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Erro ao testar conexão');
+      toast.error(err instanceof ApiError ? err.message : 'Erro ao testar conexão');
     } finally {
       setBusy(null);
     }
   };
 
   const handleDisconnect = async () => {
-    if (!confirm(`Remover a conexão com ${title}?`)) return;
+    const confirmed = await confirmAction({
+      title: `Remover a conexão com ${title}?`,
+      description: 'A integração será desconectada e as credenciais removidas.',
+      confirmLabel: 'Desconectar',
+      cancelLabel: 'Cancelar',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     setBusy('disconnect');
     try {
       await api.delete(`/api/integrations/credentials/${provider}`);
       setApiKey('');
       setApiBaseUrl(defaultBaseUrl);
       await onRefresh();
+      toast.success('Integração desconectada.');
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Erro ao desconectar');
+      toast.error(err instanceof ApiError ? err.message : 'Erro ao desconectar');
     } finally {
       setBusy(null);
     }

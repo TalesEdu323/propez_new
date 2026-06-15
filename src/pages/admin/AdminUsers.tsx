@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import AdminPageShell from './AdminPageShell';
 import { api } from '../../lib/apiClient';
+import { toast, confirmAction } from '../../lib/feedback';
 import { formatDateBR } from '../../lib/format';
 import { useSession } from '../../lib/authSession';
 import type { NavigateFn } from '../../types/navigation';
@@ -84,7 +85,7 @@ export default function AdminUsers({ navigate }: { navigate: NavigateFn }) {
     if (toggling) return;
     const nextValue = !user.isPlatformAdmin;
     if (session?.user.id === user.id && !nextValue) {
-      alert('Você não pode remover a si mesmo da lista de platform admins.');
+      toast.warning('Você não pode remover a si mesmo da lista de platform admins.');
       return;
     }
     setToggling(user.id);
@@ -95,7 +96,7 @@ export default function AdminUsers({ navigate }: { navigate: NavigateFn }) {
       );
     } catch (err) {
       console.error('[admin/users/toggle] erro:', err);
-      alert(err instanceof Error ? err.message : 'Erro ao atualizar usuário');
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar usuário');
     } finally {
       setToggling(null);
     }
@@ -106,9 +107,9 @@ export default function AdminUsers({ navigate }: { navigate: NavigateFn }) {
     setActionLoading(user.id);
     try {
       await api.post(`/api/admin/users/${user.id}/send-password-reset`, {});
-      alert(`E-mail de redefinição de senha enviado para ${user.email}.`);
+      toast.success(`E-mail de redefinição de senha enviado para ${user.email}.`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao enviar e-mail');
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar e-mail');
     } finally {
       setActionLoading(null);
     }
@@ -123,12 +124,12 @@ export default function AdminUsers({ navigate }: { navigate: NavigateFn }) {
         {},
       );
       if (res.alreadyVerified) {
-        alert('Este usuário já tem e-mail verificado.');
+        toast.warning('Este usuário já tem e-mail verificado.');
       } else {
-        alert(`E-mail de verificação enviado para ${user.email}.`);
+        toast.success(`E-mail de verificação enviado para ${user.email}.`);
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao enviar verificação');
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar verificação');
     } finally {
       setActionLoading(null);
     }
@@ -155,14 +156,18 @@ export default function AdminUsers({ navigate }: { navigate: NavigateFn }) {
         ),
       );
       setModal(null);
-      const sendVerify = window.confirm(
-        'E-mail atualizado. Deseja enviar e-mail de verificação agora?',
-      );
+      toast.success('E-mail atualizado com sucesso.');
+      const sendVerify = await confirmAction({
+        title: 'Enviar e-mail de verificação?',
+        description: 'O e-mail foi atualizado. Deseja enviar a verificação agora?',
+        confirmLabel: 'Enviar verificação',
+        cancelLabel: 'Agora não',
+      });
       if (sendVerify) {
         await sendVerification({ ...modal.user, email: trimmed });
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao atualizar e-mail');
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar e-mail');
     } finally {
       setActionLoading(null);
     }
@@ -177,7 +182,7 @@ export default function AdminUsers({ navigate }: { navigate: NavigateFn }) {
   const confirmDelete = async () => {
     if (!modal || modal.type !== 'delete') return;
     if (deleteConfirm.trim().toLowerCase() !== modal.user.email.toLowerCase()) {
-      alert('Digite o e-mail do usuário exatamente como aparece na lista.');
+      toast.warning('Digite o e-mail do usuário exatamente como aparece na lista.');
       return;
     }
     setActionLoading(modal.user.id);
@@ -185,8 +190,9 @@ export default function AdminUsers({ navigate }: { navigate: NavigateFn }) {
       await api.delete(`/api/admin/users/${modal.user.id}`);
       setUsers((prev) => prev.filter((u) => u.id !== modal.user.id));
       setModal(null);
+      toast.success('Usuário excluído.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao excluir usuário');
+      toast.error(err instanceof Error ? err.message : 'Erro ao excluir usuário');
     } finally {
       setActionLoading(null);
     }

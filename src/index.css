@@ -57,27 +57,27 @@ body {
   }
   
   .apple-card {
-    @apply bg-white rounded-2xl sm:rounded-3xl border border-black/[0.02] shadow-[0_4px_24px_-8px_rgba(0,0,0,0.04)] transition-all duration-500;
+    @apply bg-white rounded-2xl sm:rounded-3xl border border-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] transition-shadow duration-200;
   }
   
   .apple-card-hover {
-    @apply hover:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.06)] hover:-translate-y-0.5;
+    @apply hover:shadow-[0_4px_12px_rgba(0,0,0,0.05),0_16px_40px_-16px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-transform;
   }
 
   .glass-panel {
-    @apply bg-white/60 backdrop-blur-3xl border border-white/40 shadow-[0_4px_24px_-1px_rgba(0,0,0,0.02)] rounded-3xl sm:rounded-[2.5rem];
+    @apply bg-white/80 backdrop-blur-xl border border-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] rounded-3xl;
   }
 
   .glass-input {
-    @apply w-full bg-zinc-100/40 border border-transparent rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:bg-white focus:ring-1 focus:ring-black/5 focus:border-black/5 transition-all duration-500 text-zinc-900 placeholder:text-zinc-400;
+    @apply w-full bg-zinc-100/60 border border-black/[0.04] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900/20 transition duration-200 text-zinc-900 placeholder:text-zinc-400;
   }
 
   .btn-primary {
-    @apply bg-zinc-900 text-white hover:bg-black rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-500 active:scale-[0.97] flex items-center justify-center gap-2 shadow-lg shadow-black/5;
+    @apply bg-zinc-900 text-white hover:bg-black rounded-xl px-5 py-2.5 text-sm font-semibold transition duration-200 active:scale-[0.98] flex items-center justify-center gap-2 shadow-sm shadow-black/10 disabled:opacity-60 disabled:pointer-events-none;
   }
 
   .btn-secondary {
-    @apply bg-zinc-100/80 hover:bg-zinc-200/80 text-zinc-900 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-500 active:scale-[0.97] flex items-center justify-center gap-2;
+    @apply bg-zinc-100 hover:bg-zinc-200 text-zinc-900 rounded-xl px-5 py-2.5 text-sm font-semibold transition duration-200 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60 disabled:pointer-events-none;
   }
 
   .page-title {

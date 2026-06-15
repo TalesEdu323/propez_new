@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { api, ApiError } from '../../lib/apiClient';
+import { toast, confirmAction } from '../../lib/feedback';
 import type { NavigateFn } from '../../types/navigation';
 
 interface PostRow {
@@ -33,12 +34,20 @@ export default function AdminBlogList({ navigate }: { navigate: NavigateFn }) {
   }, []);
 
   const remove = async (id: string) => {
-    if (!confirm('Excluir este artigo?')) return;
+    const confirmed = await confirmAction({
+      title: 'Excluir este artigo?',
+      description: 'O artigo será removido permanentemente.',
+      confirmLabel: 'Excluir',
+      cancelLabel: 'Cancelar',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     try {
       await api.delete(`/api/admin/posts/${id}`);
+      toast.success('Artigo excluído.');
       load();
     } catch (e) {
-      alert(e instanceof ApiError ? e.message : 'Erro ao excluir');
+      toast.error(e instanceof ApiError ? e.message : 'Erro ao excluir');
     }
   };
 

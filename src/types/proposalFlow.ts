@@ -102,8 +102,10 @@ export function shouldTriggerContractSign(
 export type ClientPostApproveAction = 'redirect_sign' | 'show_pay' | 'idle';
 
 function isSignClientStepDone(state: ProposalJourneyState): boolean {
-  const status = state.contractSignStatus;
-  return status === 'signed' || status === 'sent';
+  // Apenas 'signed' conta como assinatura concluída pelo cliente.
+  // 'sent'/'pending' significam contrato gerado mas ainda NÃO assinado, então
+  // o cliente deve ser levado à assinatura (e não pular para o pagamento).
+  return state.contractSignStatus === 'signed';
 }
 
 /** Próxima ação do cliente na página pública após aprovação. */

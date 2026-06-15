@@ -53,8 +53,9 @@ const AdminBlogEditor = lazyWithRetry(() => import('./pages/admin/AdminBlogEdito
 const AdminLayout = lazyWithRetry(() => import('./pages/admin/AdminLayout'));
 
 const loadingFallback = (
-  <div className="h-full min-h-screen w-full flex items-center justify-center text-zinc-500 bg-[#F5F5F7]">
-    Carregando...
+  <div className="h-full min-h-screen w-full flex flex-col items-center justify-center gap-3 bg-[#F5F5F7]">
+    <div className="w-8 h-8 rounded-full border-2 border-zinc-200 border-t-zinc-900 animate-spin" />
+    <span className="text-sm font-medium text-zinc-400">Carregando…</span>
   </div>
 );
 

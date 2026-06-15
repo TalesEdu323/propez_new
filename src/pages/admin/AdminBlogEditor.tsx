@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, Plus, Trash2, Save } from 'lucide-react';
 import { api, ApiError } from '../../lib/apiClient';
+import { toast } from '../../lib/feedback';
 import type { NavigateFn } from '../../types/navigation';
 import type { BlogContentBlock } from '../../marketing/blog/blockTypes';
 
@@ -48,7 +49,7 @@ export default function AdminBlogEditor({
         setContent((p.content as BlogContentBlock[]) ?? []);
         setTags((p.tags as string[]) ?? []);
       })
-      .catch(() => alert('Erro ao carregar'))
+      .catch(() => toast.error('Erro ao carregar'))
       .finally(() => setLoading(false));
   }, [postId]);
 
@@ -81,9 +82,10 @@ export default function AdminBlogEditor({
       } else {
         await api.post('/api/admin/posts', body);
       }
+      toast.success('Artigo salvo com sucesso.');
       navigate('admin-blog');
     } catch (e) {
-      alert(e instanceof ApiError ? e.message : 'Erro ao salvar');
+      toast.error(e instanceof ApiError ? e.message : 'Erro ao salvar');
     } finally {
       setSaving(false);
     }

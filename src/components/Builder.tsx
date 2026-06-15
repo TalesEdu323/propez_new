@@ -24,6 +24,7 @@ import {
   type PlanTier,
 } from '../lib/featureFlags';
 import { UpgradeGate } from './UpgradeGate';
+import { toast, confirmAction } from '../lib/feedback';
 import { loadUiPreference, saveUiPreference } from '../lib/uiPreferences';
 import {
   addElementToParent as addElementToParentTree,
@@ -250,7 +251,7 @@ export default function Builder({
           if (json.pageLayout) updatePageLayout(normalizePageLayout(json.pageLayout));
         }
       } catch {
-        alert('Arquivo inválido!');
+        toast.error('Arquivo inválido!');
       }
     };
     reader.readAsText(file);
@@ -340,9 +341,12 @@ export default function Builder({
   const handleSaveClick = async () => {
     if (!onSave || saveLoading) return;
     if (!mobileReviewed && !embedded) {
-      const goMobile = window.confirm(
-        'Recomendamos revisar a proposta no celular antes de salvar. Abrir visualização mobile agora?',
-      );
+      const goMobile = await confirmAction({
+        title: 'Revisar no celular antes de salvar?',
+        description: 'Recomendamos conferir como a proposta fica no celular antes de salvar.',
+        confirmLabel: 'Abrir visualização mobile',
+        cancelLabel: 'Salvar assim mesmo',
+      });
       if (goMobile) {
         handleViewportChange('mobile');
         return;
@@ -421,7 +425,15 @@ export default function Builder({
             onImport={hideImportExport ? undefined : handleImport}
             onExport={hideImportExport ? undefined : handleExport}
             exportLocked={hideImportExport || !pdfGate.allowed}
-            onClear={() => { if (confirm('Tem certeza que deseja limpar tudo?')) setElementsWithHistory([]); }}
+            onClear={() => {
+              void confirmAction({
+                title: 'Limpar tudo?',
+                description: 'Todos os elementos do layout serão removidos. Esta ação não pode ser desfeita.',
+                confirmLabel: 'Limpar tudo',
+                cancelLabel: 'Cancelar',
+                variant: 'danger',
+              }).then((ok) => { if (ok) setElementsWithHistory([]); });
+            }}
             onUndo={handleUndo}
             onRedo={handleRedo}
             canUndo={canUndo}

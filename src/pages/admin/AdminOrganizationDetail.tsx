@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import AdminPageShell from './AdminPageShell';
 import { api } from '../../lib/apiClient';
+import { toast } from '../../lib/feedback';
 import { formatBRL, formatDateBR } from '../../lib/format';
 import { ColorPickerRow } from '../../components/builder/properties/ColorPickerRow';
 import type { NavigateFn } from '../../types/navigation';
@@ -107,15 +108,16 @@ export default function AdminOrganizationDetail({
   const confirmDeleteOrg = async () => {
     if (!data) return;
     if (deleteConfirm.trim() !== data.organization.name.trim()) {
-      alert('Digite o nome da organização exatamente como aparece acima.');
+      toast.warning('Digite o nome da organização exatamente como aparece acima.');
       return;
     }
     setDeleting(true);
     try {
       await api.delete(`/api/admin/organizations/${orgId}`);
+      toast.success('Organização excluída.');
       navigate('admin-organizations');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao excluir organização');
+      toast.error(err instanceof Error ? err.message : 'Erro ao excluir organização');
     } finally {
       setDeleting(false);
     }

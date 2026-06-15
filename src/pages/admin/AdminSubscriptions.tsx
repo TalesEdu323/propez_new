@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, CreditCard, Save, X } from 'lucide-react';
 import AdminPageShell from './AdminPageShell';
 import { api } from '../../lib/apiClient';
+import { toast } from '../../lib/feedback';
 import { formatBRL, formatDateBR } from '../../lib/format';
 import type { NavigateFn } from '../../types/navigation';
 
@@ -118,9 +119,10 @@ export default function AdminSubscriptions({ navigate }: { navigate: NavigateFn 
       });
       await load();
       setEditing(null);
+      toast.success('Assinatura atualizada com sucesso.');
     } catch (err) {
       console.error('[admin/subs/save] erro:', err);
-      alert(err instanceof Error ? err.message : 'Erro ao salvar');
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar');
     } finally {
       setSaving(false);
     }

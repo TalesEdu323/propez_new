@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { LayoutTemplate, Eye, Download, Store } from 'lucide-react';
 import { api } from '../../lib/apiClient';
+import { toast } from '../../lib/feedback';
 import { RenderElement } from '../../components/builder/RenderElement';
 import { PageShell } from '../../components/builder/PageShell';
 import { normalizePageLayout } from '../../lib/pageLayout';
@@ -54,7 +55,7 @@ export function LojaTemplatesPanel({ navigate, embedded = false }: LojaTemplates
       const modelo = await api.post<{ id: string }>(`/api/marketplace/templates/${id}/clone`, {});
       navigate('criar-modelo', { editId: modelo.id });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao usar template');
+      toast.error(err instanceof Error ? err.message : 'Erro ao usar template');
     } finally {
       setCloning(null);
     }

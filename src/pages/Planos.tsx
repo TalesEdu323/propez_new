@@ -7,6 +7,7 @@ import { PLAN_META, type PlanTier } from '../lib/featureFlags';
 import { PricingEnterpriseCta } from '../components/PricingEnterpriseCta';
 import type { NavigateFn } from '../types/navigation';
 import { useSession } from '../lib/authSession';
+import { toast } from '../lib/feedback';
 import { captureCouponFromUrl, validateCouponCode } from '../lib/affiliateTracking';
 
 interface StripePlanApi {
@@ -164,7 +165,7 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
     if (planId === 'free' || planId === currentPlan) return;
     const priceId = priceIdFor(planId, cycle);
     if (!priceId) {
-      alert('Preço não configurado. Verifique as variáveis STRIPE_PRICE_* no servidor.');
+      toast.error('Preço não configurado. Verifique as variáveis STRIPE_PRICE_* no servidor.');
       return;
     }
 
@@ -196,13 +197,13 @@ export default function Planos({ navigate, targetPlan }: PlanosProps) {
       });
       const { url, error } = await response.json();
       if (error) {
-        alert(`Erro: ${error}`);
+        toast.error(`Erro: ${error}`);
         return;
       }
       if (url) window.location.href = url;
     } catch (err) {
       console.error('Erro ao iniciar checkout:', err);
-      alert('Erro ao iniciar pagamento. Tente novamente.');
+      toast.error('Erro ao iniciar pagamento. Tente novamente.');
     } finally {
       setLoadingPlan(null);
     }

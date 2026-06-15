@@ -58,16 +58,16 @@ export function ProSyncLeadPickerModal({ open, onClose, onSelect }: Props) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/40 backdrop-blur-sm p-0 sm:p-4"
           onClick={onClose}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            initial={{ opacity: 0, scale: 0.99, y: 24 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 12 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0, scale: 0.99, y: 16 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
             onClick={e => e.stopPropagation()}
-            className="w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            className="w-full max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-black/10 overflow-hidden flex flex-col max-h-[88dvh]"
           >
             <div className="flex items-center justify-between p-6 border-b border-black/[0.05]">
               <div>

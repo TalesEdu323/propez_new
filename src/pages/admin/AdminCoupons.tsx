@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Plus, X, Ticket } from 'lucide-react';
 import AdminPageShell from './AdminPageShell';
 import { api } from '../../lib/apiClient';
+import { toast, confirmAction } from '../../lib/feedback';
 import { formatDateBR } from '../../lib/format';
 import type { NavigateFn } from '../../types/navigation';
 
@@ -107,21 +108,30 @@ export default function AdminCoupons({ navigate }: { navigate: NavigateFn }) {
         duration: 'once', durationInMonths: 3, maxRedemptions: '', expiresAt: '',
         appliesPro: true, appliesBusiness: true,
       });
+      toast.success('Cupom criado com sucesso.');
       void load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao criar cupom');
+      toast.error(err instanceof Error ? err.message : 'Erro ao criar cupom');
     } finally {
       setSaving(false);
     }
   };
 
   const deactivate = async (id: string) => {
-    if (!window.confirm('Desativar este cupom?')) return;
+    const confirmed = await confirmAction({
+      title: 'Desativar este cupom?',
+      description: 'O cupom deixará de ser aceito em novas assinaturas.',
+      confirmLabel: 'Desativar',
+      cancelLabel: 'Cancelar',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     try {
       await api.patch(`/api/admin/coupons/${id}`, { action: 'deactivate' });
+      toast.success('Cupom desativado.');
       void load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao desativar');
+      toast.error(err instanceof Error ? err.message : 'Erro ao desativar');
     }
   };
 

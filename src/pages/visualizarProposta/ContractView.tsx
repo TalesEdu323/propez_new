@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import { ChevronLeft, CheckCircle, DollarSign, FileCheck, FileText, X } from 'lucide-react';
 import type { Proposta } from '../../lib/store';
+import { toast } from '../../lib/feedback';
 import { ContractDocumentActions } from '../../components/contratos/ContractDocumentActions';
 
 export type ContractSignStatusUi = 'pending' | 'sent' | 'signed' | 'cancelled' | 'failed' | null;
@@ -173,8 +174,8 @@ export function ContractView({
                     <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] mb-6 px-4 py-3 bg-white rounded-xl w-full border border-black/[0.03] break-all">{proposta.chavePix}</p>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(proposta.chavePix || '');
-                        alert('Chave PIX copiada!');
+                        void navigator.clipboard.writeText(proposta.chavePix || '');
+                        toast.success('Chave PIX copiada!');
                       }}
                       className="w-full h-12 bg-zinc-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all active:scale-[0.98]"
                     >

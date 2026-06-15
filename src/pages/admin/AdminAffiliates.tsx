@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Copy, Link2, Plus, X, Check, ExternalLink } from 'lucide-react';
 import AdminPageShell from './AdminPageShell';
 import { api } from '../../lib/apiClient';
+import { toast } from '../../lib/feedback';
 import { formatBRL } from '../../lib/format';
 import type { NavigateFn } from '../../types/navigation';
 
@@ -112,7 +113,7 @@ export default function AdminAffiliates({ navigate }: { navigate: NavigateFn }) 
       const data = await api.get<AffiliateDetail>(`/api/admin/affiliates/${id}`);
       setDetail(data);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao carregar detalhe');
+      toast.error(err instanceof Error ? err.message : 'Erro ao carregar detalhe');
     }
   };
 
@@ -129,9 +130,10 @@ export default function AdminAffiliates({ navigate }: { navigate: NavigateFn }) 
       });
       setShowForm(false);
       setForm({ name: '', email: '', code: '', commissionPercent: 20, defaultCouponId: '', notes: '' });
+      toast.success('Afiliado criado com sucesso.');
       void load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao criar afiliado');
+      toast.error(err instanceof Error ? err.message : 'Erro ao criar afiliado');
     } finally {
       setSaving(false);
     }
@@ -146,8 +148,9 @@ export default function AdminAffiliates({ navigate }: { navigate: NavigateFn }) 
       });
       if (detail) void openDetail(detail.id);
       void load();
+      toast.success('Comissão marcada como paga.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao marcar comissão');
+      toast.error(err instanceof Error ? err.message : 'Erro ao marcar comissão');
     }
   };
 

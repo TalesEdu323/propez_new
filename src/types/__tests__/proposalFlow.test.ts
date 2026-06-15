@@ -56,6 +56,22 @@ describe('proposalFlow helpers', () => {
     ).toBe('idle');
   });
 
+  it('resolveClientActionAfterApprove não pula assinatura quando contrato está apenas enviado', () => {
+    // 'sent' = contrato gerado mas ainda NÃO assinado -> cliente deve ir assinar.
+    expect(
+      resolveClientActionAfterApprove(DEFAULT_FLOW, { pago: false, contractSignStatus: 'sent' }),
+    ).toBe('redirect_sign');
+
+    expect(
+      resolveClientActionAfterApprove(DEFAULT_FLOW, { pago: false, contractSignStatus: 'pending' }),
+    ).toBe('redirect_sign');
+
+    // Após assinar ('signed'), avança para o pagamento.
+    expect(
+      resolveClientActionAfterApprove(DEFAULT_FLOW, { pago: false, contractSignStatus: 'signed' }),
+    ).toBe('show_pay');
+  });
+
   it('journeyMethodOrder reflete fluxo configurado', () => {
     expect(journeyMethodOrder(DEFAULT_FLOW)).toEqual([
       'SIGNATURE_ON_SCREEN',

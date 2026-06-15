@@ -20,6 +20,7 @@ import { shouldShowWatermark } from '../lib/featureFlags';
 import { flowHasStep } from '../types/proposalFlow';
 import { api } from '../lib/apiClient';
 import { updateProposta } from '../lib/store';
+import { toast } from '../lib/feedback';
 import type { NavigateFn } from '../types/navigation';
 
 export default function VisualizarProposta({ navigate, id }: { navigate: NavigateFn; id: string }) {
@@ -174,7 +175,7 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
       setShowIdentification(false);
     } catch (error) {
       console.error('Failed to update status:', error);
-      alert('Erro ao aprovar proposta. Tente novamente.');
+      toast.error('Erro ao aprovar proposta. Tente novamente.');
     } finally {
       setIsUpdating(false);
     }
@@ -186,8 +187,9 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
     try {
       const updated = await api.post<Proposta>(`/api/propostas/${proposta.id}/accept-contract`, {});
       persistProposta(updated);
+      toast.success('Contrato aceito com sucesso.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Não foi possível aceitar o contrato.');
+      toast.error(err instanceof Error ? err.message : 'Não foi possível aceitar o contrato.');
     } finally {
       setIsUpdating(false);
     }
@@ -209,10 +211,10 @@ export default function VisualizarProposta({ navigate, id }: { navigate: Navigat
       }
 
       persistProposta({ status: 'recusada' });
-      alert('Proposta recusada.');
+      toast.success('Proposta recusada.');
     } catch (error) {
       console.error('Failed to update status:', error);
-      alert('Erro ao recusar proposta. Tente novamente.');
+      toast.error('Erro ao recusar proposta. Tente novamente.');
     } finally {
       setIsUpdating(false);
     }

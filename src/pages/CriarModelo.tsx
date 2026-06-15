@@ -140,8 +140,10 @@ export default function CriarModelo({ navigate, initialData }: { navigate: Navig
     setSaveLoading(true);
     setSaveError(null);
     try {
+      // saveModelosAsync já faz update otimista do cache e mescla a resposta do
+      // servidor (mergeModeloAfterSave). Não bloqueamos com um fetch extra para o
+      // modelo aparecer rápido na galeria e o toast de sucesso chegar visível.
       await store.saveModelosAsync(nextList);
-      await fetchModeloById(newModelo.id);
 
       const fluidoReturn =
         typeof initialData?.fluidoReturn === 'string' ? initialData.fluidoReturn : undefined;

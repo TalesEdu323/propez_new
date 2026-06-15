@@ -16,6 +16,7 @@ import {
   useNotifications,
 } from '../lib/useNotifications';
 import { api, ApiError } from '../lib/apiClient';
+import { toast } from '../lib/feedback';
 import type { OfferType } from '../lib/layoutContext';
 import { SEGMENT_OPTIONS } from '../lib/segmentLabels';
 import {
@@ -97,7 +98,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
       await loadIntegrations();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Erro ao conectar integração';
-      alert(message);
+      toast.error(message);
     } finally {
       setProvisioning(null);
     }
@@ -108,6 +109,7 @@ export default function Configuracoes({ navigate }: ConfiguracoesProps) {
   const handleSave = () => {
     setIsSaving(true);
     store.saveUserConfig(userConfig);
+    toast.success('Ajustes salvos com sucesso.');
     setTimeout(() => setIsSaving(false), 1000);
   };
 

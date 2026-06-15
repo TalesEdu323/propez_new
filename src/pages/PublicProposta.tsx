@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Copy, ExternalLink, FileText, Loader2, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api, apiFetch, ApiError } from '../lib/apiClient';
+import { toast } from '../lib/feedback';
 import { formatBRL } from '../lib/format';
 import { friendlySignaturePrepareError } from '../lib/signatureErrors';
 import { RenderElement } from '../components/builder/RenderElement';
@@ -515,9 +516,11 @@ export default function PublicProposta({ token }: Props) {
         } else {
           await runPrepareAndRedirect(res.proposta);
         }
+      } else {
+        toast.success('Pagamento registrado. Obrigado!');
       }
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Não foi possível registrar o pagamento.');
+      toast.error(err instanceof ApiError ? err.message : 'Não foi possível registrar o pagamento.');
     } finally {
       setIsSubmitting(false);
     }
@@ -532,8 +535,9 @@ export default function PublicProposta({ token }: Props) {
         { skipRefresh: true },
       );
       setData((prev) => (prev ? { ...prev, proposta: res.proposta, journey: res.journey } : prev));
+      toast.success('Recebimento confirmado. Obrigado!');
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Não foi possível confirmar o recebimento.');
+      toast.error(err instanceof ApiError ? err.message : 'Não foi possível confirmar o recebimento.');
     } finally {
       setIsSubmitting(false);
     }
@@ -750,7 +754,7 @@ export default function PublicProposta({ token }: Props) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+            className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
             onClick={() => setFormOpen(false)}
           >
             <motion.div
@@ -758,7 +762,7 @@ export default function PublicProposta({ token }: Props) {
               animate={{ y: 0, scale: 1 }}
               exit={{ y: 40, scale: 0.98 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
+              className="bg-white rounded-t-3xl sm:rounded-3xl p-6 sm:p-8 pb-[max(1.5rem,env(safe-area-inset-bottom))] w-full max-w-md shadow-2xl max-h-[92dvh] overflow-y-auto custom-scrollbar"
             >
               <h3 className="text-xl font-bold text-zinc-900 tracking-tight mb-2">
                 {formOpen === 'approve' ? 'Confirmar aprovação' : 'Confirmar recusa'}

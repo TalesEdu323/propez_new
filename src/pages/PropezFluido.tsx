@@ -15,6 +15,7 @@ import {
   type Servico,
 } from '../lib/store';
 import { ApiError } from '../lib/apiClient';
+import { toast } from '../lib/feedback';
 import { updateProposalStatusInCRM, type ExternalClient } from '../services/crmApi';
 import { createId } from '../lib/ids';
 import { replaceContractString, replaceVariablesInElements, type ContractContext } from '../lib/contractVariables';
@@ -391,7 +392,7 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
       console.error('[PropezFluido] erro ao salvar proposta:', error);
       const message = formatSaveError(error);
       setSaveError(message);
-      alert(message);
+      toast.error(message);
     } finally {
       setIsSaving(false);
     }
@@ -416,24 +417,24 @@ export default function PropezFluido({ navigate, initialData }: { navigate: Navi
 
   const handleAdvance = async () => {
     if (step === 1 && !formData.modeloId) {
-      alert('Selecione um modelo e confirme no preview antes de continuar.');
+      toast.warning('Selecione um modelo e confirme no preview antes de continuar.');
       return;
     }
     if (step === 2 && !formData.clienteNome) {
-      alert('Preencha o nome do cliente.');
+      toast.warning('Preencha o nome do cliente.');
       return;
     }
     if (step === 3) {
       if (!formData.servicos.length || !formData.valor) {
-        alert('Selecione pelo menos um serviço e preencha o valor.');
+        toast.warning('Selecione pelo menos um serviço e preencha o valor.');
         return;
       }
       if (!formData.envio || !formData.validade) {
-        alert('Preencha as datas de envio e validade.');
+        toast.warning('Preencha as datas de envio e validade.');
         return;
       }
       if (!formData.elementos.length) {
-        alert('Esta proposta está sem layout. Volte ao passo 1 e selecione um modelo para gerar a proposta.');
+        toast.warning('Esta proposta está sem layout. Volte ao passo 1 e selecione um modelo para gerar a proposta.');
         return;
       }
       setStep(4);
